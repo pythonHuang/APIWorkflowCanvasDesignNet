@@ -135,14 +135,17 @@ public class FillRule
     [JsonPropertyName("source")]
     public string Source { get; set; } = "";
 
-    /// <summary>VARIABLE / CONSTANT</summary>
+    /// <summary>VARIABLE / CONSTANT / STATIC / INPUT / SUB_PROPERTY</summary>
     [JsonPropertyName("sourceType")]
     public string SourceType { get; set; } = "VARIABLE";
+
+    [JsonPropertyName("sourcePath")]
+    public string SourcePath { get; set; } = "";
 
     [JsonPropertyName("target")]
     public string Target { get; set; } = "";
 
-    /// <summary>INPUT_PARAM / OUTPUT_PARAM / HEADER / VARIABLE / OUTPUT（流程输出参数）</summary>
+    /// <summary>INPUT_PARAM / OUTPUT_PARAM / HEADER / VARIABLE / OUTPUT（流程输出参数）/ SUB_PROPERTY</summary>
     [JsonPropertyName("targetType")]
     public string TargetType { get; set; } = "INPUT_PARAM";
 }
@@ -154,15 +157,19 @@ public class AssignRule
     [JsonPropertyName("source")]
     public string Source { get; set; } = "";
 
-    /// <summary>VARIABLE / CONSTANT / STATIC（全局静态变量）</summary>
+    /// <summary>VARIABLE / CONSTANT / STATIC（全局静态变量）/ INPUT / SUB_PROPERTY</summary>
     [JsonPropertyName("sourceType")]
     public string SourceType { get; set; } = "VARIABLE";
+
+    /// <summary>子对象属性路径（sourceType/targetType 为 SUB_PROPERTY 时使用），如 "name" 或 "user.id"</summary>
+    [JsonPropertyName("sourcePath")]
+    public string SourcePath { get; set; } = "";
 
     /// <summary>目标变量名</summary>
     [JsonPropertyName("target")]
     public string Target { get; set; } = "";
 
-    /// <summary>目标类型：VARIABLE（流程变量）/ STATIC（全局静态变量）</summary>
+    /// <summary>目标类型：VARIABLE（流程变量）/ STATIC（全局静态变量）/ OUTPUT / INPUT / SUB_PROPERTY</summary>
     [JsonPropertyName("targetType")]
     public string TargetType { get; set; } = "VARIABLE";
 

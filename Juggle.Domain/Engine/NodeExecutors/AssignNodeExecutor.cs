@@ -5,11 +5,15 @@ namespace Juggle.Domain.Engine.NodeExecutors;
 /// sourceType 支持：
 ///   CONSTANT      — 常量值
 ///   VARIABLE      — 流程变量
-///   STATIC        — 全局静态变量（$static.xxx）
+///   STATIC        — 全局静态变量
+///   INPUT         — 流程入参
+///   SUB_PROPERTY  — 对象的子属性
 /// targetType 支持：
-///   (默认)         — 流程变量
+///   VARIABLE      — 流程变量
 ///   STATIC        — 写入全局静态变量（执行后持久化）
 ///   OUTPUT        — 写入输出参数（流程执行结果）
+///   INPUT         — 写入流程入参
+///   SUB_PROPERTY  — 写入对象的子属性
 /// </summary>
 public class AssignNodeExecutor : INodeExecutor
 {
@@ -28,11 +32,13 @@ public class AssignNodeExecutor : INodeExecutor
                         value = ParseConstant(rule.Source, rule.DataType);
                         break;
                     case "STATIC":
-                        // 从全局静态变量读取
                         value = context.GetStaticVariable(rule.Source);
                         break;
+                    case "SUB_PROPERTY":
+                        value = context.GetNestedProperty(rule.Source, rule.SourcePath);
+                        break;
                     default:
-                        // VARIABLE
+                        // VARIABLE / INPUT
                         value = context.GetVariable(rule.Source);
                         break;
                 }
@@ -45,11 +51,13 @@ public class AssignNodeExecutor : INodeExecutor
                         context.SetStaticVariable(rule.Target, value?.ToString());
                         break;
                     case "OUTPUT":
-                        // 写入输出参数
                         context.SetOutputParameter(rule.Target, value);
                         break;
+                    case "SUB_PROPERTY":
+                        context.SetNestedProperty(rule.Target, rule.SourcePath, value);
+                        break;
                     default:
-                        // VARIABLE 或其他未知类型，默认写入流程变量
+                        // VARIABLE / INPUT 等
                         context.SetVariable(rule.Target, value);
                         break;
                 }

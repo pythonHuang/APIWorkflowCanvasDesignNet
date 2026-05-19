@@ -58,6 +58,89 @@ public class FlowContext
         ModifiedStaticVarCodes.Add(code);
     }
 
+    // ========== 嵌套属性导航 ==========
+
+    /// <summary>从变量中按路径取嵌套属性值。支持 JsonElement 和 Dictionary 类型。</summary>
+    public object? GetNestedProperty(string variableCode, string path)
+    {
+        var obj = GetVariable(variableCode);
+        if (obj == null || string.IsNullOrEmpty(path)) return obj;
+        return NavigatePath(obj, path);
+    }
+
+    /// <summary>向变量的嵌套属性路径写入值。仅支持 Dictionary 类型（会原地修改）。</summary>
+    public void SetNestedProperty(string variableCode, string path, object? value)
+    {
+        var container = GetVariable(variableCode);
+        if (container is Dictionary<string, object?> dict)
+        {
+            SetByPath(dict, path, value);
+        }
+        // 如果容器为空或不是 Dictionary，创建一个新的 Dictionary
+        else if (container == null)
+        {
+            var newDict = new Dictionary<string, object?>();
+            SetByPath(newDict, path, value);
+            SetVariable(variableCode, newDict);
+        }
+    }
+
+    private static object? NavigatePath(object? obj, string path)
+    {
+        var parts = path.Split('.');
+        foreach (var part in parts)
+        {
+            if (obj == null) return null;
+            if (obj is System.Text.Json.JsonElement jsonEl && jsonEl.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (jsonEl.TryGetProperty(part, out var next))
+                    obj = next;
+                else
+                    return null;
+            }
+            else if (obj is Dictionary<string, object?> dict)
+            {
+                if (dict.TryGetValue(part, out var next))
+                    obj = next;
+                else
+                    return null;
+            }
+            else
+            {
+                return null;
+            }
+        }
+        // 将 JsonElement 转为 .NET 原生类型
+        if (obj is System.Text.Json.JsonElement finalEl)
+        {
+            return finalEl.ValueKind switch
+            {
+                System.Text.Json.JsonValueKind.String => finalEl.GetString(),
+                System.Text.Json.JsonValueKind.Number => finalEl.TryGetInt64(out var l) ? l : finalEl.GetDouble(),
+                System.Text.Json.JsonValueKind.True => true,
+                System.Text.Json.JsonValueKind.False => false,
+                System.Text.Json.JsonValueKind.Null => null,
+                _ => obj
+            };
+        }
+        return obj;
+    }
+
+    private static void SetByPath(Dictionary<string, object?> dict, string path, object? value)
+    {
+        var parts = path.Split('.');
+        for (int i = 0; i < parts.Length - 1; i++)
+        {
+            if (!dict.TryGetValue(parts[i], out var next) || next is not Dictionary<string, object?> nextDict)
+            {
+                nextDict = new Dictionary<string, object?>();
+                dict[parts[i]] = nextDict;
+            }
+            dict = nextDict;
+        }
+        dict[parts[^1]] = value;
+    }
+
     // ========== 节点日志操作 ==========
 
     /// <summary>添加一条简单的运行日志（非节点日志，用于通知等场景）</summary>

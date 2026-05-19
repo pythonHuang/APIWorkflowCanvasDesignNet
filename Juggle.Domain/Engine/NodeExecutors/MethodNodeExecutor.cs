@@ -72,13 +72,22 @@ public class MethodNodeExecutor : INodeExecutor
             var responseDoc = JsonSerializer.Deserialize<JsonElement>(responseJson);
             foreach (var rule in method.OutputFillRules)
             {
-                var targetType = rule.TargetType?.ToUpper() ?? "VARIABLE";
+                var targetType = (rule.TargetType ?? "VARIABLE").ToUpper();
                 var value = ExtractJsonValue(responseDoc, rule.Source);
-                
-                if (targetType == "OUTPUT")
-                    context.SetOutputParameter(rule.Target, value);
-                else
-                    context.SetVariable(rule.Target, value);
+
+                switch (targetType)
+                {
+                    case "OUTPUT":
+                        context.SetOutputParameter(rule.Target, value);
+                        break;
+                    case "SUB_PROPERTY":
+                        context.SetNestedProperty(rule.Target, rule.SourcePath, value);
+                        break;
+                    default:
+                        // VARIABLE / INPUT 等
+                        context.SetVariable(rule.Target, value);
+                        break;
+                }
             }
         }
         catch
@@ -91,8 +100,19 @@ public class MethodNodeExecutor : INodeExecutor
 
     private static object? ResolveSource(FillRule rule, FlowContext context)
     {
-        if (rule.SourceType == "CONSTANT") return rule.Source;
-        return context.GetVariable(rule.Source);
+        var srcType = (rule.SourceType ?? "VARIABLE").ToUpper();
+        switch (srcType)
+        {
+            case "CONSTANT":
+                return rule.Source;
+            case "STATIC":
+                return context.GetStaticVariable(rule.Source);
+            case "SUB_PROPERTY":
+                return context.GetNestedProperty(rule.Source, rule.SourcePath);
+            default:
+                // VARIABLE / INPUT 等
+                return context.GetVariable(rule.Source);
+        }
     }
 
     private async Task<string> CallHttpAsync(

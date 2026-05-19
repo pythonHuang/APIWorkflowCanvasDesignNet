@@ -417,7 +417,7 @@
               <el-select v-else v-model="rule.source" placeholder="变量" size="small" style="flex:1">
                 <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
               </el-select>
-              <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.method!.headerFillRules.splice(i, 1)" />
+              <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.method?.headerFillRules.splice(i, 1)" />
             </div>
 
             <!-- 输入参数配置 -->
@@ -425,32 +425,39 @@
               输入参数（Body/Query）
               <el-button size="small" icon="Plus" link @click="addFillRule('input')" style="margin-left:auto">添加</el-button>
             </div>
-            <div v-for="(rule, i) in selectedNode.method?.inputFillRules" :key="'i'+i" class="fill-rule-row">
-              <el-select v-model="rule.sourceType" size="small" style="width:70px;flex-shrink:0" @change="rule.sourcePath = ''">
-                <el-option value="VARIABLE" label="变量" />
-                <el-option value="CONSTANT" label="常量" />
-                <el-option value="STATIC" label="静态" />
-                <el-option value="INPUT" label="入参" />
-                <el-option value="SUB_PROPERTY" label="子对象" />
-              </el-select>
-              <el-input v-if="rule.sourceType==='CONSTANT'" v-model="rule.source" placeholder="常量值" size="small" style="flex:1" />
-              <el-select v-else-if="rule.sourceType==='STATIC'" v-model="rule.source" placeholder="选择静态变量" size="small" style="flex:1">
-                <el-option v-for="s in staticVariables" :key="s.varCode" :value="s.varCode" :label="`${s.varName} (${s.varCode})`" />
-              </el-select>
-              <el-select v-else-if="rule.sourceType==='INPUT'" v-model="rule.source" placeholder="选择入参" size="small" style="flex:1">
-                <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
-              </el-select>
-              <el-select v-else-if="rule.sourceType==='SUB_PROPERTY'" v-model="rule.source" placeholder="非简单类型" size="small" style="flex:1" @change="rule.sourcePath = ''">
-                <el-option v-for="c in allComplexTypes" :key="c.code" :value="c.code" :label="`${c.name}(${c.code}) [${sourceTypeTag(c.type)}]`" />
-              </el-select>
-              <el-select v-else v-model="rule.source" placeholder="来源变量" size="small" style="flex:1">
-                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
-              </el-select>
-              <span class="arrow-icon">→</span>
-              <el-select v-model="rule.target" placeholder="API入参名" size="small" style="width:36%" filterable allow-create default-first-option>
-                <el-option v-for="p in selectedApiInputParams" :key="p.paramCode + (p._prefix||'')" :value="p.paramCode" :label="`${p._displayName || p.paramName} (${p.paramCode})`" :style="{ textIndent: (p._level||0) * 16 + 'px' }" />
-              </el-select>
-              <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.method!.inputFillRules.splice(i, 1)" />
+            <div v-for="(rule, i) in selectedNode.method?.inputFillRules" :key="'i'+i">
+              <div class="fill-rule-row">
+                <el-select v-model="rule.sourceType" size="small" style="width:70px;flex-shrink:0" @change="rule.sourcePath = ''">
+                  <el-option value="VARIABLE" label="变量" />
+                  <el-option value="CONSTANT" label="常量" />
+                  <el-option value="STATIC" label="静态" />
+                  <el-option value="INPUT" label="入参" />
+                  <el-option value="SUB_PROPERTY" label="子对象" />
+                </el-select>
+                <el-input v-if="rule.sourceType==='CONSTANT'" v-model="rule.source" placeholder="常量值" size="small" style="flex:1" />
+                <el-select v-else-if="rule.sourceType==='STATIC'" v-model="rule.source" placeholder="选择静态变量" size="small" style="flex:1">
+                  <el-option v-for="s in staticVariables" :key="s.varCode" :value="s.varCode" :label="`${s.varName} (${s.varCode})`" />
+                </el-select>
+                <el-select v-else-if="rule.sourceType==='INPUT'" v-model="rule.source" placeholder="选择入参" size="small" style="flex:1">
+                  <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                </el-select>
+                <el-select v-else-if="rule.sourceType==='SUB_PROPERTY'" v-model="rule.source" placeholder="非简单类型" size="small" style="flex:1" @change="rule.sourcePath = ''">
+                  <el-option v-for="c in allComplexTypes" :key="c.code" :value="c.code" :label="`${c.name}(${c.code}) [${sourceTypeTag(c.type)}]`" />
+                </el-select>
+                <el-select v-else v-model="rule.source" placeholder="来源变量" size="small" style="flex:1">
+                  <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                </el-select>
+                <span class="arrow-icon">→</span>
+                <el-select v-model="rule.target" placeholder="API入参名" size="small" style="width:36%" filterable allow-create default-first-option>
+                  <el-option v-for="p in selectedApiInputParams" :key="p.paramCode + (p._prefix||'')" :value="p.paramCode" :label="`${p._displayName || p.paramName} (${p.paramCode})`" :style="{ textIndent: (p._level||0) * 16 + 'px' }" />
+                </el-select>
+                <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.method?.inputFillRules.splice(i, 1)" />
+              </div>
+              <div v-if="rule.sourceType==='SUB_PROPERTY'" class="fill-rule-row" style="margin-top:2px;">
+                <span style="font-size:11px;color:#888;width:70px;flex-shrink:0">属性</span>
+                <el-input v-model="rule.sourcePath" placeholder="如: name 或 user.id" size="small" style="flex:1" />
+                <el-button size="small" icon="Search" @click="browseProperties(rule)" style="flex-shrink:0">浏览</el-button>
+              </div>
             </div>
 
             <!-- 输出参数配置 -->
@@ -458,36 +465,43 @@
               输出映射（Response→变量）
               <el-button size="small" icon="Plus" link @click="addFillRule('output')" style="margin-left:auto">添加</el-button>
             </div>
-            <div v-for="(rule, i) in selectedNode.method?.outputFillRules" :key="'o'+i" class="fill-rule-row">
-              <el-select v-model="rule.source" placeholder="响应字段path" size="small" style="flex:1" filterable allow-create default-first-option>
-                <el-option v-for="p in selectedApiOutputParams" :key="p.paramCode + (p._prefix||'')" :value="p.paramCode" :label="`${p._displayName || p.paramName} (${p.paramCode})`" :style="{ textIndent: (p._level||0) * 16 + 'px' }" />
-              </el-select>
-              <span class="arrow-icon">→</span>
-              <el-select v-model="rule.targetType" size="small" style="width:80px;flex-shrink:0">
-                <el-option value="VARIABLE" label="变量" />
-                <el-option value="OUTPUT" label="出参" />
-                <el-option value="STATIC" label="静态" />
-                <el-option value="INPUT" label="入参" />
-                <el-option value="SUB_PROPERTY" label="子对象" />
-              </el-select>
-              <el-select v-model="rule.target" :placeholder="methodOutputTargetPlaceholder(rule.targetType)" size="small" style="width:46%">
-                <template v-if="rule.targetType === 'VARIABLE'">
-                  <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
-                </template>
-                <template v-else-if="rule.targetType === 'OUTPUT'">
-                  <el-option v-for="p in flowOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
-                </template>
-                <template v-else-if="rule.targetType === 'STATIC'">
-                  <el-option v-for="s in staticVariables" :key="s.varCode" :value="s.varCode" :label="`${s.varName} (${s.varCode})`" />
-                </template>
-                <template v-else-if="rule.targetType === 'INPUT'">
-                  <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
-                </template>
-                <template v-else-if="rule.targetType === 'SUB_PROPERTY'">
-                  <el-option v-for="c in allComplexTypes" :key="c.code" :value="c.code" :label="`${c.name}(${c.code}) [${sourceTypeTag(c.type)}]`" />
-                </template>
-              </el-select>
-              <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.method!.outputFillRules.splice(i, 1)" />
+            <div v-for="(rule, i) in selectedNode.method?.outputFillRules" :key="'o'+i">
+              <div class="fill-rule-row">
+                <el-select v-model="rule.source" placeholder="响应字段path" size="small" style="flex:1" filterable allow-create default-first-option>
+                  <el-option v-for="p in selectedApiOutputParams" :key="p.paramCode + (p._prefix||'')" :value="p.paramCode" :label="`${p._displayName || p.paramName} (${p.paramCode})`" :style="{ textIndent: (p._level||0) * 16 + 'px' }" />
+                </el-select>
+                <span class="arrow-icon">→</span>
+                <el-select v-model="rule.targetType" size="small" style="width:80px;flex-shrink:0">
+                  <el-option value="VARIABLE" label="变量" />
+                  <el-option value="OUTPUT" label="出参" />
+                  <el-option value="STATIC" label="静态" />
+                  <el-option value="INPUT" label="入参" />
+                  <el-option value="SUB_PROPERTY" label="子对象" />
+                </el-select>
+                <el-select v-model="rule.target" :placeholder="methodOutputTargetPlaceholder(rule.targetType)" size="small" style="width:46%">
+                  <template v-if="rule.targetType === 'VARIABLE'">
+                    <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                  </template>
+                  <template v-else-if="rule.targetType === 'OUTPUT'">
+                    <el-option v-for="p in flowOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </template>
+                  <template v-else-if="rule.targetType === 'STATIC'">
+                    <el-option v-for="s in staticVariables" :key="s.varCode" :value="s.varCode" :label="`${s.varName} (${s.varCode})`" />
+                  </template>
+                  <template v-else-if="rule.targetType === 'INPUT'">
+                    <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </template>
+                  <template v-else-if="rule.targetType === 'SUB_PROPERTY'">
+                    <el-option v-for="c in allComplexTypes" :key="c.code" :value="c.code" :label="`${c.name}(${c.code}) [${sourceTypeTag(c.type)}]`" />
+                  </template>
+                </el-select>
+                <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.method?.outputFillRules.splice(i, 1)" />
+              </div>
+              <div v-if="rule.targetType==='SUB_PROPERTY'" class="fill-rule-row" style="margin-top:2px;">
+                <span style="font-size:11px;color:#888;width:80px;flex-shrink:0">属性</span>
+                <el-input v-model="rule.sourcePath" placeholder="如: name 或 user.id" size="small" style="flex:1" />
+                <el-button size="small" icon="Search" @click="browseProperties(rule)" style="flex-shrink:0">浏览</el-button>
+              </div>
             </div>
           </template>
 
@@ -569,7 +583,7 @@
                   <el-option value="double" label="double" />
                   <el-option value="boolean" label="bool" />
                 </el-select>
-                <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.assignRules!.splice(i, 1)" />
+                <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.assignRules.splice(i, 1)" />
               </div>
             </div>
           </template>
@@ -676,7 +690,7 @@
                   <el-option value="CUSTOM" label="自定义" />
                   <el-option value="DEFAULT" label="默认(else)" />
                 </el-select>
-                <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.conditions!.splice(i, 1)" />
+                <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.conditions.splice(i, 1)" />
               </div>
               <el-input v-if="cond.conditionType === 'CUSTOM'"
                 v-model="cond.expression"
