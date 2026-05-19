@@ -726,19 +726,27 @@
                 <el-input v-model="row.paramName" size="small" />
               </template>
             </el-table-column>
-            <el-table-column label="类型" width="95">
+            <el-table-column label="类型" width="85">
               <template #default="{ row }">
-                <el-select v-model="row.dataType" size="small" style="width:100%">
+                <el-select v-model="row.dataType" size="small" style="width:100%" @change="onFlowParamTypeChange(row)">
                   <el-option v-for="t in dataTypes" :key="t.value" :value="t.value" :label="t.label" />
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="必填" width="55" align="center">
+            <el-table-column v-if="hasObjectParams('input')" label="关联对象" width="120">
+              <template #default="{ row }">
+                <el-select v-if="row.dataType === 'object' || row.dataType === 'array'" v-model="row.objectCode" size="small" style="width:100%" clearable @change="onFlowParamObjChange(row, $event)">
+                  <el-option v-for="obj in objectList" :key="obj.id" :label="obj.objectName" :value="obj.objectCode" />
+                </el-select>
+                <span v-else style="color:#ccc;font-size:11px">—</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="必填" width="50" align="center">
               <template #default="{ row }">
                 <el-checkbox v-model="row.required" :true-value="1" :false-value="0" />
               </template>
             </el-table-column>
-            <el-table-column label="默认值" width="90">
+            <el-table-column label="默认值" width="80">
               <template #default="{ row }">
                 <el-input v-model="row.defaultValue" size="small" />
               </template>
@@ -748,7 +756,7 @@
                 <el-input v-model="row.description" size="small" />
               </template>
             </el-table-column>
-            <el-table-column label="" width="50" align="center">
+            <el-table-column label="" width="45" align="center">
               <template #default="{ $index }">
                 <el-button size="small" type="danger" link @click="flowInputParams.splice($index,1)">删</el-button>
               </template>
@@ -776,11 +784,19 @@
                 <el-input v-model="row.paramName" size="small" />
               </template>
             </el-table-column>
-            <el-table-column label="类型" width="95">
+            <el-table-column label="类型" width="85">
               <template #default="{ row }">
-                <el-select v-model="row.dataType" size="small" style="width:100%">
+                <el-select v-model="row.dataType" size="small" style="width:100%" @change="onFlowParamTypeChange(row)">
                   <el-option v-for="t in dataTypes" :key="t.value" :value="t.value" :label="t.label" />
                 </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column v-if="hasObjectParams('output')" label="关联对象" width="120">
+              <template #default="{ row }">
+                <el-select v-if="row.dataType === 'object' || row.dataType === 'array'" v-model="row.objectCode" size="small" style="width:100%" clearable>
+                  <el-option v-for="obj in objectList" :key="obj.id" :label="obj.objectName" :value="obj.objectCode" />
+                </el-select>
+                <span v-else style="color:#ccc;font-size:11px">—</span>
               </template>
             </el-table-column>
             <el-table-column label="描述">
@@ -788,7 +804,7 @@
                 <el-input v-model="row.description" size="small" />
               </template>
             </el-table-column>
-            <el-table-column label="" width="50" align="center">
+            <el-table-column label="" width="45" align="center">
               <template #default="{ $index }">
                 <el-button size="small" type="danger" link @click="flowOutputParams.splice($index,1)">删</el-button>
               </template>
@@ -849,11 +865,19 @@
               <el-tag size="small" type="info">中间</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="数据类型" width="95">
+          <el-table-column label="数据类型" width="90">
             <template #default="{ row }">
-              <el-select v-model="row.dataType" size="small" style="width:100%">
+              <el-select v-model="row.dataType" size="small" style="width:100%" @change="onVarTypeChange(row)">
                 <el-option v-for="t in dataTypes" :key="t.value" :value="t.value" :label="t.label" />
               </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="hasObjectVars" label="关联对象" width="120">
+            <template #default="{ row }">
+              <el-select v-if="row.dataType === 'object' || row.dataType === 'array'" v-model="row.objectCode" size="small" style="width:100%" clearable>
+                <el-option v-for="obj in objectList" :key="obj.id" :label="obj.objectName" :value="obj.objectCode" />
+              </el-select>
+              <span v-else style="color:#ccc;font-size:11px">—</span>
             </template>
           </el-table-column>
           <el-table-column label="默认值">
@@ -861,7 +885,7 @@
               <el-input v-model="row.defaultValue" size="small" placeholder="可选" />
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="55">
+          <el-table-column label="操作" width="50">
             <template #default="{ $index }">
               <el-button size="small" type="danger" link @click="allVariables.splice($index, 1)">删</el-button>
             </template>
@@ -1132,7 +1156,7 @@ const objectList = ref<any[]>([])
 // 变量管理
 const variableDrawer = ref(false)
 const varDialogVisible = ref(false)
-const varForm = ref({ variableCode: '', variableName: '', variableType: 'VARIABLE', dataType: 'string', defaultValue: '' })
+const varForm = ref({ variableCode: '', variableName: '', variableType: 'VARIABLE', dataType: 'string', objectCode: '', defaultValue: '' })
 
 // ====== 调试相关 ======
 const debugVisible = ref(false)
@@ -1197,6 +1221,24 @@ const dataTypes = [
   { value: 'object',  label: 'object（对象类型）' },
   { value: 'array',   label: 'array（对象数组）' },
 ]
+
+// 检测是否有参数使用了 object/array 类型
+const hasObjectParams = (type: 'input' | 'output') => {
+  const params = type === 'input' ? flowInputParams.value : flowOutputParams.value
+  return params.some(p => p.dataType === 'object' || p.dataType === 'array')
+}
+const hasObjectVars = computed(() => allVariables.value.some(v => v.dataType === 'object' || v.dataType === 'array'))
+
+// 类型切换时清除 objectCode（如果不再需要）
+function onFlowParamTypeChange(row: any) {
+  if (row.dataType !== 'object' && row.dataType !== 'array') row.objectCode = ''
+}
+function onFlowParamObjChange(row: any, objectCode: string) {
+  row.objectCode = objectCode
+}
+function onVarTypeChange(row: any) {
+  if (row.dataType !== 'object' && row.dataType !== 'array') row.objectCode = ''
+}
 
 const selectedNode = computed(() => businessNodes.value.find(n => n.key === selectedNodeKey.value) || null)
 const selectedEdgeInfo = computed(() => selectedEdgeId.value ? vfEdges.value.find(e => e.id === selectedEdgeId.value) : null)
@@ -1263,7 +1305,7 @@ function onPaneClick() {
 
 // 让容器获取焦点（以便接收键盘事件）
 onMounted(async () => {
-  await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources(), loadStaticVariables(), loadPublishedFlows()])
+  await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources(), loadStaticVariables(), loadPublishedFlows(), loadObjects()])
   nextTick(() => { containerRef.value?.focus() })
 })
 
@@ -1662,6 +1704,13 @@ async function loadStaticVariables() {
   } catch {}
 }
 
+async function loadObjects() {
+  try {
+    const res: any = await request.get('/object/list')
+    objectList.value = res.data || []
+  } catch {}
+}
+
 async function loadPublishedFlows() {
   try {
     // 从 FlowDefinition 表加载所有流程（无需部署），排除自身 flowKey
@@ -1871,7 +1920,7 @@ function addCondition() {
 // 流程参数
 function addFlowParam(type: 'input' | 'output') {
   const prefix = type === 'input' ? 'input_' : 'output_'
-  const param = { paramCode: prefix, paramName: '', dataType: 'string', required: type === 'input' ? 1 : 0, defaultValue: '', description: '', sortNum: 0 }
+  const param = { paramCode: prefix, paramName: '', dataType: 'string', objectCode: '', required: type === 'input' ? 1 : 0, defaultValue: '', description: '', sortNum: 0 }
   if (type === 'input') flowInputParams.value.push(param)
   else flowOutputParams.value.push(param)
 }
@@ -1913,7 +1962,8 @@ function importFlowObjParams() {
   for (const p of flowObjPreviewParams.value) {
     target.value.push({
       paramCode: p.paramCode, paramName: p.paramName,
-      dataType: p.dataType || 'string', required: flowObjDialogType.value === 'input' ? 1 : 0,
+      dataType: p.dataType || 'string', objectCode: p.objectCode ?? '',
+      required: flowObjDialogType.value === 'input' ? 1 : 0,
       defaultValue: p.defaultValue ?? '', description: p.description ?? '', sortNum: 0
     })
   }
@@ -1924,7 +1974,7 @@ function importFlowObjParams() {
 // 变量管理
 function addVariable() {
   varDialogVisible.value = true
-  varForm.value = { variableCode: '', variableName: '', variableType: 'VARIABLE', dataType: 'string', defaultValue: '' }
+  varForm.value = { variableCode: '', variableName: '', variableType: 'VARIABLE', dataType: 'string', objectCode: '', defaultValue: '' }
 }
 
 function confirmAddVariable() {
