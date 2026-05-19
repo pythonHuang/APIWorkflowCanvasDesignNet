@@ -5,7 +5,7 @@ namespace Juggle.Domain.Engine;
 
 /// <summary>
 /// 流程执行引擎：解析流程 JSON，按节点拓扑顺序执行，维护变量上下文
-/// 支持节点类型：START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL(DB) / MERGE / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY
+/// 支持节点类型：START / END / METHOD / CONDITION / ASSIGN / CODE / MYSQL(DB) / MERGE / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY / TRANSFORM
 /// 支持功能：节点执行日志收集、静态全局变量读写、子流程递归调用
 /// </summary>
 public class FlowEngine
@@ -147,6 +147,7 @@ public class FlowEngine
                 "DELAY" or "WAIT" => new DelayNodeExecutor(),
                 "PARALLEL"      => new ParallelNodeExecutor(),
                 "NOTIFY"        => new NotifyNodeExecutor(_httpClientFactory),
+                "TRANSFORM"     => new TransformNodeExecutor(),
                 _ => throw new InvalidOperationException($"未知节点类型: {currentNode.ElementType}")
             };
 

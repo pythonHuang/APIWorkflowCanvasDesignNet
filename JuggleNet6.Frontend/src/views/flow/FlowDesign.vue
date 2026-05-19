@@ -233,6 +233,46 @@
             <div class="prop-tip" style="margin-top:8px">并行节点会同时执行所有分支路径。通过画布连线设置各分支入口。<br/>全部等待：所有分支完成后继续。任一完成：任一分支完成即继续。</div>
           </template>
 
+          <!-- TRANSFORM 模板转换节点属性 -->
+          <template v-if="selectedNode.elementType === 'TRANSFORM'">
+            <div class="prop-tip">模板转换：将模板占位符替换为变量/参数值，结果赋值到目标。</div>
+            <div class="prop-item">
+              <label>赋值给类型</label>
+              <el-select v-model="selectedNode.transformConfig.targetType" size="small" style="width:100%">
+                <el-option value="INPUT" label="入参" />
+                <el-option value="OUTPUT" label="出参" />
+                <el-option value="VARIABLE" label="中间变量" />
+                <el-option value="STATIC" label="静态变量" />
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>选择目标</label>
+              <el-select v-model="selectedNode.transformConfig.targetCode" placeholder="选择" size="small" style="width:100%" filterable>
+                <template v-if="selectedNode.transformConfig.targetType === 'INPUT'">
+                  <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                </template>
+                <template v-else-if="selectedNode.transformConfig.targetType === 'OUTPUT'">
+                  <el-option v-for="p in flowOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                </template>
+                <template v-else-if="selectedNode.transformConfig.targetType === 'VARIABLE'">
+                  <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                </template>
+                <template v-else-if="selectedNode.transformConfig.targetType === 'STATIC'">
+                  <el-option v-for="s in staticVariables" :key="s.varCode" :value="s.varCode" :label="`${s.varName} (${s.varCode})`" />
+                </template>
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>格式化模板</label>
+              <el-input v-model="selectedNode.transformConfig.template" type="textarea" :rows="8"
+                placeholder='如: {"user":"${userName}","id":"${userId | ToFix(0)}","name":"${input_name | ToUpper}"}'
+                class="code-editor" />
+              <div style="font-size:11px;color:#999;margin-top:4px">
+                语法: ${变量名|管道1|管道2}  |后面可接转换方法，含.为静态调用，不含.为实例调用
+              </div>
+            </div>
+          </template>
+
           <!-- NOTIFY 通知节点属性 -->
           <template v-if="selectedNode.elementType === 'NOTIFY'">
             <div class="prop-item">
@@ -1618,7 +1658,7 @@ function nodeIcon(type: string) {
   const map: Record<string, string> = {
     START: '▶', END: '⏹', METHOD: '⚙', CONDITION: '◆',
     ASSIGN: '←', CODE: '{ }', MYSQL: '⊕', MERGE: '⇒', SUB_FLOW: '⬡',
-    LOOP: '↻', DELAY: '⏱', PARALLEL: '∥', NOTIFY: '✉'
+    LOOP: '↻', DELAY: '⏱', PARALLEL: '∥', NOTIFY: '✉', TRANSFORM: '📝'
   }
   return map[type] || '?'
 }
@@ -1627,7 +1667,7 @@ function nodeTypeName(type: string) {
   const map: Record<string, string> = {
     START: '开始', END: '结束', METHOD: '方法', CONDITION: '条件',
     ASSIGN: '赋值', CODE: '代码', MYSQL: '数据库', MERGE: '聚合', SUB_FLOW: '子流程',
-    LOOP: '循环', DELAY: '延迟', PARALLEL: '并行', NOTIFY: '通知'
+    LOOP: '循环', DELAY: '延迟', PARALLEL: '并行', NOTIFY: '通知', TRANSFORM: '模板转换'
   }
   return map[type] || type
 }
@@ -1647,6 +1687,7 @@ const nodeToolList = [
   { type: 'DELAY', icon: '⏱', label: '延迟' },
   { type: 'PARALLEL', icon: '∥', label: '并行' },
   { type: 'NOTIFY', icon: '✉', label: '通知' },
+  { type: 'TRANSFORM', icon: '📝', label: '模板转换' },
 ]
 
 function addNode(type: string) {
@@ -1692,6 +1733,9 @@ function addNode(type: string) {
     notifyType: 'WEBHOOK', webhookUrl: '', webhookMethod: 'POST',
     webhookHeaders: '', bodyTemplate: '{"flowKey":"${flowKey}","status":"${status}"}',
     emailTo: '', emailSubject: '', failOnError: false
+  }
+  if (type === 'TRANSFORM') bNode.transformConfig = {
+    targetType: 'VARIABLE', targetCode: '', template: ''
   }
 
   businessNodes.value.push(bNode)

@@ -69,6 +69,10 @@ public class FlowNode
     /// <summary>通知节点配置（NOTIFY 节点）</summary>
     [JsonPropertyName("notifyConfig")]
     public NotifyConfig? NotifyConfig { get; set; }
+
+    /// <summary>模板转换节点配置（TRANSFORM 节点）</summary>
+    [JsonPropertyName("transformConfig")]
+    public TransformConfig? TransformConfig { get; set; }
 }
 
 /// <summary>方法节点配置</summary>
@@ -349,4 +353,20 @@ public class NotifyConfig
     /// <summary>失败时是否中断流程，false=仅记录日志继续执行</summary>
     [JsonPropertyName("failOnError")]
     public bool FailOnError { get; set; } = false;
+}
+
+/// <summary>模板转换节点配置（TRANSFORM 节点）</summary>
+public class TransformConfig
+{
+    /// <summary>目标类型：INPUT=入参, OUTPUT=出参, VARIABLE=变量, STATIC=静态变量</summary>
+    [JsonPropertyName("targetType")]
+    public string TargetType { get; set; } = "VARIABLE";
+
+    /// <summary>目标名称（变量/参数 key）</summary>
+    [JsonPropertyName("targetCode")]
+    public string TargetCode { get; set; } = "";
+
+    /// <summary>模板文本，支持 ${varName} 和 ${varName.sub.path | transform1 | transform2}</summary>
+    [JsonPropertyName("template")]
+    public string Template { get; set; } = "";
 }
