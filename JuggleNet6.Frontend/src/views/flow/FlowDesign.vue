@@ -448,7 +448,7 @@
               </el-select>
               <span class="arrow-icon">→</span>
               <el-select v-model="rule.target" placeholder="API入参名" size="small" style="width:36%" filterable allow-create default-first-option>
-                <el-option v-for="p in selectedApiInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                <el-option v-for="p in selectedApiInputParams" :key="p.paramCode + (p._prefix||'')" :value="p.paramCode" :label="`${p._displayName || p.paramName} (${p.paramCode})`" :style="{ textIndent: (p._level||0) * 16 + 'px' }" />
               </el-select>
               <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.method!.inputFillRules.splice(i, 1)" />
             </div>
@@ -460,7 +460,7 @@
             </div>
             <div v-for="(rule, i) in selectedNode.method?.outputFillRules" :key="'o'+i" class="fill-rule-row">
               <el-select v-model="rule.source" placeholder="响应字段path" size="small" style="flex:1" filterable allow-create default-first-option>
-                <el-option v-for="p in selectedApiOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                <el-option v-for="p in selectedApiOutputParams" :key="p.paramCode + (p._prefix||'')" :value="p.paramCode" :label="`${p._displayName || p.paramName} (${p.paramCode})`" :style="{ textIndent: (p._level||0) * 16 + 'px' }" />
               </el-select>
               <span class="arrow-icon">→</span>
               <el-select v-model="rule.targetType" size="small" style="width:80px;flex-shrink:0">
@@ -1922,12 +1922,36 @@ function onApiSelect(val: any[]) {
 async function loadApiParams(apiId: number) {
   try {
     const res: any = await request.get(`/suite/api/info/${apiId}`)
-    selectedApiInputParams.value = res.data?.inputParams || []
-    selectedApiOutputParams.value = res.data?.outputParams || []
+    const inputs = res.data?.inputParams || []
+    const outputs = res.data?.outputParams || []
+    // 递归加载对象属性的子属性
+    selectedApiInputParams.value = await buildParamTree(inputs)
+    selectedApiOutputParams.value = await buildParamTree(outputs)
   } catch {
     selectedApiInputParams.value = []
     selectedApiOutputParams.value = []
   }
+}
+
+async function buildParamTree(params: any[], level = 0, prefix = ''): Promise<any[]> {
+  const result: any[] = []
+  for (const p of params) {
+    result.push({ ...p, _level: level, _prefix: prefix, _displayName: prefix + (p.paramName || p.paramCode) })
+    // 如果是对象或数组类型，且有关联对象，加载子属性
+    if ((p.dataType === 'object' || p.dataType === 'array') && p.objectCode) {
+      const obj = objectList.value.find((o: any) => o.objectCode === p.objectCode)
+      if (obj) {
+        try {
+          const childRes: any = await request.get('/parameter/list', { params: { ownerId: obj.id, paramType: 3 } })
+          const children = childRes.data || []
+          const childPrefix = prefix + '\xA0\xA0\xA0\xA0'
+          const childTree = await buildParamTree(children, level + 1, childPrefix)
+          result.push(...childTree)
+        } catch {}
+      }
+    }
+  }
+  return result
 }
 
 function addFillRule(type: 'input' | 'output') {
