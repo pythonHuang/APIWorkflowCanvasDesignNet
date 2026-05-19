@@ -29,17 +29,14 @@ public class TransformNodeExecutor : INodeExecutor
     /// <summary>处理模板，替换 ${...} 占位符</summary>
     internal static string ProcessTemplate(string template, FlowContext context)
     {
-        // 匹配 ${...} 占位符（支持嵌套花括号内的内容直到匹配的 }）
         return Regex.Replace(template, @"\$\{([^}]+)\}", match =>
         {
             var expr = match.Groups[1].Value.Trim();
             var parts = expr.Split('|');
             var path = parts[0].Trim();
 
-            // 读取变量值
             var value = GetVariableValue(path, context);
 
-            // 应用管道转换（跳过第一个 path 元素）
             for (int i = 1; i < parts.Length; i++)
             {
                 var transform = parts[i].Trim();
@@ -47,8 +44,24 @@ public class TransformNodeExecutor : INodeExecutor
                 value = ApplyTransform(value, transform);
             }
 
-            return value?.ToString() ?? "";
+            return ValueToString(value);
         });
+    }
+
+    /// <summary>将值转为模板替换用的字符串（JsonElement 序列化为 JSON 字符串）</summary>
+    private static string ValueToString(object? value)
+    {
+        if (value == null) return "";
+        if (value is JsonElement je)
+        {
+            return je.ValueKind switch
+            {
+                JsonValueKind.String => je.GetString() ?? "",
+                JsonValueKind.Null => "",
+                _ => je.GetRawText()
+            };
+        }
+        return value.ToString() ?? "";
     }
 
     /// <summary>从上下文中读取变量值，支持点路径（如 userInfo.name）</summary>
@@ -272,28 +285,46 @@ public class TransformNodeExecutor : INodeExecutor
         }
     }
 
-    /// <summary>将模板结果赋值到目标</summary>
+    /// <summary>将模板结果赋值到目标，尝试转换为 JSON 类型</summary>
     private static void ApplyResult(string targetType, string targetCode, string result, FlowContext context)
     {
         if (string.IsNullOrEmpty(targetCode)) return;
 
+        // 尝试将结果转为 JSON 对象（如果看起来像 JSON）
+        var value = TryParseJson(result);
+
         switch (targetType.ToUpperInvariant())
         {
             case "VARIABLE":
-                context.SetVariable(targetCode, result);
+                context.SetVariable(targetCode, value);
                 break;
             case "STATIC":
                 context.StaticVariables[targetCode] = result;
                 context.ModifiedStaticVarCodes.Add(targetCode);
                 break;
             case "INPUT":
-                // 入参：写入 input_ 前缀变量
-                context.SetVariable(targetCode.StartsWith("input_") ? targetCode : "input_" + targetCode, result);
+                context.SetVariable(targetCode.StartsWith("input_") ? targetCode : "input_" + targetCode, value);
                 break;
             case "OUTPUT":
-                // 出参：写入 output_ 前缀变量
-                context.SetVariable(targetCode.StartsWith("output_") ? targetCode : "output_" + targetCode, result);
+                context.SetVariable(targetCode.StartsWith("output_") ? targetCode : "output_" + targetCode, value);
                 break;
         }
+    }
+
+    /// <summary>尝试将字符串解析为 JSON，成功返回 JsonElement，失败返回原字符串</summary>
+    private static object TryParseJson(string str)
+    {
+        if (string.IsNullOrEmpty(str)) return str;
+        str = str.Trim();
+        if ((str.StartsWith("{") && str.EndsWith("}")) || (str.StartsWith("[") && str.EndsWith("]")))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(str);
+                return doc.RootElement.Clone();
+            }
+            catch { }
+        }
+        return str;
     }
 }
