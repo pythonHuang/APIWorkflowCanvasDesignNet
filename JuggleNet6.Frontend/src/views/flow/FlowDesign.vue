@@ -426,11 +426,12 @@
               <el-button size="small" icon="Plus" link @click="addFillRule('input')" style="margin-left:auto">添加</el-button>
             </div>
             <div v-for="(rule, i) in selectedNode.method?.inputFillRules" :key="'i'+i" class="fill-rule-row">
-              <el-select v-model="rule.sourceType" size="small" style="width:70px;flex-shrink:0">
+              <el-select v-model="rule.sourceType" size="small" style="width:70px;flex-shrink:0" @change="rule.sourcePath = ''">
                 <el-option value="VARIABLE" label="变量" />
                 <el-option value="CONSTANT" label="常量" />
                 <el-option value="STATIC" label="静态" />
                 <el-option value="INPUT" label="入参" />
+                <el-option value="SUB_PROPERTY" label="子对象" />
               </el-select>
               <el-input v-if="rule.sourceType==='CONSTANT'" v-model="rule.source" placeholder="常量值" size="small" style="flex:1" />
               <el-select v-else-if="rule.sourceType==='STATIC'" v-model="rule.source" placeholder="选择静态变量" size="small" style="flex:1">
@@ -438,6 +439,9 @@
               </el-select>
               <el-select v-else-if="rule.sourceType==='INPUT'" v-model="rule.source" placeholder="选择入参" size="small" style="flex:1">
                 <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+              </el-select>
+              <el-select v-else-if="rule.sourceType==='SUB_PROPERTY'" v-model="rule.source" placeholder="非简单类型" size="small" style="flex:1" @change="rule.sourcePath = ''">
+                <el-option v-for="c in allComplexTypes" :key="c.code" :value="c.code" :label="`${c.name}(${c.code}) [${sourceTypeTag(c.type)}]`" />
               </el-select>
               <el-select v-else v-model="rule.source" placeholder="来源变量" size="small" style="flex:1">
                 <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
@@ -464,6 +468,7 @@
                 <el-option value="OUTPUT" label="出参" />
                 <el-option value="STATIC" label="静态" />
                 <el-option value="INPUT" label="入参" />
+                <el-option value="SUB_PROPERTY" label="子对象" />
               </el-select>
               <el-select v-model="rule.target" :placeholder="methodOutputTargetPlaceholder(rule.targetType)" size="small" style="width:46%">
                 <template v-if="rule.targetType === 'VARIABLE'">
@@ -477,6 +482,9 @@
                 </template>
                 <template v-else-if="rule.targetType === 'INPUT'">
                   <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                </template>
+                <template v-else-if="rule.targetType === 'SUB_PROPERTY'">
+                  <el-option v-for="c in allComplexTypes" :key="c.code" :value="c.code" :label="`${c.name}(${c.code}) [${sourceTypeTag(c.type)}]`" />
                 </template>
               </el-select>
               <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.method!.outputFillRules.splice(i, 1)" />
@@ -497,7 +505,7 @@
                   <el-option value="VARIABLE" label="变量" />
                   <el-option value="STATIC" label="静态" />
                   <el-option value="INPUT" label="入参" />
-                  <el-option value="INPUT_PROPERTY" label="入参子对象" />
+                  <el-option value="SUB_PROPERTY" label="子对象" />
                 </el-select>
                 <template v-if="rule.sourceType === 'CONSTANT'">
                   <el-input v-model="rule.source" placeholder="常量值" size="small" style="flex:1" />
@@ -517,14 +525,14 @@
                     <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
                   </el-select>
                 </template>
-                <template v-else-if="rule.sourceType === 'INPUT_PROPERTY'">
-                  <el-select v-model="rule.source" placeholder="选择入参" size="small" style="flex:1" @change="rule.sourcePath = ''">
-                    <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                <template v-else-if="rule.sourceType === 'SUB_PROPERTY'">
+                  <el-select v-model="rule.source" placeholder="选择非简单类型" size="small" style="flex:1" @change="rule.sourcePath = ''">
+                    <el-option v-for="c in allComplexTypes" :key="c.code" :value="c.code" :label="`${c.name}(${c.code}) [${sourceTypeTag(c.type)}]`" />
                   </el-select>
                 </template>
               </div>
               <!-- 属性路径行 -->
-              <div v-if="(rule.sourceType === 'INPUT_PROPERTY' || rule.targetType === 'OUTPUT_PROPERTY')" class="assign-row" style="margin-top:2px;">
+              <div v-if="rule.sourceType === 'SUB_PROPERTY' || rule.targetType === 'SUB_PROPERTY'" class="assign-row" style="margin-top:2px;">
                 <span style="font-size:11px;color:#888;width:80px;flex-shrink:0">属性</span>
                 <el-input v-model="rule.sourcePath" placeholder="如: name 或 user.id" size="small" style="flex:1" />
                 <el-button size="small" icon="Search" @click="browseProperties(rule)" style="flex-shrink:0">浏览</el-button>
@@ -536,7 +544,7 @@
                   <el-option value="OUTPUT" label="出参" />
                   <el-option value="STATIC" label="静态" />
                   <el-option value="INPUT" label="入参" />
-                  <el-option value="OUTPUT_PROPERTY" label="出参子对象" />
+                  <el-option value="SUB_PROPERTY" label="子对象" />
                 </el-select>
                 <el-select v-model="rule.target" :placeholder="getTargetPlaceholder(rule.targetType)" size="small" style="flex:1">
                   <template v-if="rule.targetType === 'VARIABLE'">
@@ -551,8 +559,8 @@
                   <template v-else-if="rule.targetType === 'INPUT'">
                     <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
                   </template>
-                  <template v-else-if="rule.targetType === 'OUTPUT_PROPERTY'">
-                    <el-option v-for="p in flowOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  <template v-else-if="rule.targetType === 'SUB_PROPERTY'">
+                    <el-option v-for="c in allComplexTypes" :key="c.code" :value="c.code" :label="`${c.name}(${c.code}) [${sourceTypeTag(c.type)}]`" />
                   </template>
                 </el-select>
                 <el-select v-model="rule.dataType" size="small" style="width:72px;flex-shrink:0">
@@ -1274,6 +1282,24 @@ function onVarTypeChange(row: any) {
   if (row.dataType !== 'object' && row.dataType !== 'array') row.objectCode = ''
 }
 
+// 所有非简单类型（object/array）的参数/变量，供"子对象"选择
+const allComplexTypes = computed(() => {
+  const items: any[] = []
+  for (const p of flowInputParams.value) {
+    if (p.dataType === 'object' || p.dataType === 'array') items.push({ code: p.paramCode, name: p.paramName, type: 'input', objectCode: p.objectCode, dataType: p.dataType })
+  }
+  for (const p of flowOutputParams.value) {
+    if (p.dataType === 'object' || p.dataType === 'array') items.push({ code: p.paramCode, name: p.paramName, type: 'output', objectCode: p.objectCode, dataType: p.dataType })
+  }
+  for (const v of allVariables.value) {
+    if (v.dataType === 'object' || v.dataType === 'array') items.push({ code: v.variableCode, name: v.variableName, type: 'variable', objectCode: v.objectCode, dataType: v.dataType })
+  }
+  for (const s of staticVariables.value) {
+    if (s.dataType === 'object' || s.dataType === 'array') items.push({ code: s.varCode, name: s.varName, type: 'static', objectCode: s.objectCode, dataType: s.dataType })
+  }
+  return items
+})
+
 const selectedNode = computed(() => businessNodes.value.find(n => n.key === selectedNodeKey.value) || null)
 const selectedEdgeInfo = computed(() => selectedEdgeId.value ? vfEdges.value.find(e => e.id === selectedEdgeId.value) : null)
 const hasStart = computed(() => businessNodes.value.some(n => n.elementType === 'START'))
@@ -1907,7 +1933,7 @@ async function loadApiParams(apiId: number) {
 function addFillRule(type: 'input' | 'output') {
   if (!selectedNode.value?.method) return
   const rule = {
-    source: '', sourceType: type === 'input' ? 'VARIABLE' : 'OUTPUT_PARAM',
+    source: '', sourceType: type === 'input' ? 'VARIABLE' : 'OUTPUT_PARAM', sourcePath: '',
     target: '', targetType: type === 'input' ? 'INPUT_PARAM' : 'VARIABLE'
   }
   if (type === 'input') selectedNode.value.method.inputFillRules.push(rule)
@@ -1932,17 +1958,13 @@ const propBrowserLevels = ref<any[]>([]) // 级联层级 [{ params: [], selected
 async function browseProperties(rule: any) {
   propBrowserRule.value = rule
   propBrowserLevels.value = []
-  // 根据规则类型确定要查询的参数来源
-  const srcParam = rule.sourceType === 'INPUT_PROPERTY'
-    ? flowInputParams.value.find((p: any) => p.paramCode === rule.source)
-    : rule.targetType === 'OUTPUT_PROPERTY'
-    ? flowOutputParams.value.find((p: any) => p.paramCode === rule.target)
-    : null
-  if (!srcParam?.objectCode || !srcParam.objectCode) {
-    propBrowserLevels.value = [{ params: [], label: '请先为参数关联一个对象类型（objectCode）' }]
+  const searchCode = rule.sourceType === 'SUB_PROPERTY' ? rule.source : rule.targetType === 'SUB_PROPERTY' ? rule.target : null
+  const srcItem = allComplexTypes.value.find((c: any) => c.code === searchCode)
+  if (!srcItem?.objectCode) {
+    propBrowserLevels.value = [{ params: [], label: '该参数未关联对象类型' }]
     propBrowserVisible.value = true; return
   }
-  await loadPropLevel(0, srcParam.objectCode)
+  await loadPropLevel(0, srcItem.objectCode)
   propBrowserVisible.value = true
 }
 
@@ -1986,8 +2008,7 @@ function getTargetPlaceholder(targetType: string) {
     case 'OUTPUT': return '选择输出参数';
     case 'STATIC': return '选择静态变量';
     case 'INPUT': return '选择入参';
-    case 'INPUT_PROPERTY': return '选择入参子对象';
-    case 'OUTPUT_PROPERTY': return '选择出参子对象';
+    case 'SUB_PROPERTY': return '选择非简单类型';
     default: return '选择目标';
   }
 }
@@ -1997,8 +2018,12 @@ function methodOutputTargetPlaceholder(targetType: string) {
     case 'OUTPUT': return '选择输出参数';
     case 'STATIC': return '选择静态变量';
     case 'INPUT': return '选择入参';
+    case 'SUB_PROPERTY': return '选择非简单类型';
     default: return '选择目标';
   }
+}
+function sourceTypeTag(type: string) {
+  return { input: '入参', output: '出参', variable: '变量', static: '静态' }[type] || type
 }
 
 function addCondition() {
