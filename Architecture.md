@@ -1,8 +1,8 @@
 # Juggle 接口编排平台 - 系统架构文档
 
-> 版本：v1.0  
-> 日期：2026-03-24  
-> 基于原项目（Java + Spring Boot + Vue3）重构为 .NET 6 + Vue3 + SQLite 技术栈
+> 版本：v1.6  
+> 日期：2026-05-19  
+> 基于原项目（Java + Spring Boot + Vue3）重构为 .NET 8 + Vue3 + SQLite 技术栈
 
 ---
 
@@ -21,11 +21,11 @@
 
 ### 1.2 技术栈对比
 
-| 层次 | 原版（Java） | 重构版（.NET 6） |
+| 层次 | 原版（Java） | 重构版（.NET 8） |
 |------|------------|----------------|
-| 后端框架 | Spring Boot 2.7 | ASP.NET Core 6 (Web API) |
-| 数据库 | MySQL | SQLite |
-| ORM | MyBatis | Entity Framework Core 6 |
+| 后端框架 | Spring Boot 2.7 | ASP.NET Core 8 (Web API) |
+| 数据库 | MySQL | SQLite / MySQL / PostgreSQL / SQLServer |
+| ORM | MyBatis | Entity Framework Core 8 |
 | 前端框架 | Vue 3 | Vue 3 (Composition API) |
 | 前端语言 | TypeScript | TypeScript |
 | UI 组件库 | Element Plus | Element Plus |
@@ -100,7 +100,8 @@ Controllers/
 │   ├── UserController              # 用户登录
 │   └── DataTypeInfoController      # 数据类型列表
 ├── Open/
-│   └── FlowOpenController          # 开放接口（触发流程）
+│   ├── FlowOpenController          # 开放接口（触发流程 + 服务别名）
+│   └── WebhookTriggerController    # Webhook 触发
 └── Example/
     ├── UserExampleController       # 示例用户接口
     ├── GoodsExampleController      # 示例商品接口
@@ -325,8 +326,18 @@ t_flow_definition ──(部署)──> t_flow_info ──< t_flow_version
 |---------|------|
 | START | 开始节点，流程入口 |
 | END | 结束节点，流程出口 |
-| METHOD | 方法节点，调用 HTTP API 接口 |
+| METHOD | 方法节点，调用 HTTP API / WebService 接口 |
 | CONDITION | 条件节点，多分支判断 |
+| ASSIGN | 赋值节点，常量/变量/入参/静态→赋值给变量/出参/静态/子对象 |
+| CODE | 代码节点，执行 JavaScript 脚本 |
+| MYSQL/DB | 数据库节点，执行 SQL 查询/更新 |
+| MERGE | 聚合节点，多分支汇聚 |
+| SUB_FLOW | 子流程节点，递归调用其他已发布流程 |
+| LOOP | 循环节点，遍历数组执行子流程 |
+| DELAY | 延迟节点，等待指定时间 |
+| PARALLEL | 并行节点，多分支并发执行 |
+| NOTIFY | 通知节点，Webhook/邮件通知 |
+| TRANSFORM | 模板转换节点，${var|pipe} 语法替换占位符 |
 
 ### 6.3 变量机制
 

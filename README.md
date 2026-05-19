@@ -74,7 +74,7 @@ docker-compose up -d
 
 ### 核心流程
 - ✅ 可视化流程设计器（节点画布）
-- ✅ **13 种节点**：START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / DB / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY
+- ✅ **14 种节点**：START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / DB / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY / TRANSFORM（模板转换）
 - ✅ 节点超时 & 重试策略
 - ✅ 流程版本管理 & 版本对比
 - ✅ 流程克隆 / 导入 / 导出（含 Word 文档）
@@ -85,10 +85,12 @@ docker-compose up -d
 - ✅ 异步触发 + 结果查询
 - ✅ Webhook 触发（含签名验证）
 - ✅ 定时任务调度
+- ✅ 服务别名（`/open/services/别名` 快捷访问）
 
 ### 套件 & 接口
 - ✅ 套件 / 接口 / 对象 / 参数管理
 - ✅ 接口 Mock 功能
+- ✅ WebService（SOAP 1.1 / 1.2）支持
 
 ### 监控 & 测试
 - ✅ 监控仪表盘

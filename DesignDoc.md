@@ -1,8 +1,8 @@
 # Juggle 接口编排平台 - 系统详细设计文档
 
-> 版本：v1.5  
-> 日期：2026-04-01  
-> 技术栈：ASP.NET Core 8 + Vue3 + SQLite + EF Core（DDD 四层架构）
+> 版本：v1.6  
+> 日期：2026-05-19  
+> 技术栈：ASP.NET Core 8 + Vue3 + SQLite/Multi-DB + EF Core 8（DDD 四层架构）
 
 ---
 
@@ -564,6 +564,19 @@ public class SubFlowMapping
     public string Target { get; set; }   // 目标变量 key
 }
 
+// 模板转换节点
+public class TransformNode : FlowNode
+{
+    public TransformConfig TransformConfig { get; set; }
+}
+
+public class TransformConfig
+{
+    public string TargetType { get; set; }   // INPUT/OUTPUT/VARIABLE/STATIC
+    public string TargetCode { get; set; }   // 目标变量/参数 key
+    public string Template { get; set; }     // 模板文本，支持${var|pipe}
+}
+
 // 流程引擎
 public class FlowEngine
 {
@@ -635,6 +648,7 @@ C# 实现方案：使用 `System.Linq.Dynamic.Core` 库或手动解析 `conditio
 - 数据库节点（SQL 查询，支持 `${varName}` 模板替换）
 - 聚合节点（多分支汇聚）
 - **子流程节点**（调用已发布的其他流程，支持入参/出参变量映射）
+- **模板转换节点**（${var|pipe} 语法替换占位符，支持静态/实例方法调用，结果赋值到入参/出参/变量/静态）
 
 **画布区：**
 - 节点拖拽放置
@@ -1310,9 +1324,25 @@ VALUES ('sync_example', '示例流程', 'sync', '...JSON...', '', 0);
 - [x] 套件管理导入/导出（含接口+参数全量导出/导入）
 - [x] 开放接口支持不带版本号（自动取最新已发布版本）
 
-### v1.6（待规划）
+### v1.6（模板转换与服务增强）✅ 已完成（2026-05-19）
+- [x] TRANSFORM 模板转换节点（${var|pipe} 语法，支持静态/实例方法调用）
+- [x] 流程访问别名（通过 /open/services/{alias} 触发最新版本）
+- [x] WebService 扩展支持 SOAP 1.2 + 独立配置操作名/命名空间/SOAPAction
+- [x] 入参增加参数位置（body/query/rawBody）+ Header 增加默认值
+- [x] 流程变量管理支持内联编辑
+- [x] 流程参数配置增加"来自对象"按钮（入参/出参）
+- [x] 赋值节点增加入参类型来源，方法节点入/出规则增加静态+入参类型
+- [x] 接口详情入参/出参/Header 增加"来自对象"按钮
+- [x] 接口列表增加接口测试功能（在线调试）
+- [x] object/array 类型可关联全局对象类型
+- [x] 赋值节点 INPUT_PROPERTY/OUTPUT_PROPERTY 支持级联属性选择
+- [x] 流程变量仅保留"中间变量"类型
+- [x] 监控仪表盘独立菜单，置于首位
+- [x] 复制 URL 剪贴板兼容非 HTTPS 环境
+
+### v1.7（待规划）
 - [ ] 流程模板市场
-- [ ] 流程版本对比
-- [ ] 执行日志统计图表
+- [ ] 执行日志统计图表增强
 - [ ] 接口批量测试
+- [ ] 属性选择器集成到方法节点入/出参
 
