@@ -518,10 +518,16 @@
                   </el-select>
                 </template>
                 <template v-else-if="rule.sourceType === 'INPUT_PROPERTY'">
-                  <el-select v-model="rule.source" placeholder="选择入参" size="small" style="flex:1">
+                  <el-select v-model="rule.source" placeholder="选择入参" size="small" style="flex:1" @change="rule.sourcePath = ''">
                     <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
                   </el-select>
                 </template>
+              </div>
+              <!-- 属性路径行 -->
+              <div v-if="(rule.sourceType === 'INPUT_PROPERTY' || rule.targetType === 'OUTPUT_PROPERTY')" class="assign-row" style="margin-top:2px;">
+                <span style="font-size:11px;color:#888;width:80px;flex-shrink:0">属性</span>
+                <el-input v-model="rule.sourcePath" placeholder="如: name 或 user.id" size="small" style="flex:1" />
+                <el-button size="small" icon="Search" @click="browseProperties(rule)" style="flex-shrink:0">浏览</el-button>
               </div>
               <div class="assign-row" style="margin-top:4px">
                 <span style="font-size:12px;color:#666;width:72px;flex-shrink:0">→ 赋值给</span>
@@ -838,6 +844,34 @@
         <template #footer>
           <el-button @click="flowObjDialogVisible = false">取消</el-button>
           <el-button type="primary" :disabled="flowObjPreviewParams.length === 0" @click="importFlowObjParams">导入到参数列表</el-button>
+        </template>
+      </el-dialog>
+
+      <!-- 属性浏览器对话框 -->
+      <el-dialog v-model="propBrowserVisible" title="选择对象属性" width="600px" append-to-body>
+        <div style="display:flex;gap:12px;overflow-x:auto;min-height:200px">
+          <div v-for="(level, lIdx) in propBrowserLevels" :key="lIdx" style="min-width:180px;flex-shrink:0">
+            <div style="font-size:12px;color:#999;margin-bottom:4px">
+              {{ lIdx === 0 ? '选择属性' : '子属性' }}
+              <el-tag v-if="level.objectCode" size="small" style="margin-left:4px">{{ level.objectCode }}</el-tag>
+            </div>
+            <div v-if="!level.params || level.params.length === 0" style="color:#ccc;font-size:13px;padding:8px">
+              {{ level.label || '无可用属性' }}
+            </div>
+            <el-radio-group v-else v-model="level.selected" @change="onPropLevelSelect(lIdx, $event)" style="display:flex;flex-direction:column">
+              <el-radio v-for="p in level.params" :key="p.paramCode" :value="p.paramCode" style="margin-bottom:4px;padding:4px 8px;border:1px solid #eee;border-radius:4px">
+                <span>{{ p.paramName || p.paramCode }}</span>
+                <el-tag size="small" style="margin-left:4px">{{ p.dataType || 'string' }}</el-tag>
+              </el-radio>
+            </el-radio-group>
+          </div>
+        </div>
+        <div v-if="propBrowserLevels.length > 0 && propBrowserLevels.some(l => l.selected)" style="margin-top:8px;color:#1890ff;font-size:12px">
+          已选路径: {{ propBrowserLevels.filter(l => l.selected).map(l => l.selected).join(' → ') }}
+        </div>
+        <template #footer>
+          <el-button @click="propBrowserVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmPropSelection">确定</el-button>
         </template>
       </el-dialog>
     </el-drawer>
@@ -1887,7 +1921,62 @@ function addHeaderRule() {
 
 function addAssignRule() {
   if (!selectedNode.value?.assignRules) return
-  selectedNode.value.assignRules.push({ source: '', sourceType: 'CONSTANT', target: '', targetType: 'VARIABLE', dataType: 'string' })
+  selectedNode.value.assignRules.push({ source: '', sourceType: 'CONSTANT', sourcePath: '', target: '', targetType: 'VARIABLE', dataType: 'string' })
+}
+
+// 属性浏览器状态
+const propBrowserVisible = ref(false)
+const propBrowserRule = ref<any>(null)
+const propBrowserLevels = ref<any[]>([]) // 级联层级 [{ params: [], selected: '' }]
+
+async function browseProperties(rule: any) {
+  propBrowserRule.value = rule
+  propBrowserLevels.value = []
+  // 根据规则类型确定要查询的参数来源
+  const srcParam = rule.sourceType === 'INPUT_PROPERTY'
+    ? flowInputParams.value.find((p: any) => p.paramCode === rule.source)
+    : rule.targetType === 'OUTPUT_PROPERTY'
+    ? flowOutputParams.value.find((p: any) => p.paramCode === rule.target)
+    : null
+  if (!srcParam?.objectCode || !srcParam.objectCode) {
+    propBrowserLevels.value = [{ params: [], label: '请先为参数关联一个对象类型（objectCode）' }]
+    propBrowserVisible.value = true; return
+  }
+  await loadPropLevel(0, srcParam.objectCode)
+  propBrowserVisible.value = true
+}
+
+async function loadPropLevel(level: number, objectCode: string) {
+  // 查找对象 ID
+  const obj = objectList.value.find((o: any) => o.objectCode === objectCode)
+  if (!obj) { propBrowserLevels.value[level] = { params: [], label: `对象${objectCode}不存在` }; return }
+  const res: any = await request.get('/parameter/list', { params: { ownerId: obj.id, paramType: 3 } })
+  propBrowserLevels.value[level] = { params: res.data || [], selected: '', level, objectCode }
+  // 确保下一级清空
+  propBrowserLevels.value = propBrowserLevels.value.slice(0, level + 1)
+}
+
+function onPropLevelSelect(level: number, paramCode: string) {
+  const currentLevel = propBrowserLevels.value[level]
+  if (!currentLevel) return
+  currentLevel.selected = paramCode
+  // 检查选中的属性是否也是 object/array 类型且有 objectCode
+  const selectedParam = currentLevel.params.find((p: any) => p.paramCode === paramCode)
+  if (selectedParam && (selectedParam.dataType === 'object' || selectedParam.dataType === 'array') && selectedParam.objectCode) {
+    loadPropLevel(level + 1, selectedParam.objectCode)
+  } else {
+    propBrowserLevels.value = propBrowserLevels.value.slice(0, level + 1)
+  }
+}
+
+function confirmPropSelection() {
+  if (!propBrowserRule.value) return
+  const path = propBrowserLevels.value
+    .filter((l: any) => l.selected)
+    .map((l: any) => l.selected)
+    .join('.')
+  propBrowserRule.value.sourcePath = path
+  propBrowserVisible.value = false
 }
 
 // 获取赋值目标占位符文本
