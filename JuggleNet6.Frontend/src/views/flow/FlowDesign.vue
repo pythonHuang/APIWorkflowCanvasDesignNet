@@ -880,8 +880,8 @@
             <div v-if="!level.params || level.params.length === 0" style="color:#ccc;font-size:13px;padding:8px">
               {{ level.label || '无可用属性' }}
             </div>
-            <el-radio-group v-else v-model="level.selected" @change="onPropLevelSelect(lIdx, $event)" style="display:flex;flex-direction:column">
-              <el-radio v-for="p in level.params" :key="p.paramCode" :value="p.paramCode" style="margin-bottom:4px;padding:4px 8px;border:1px solid #eee;border-radius:4px">
+            <el-radio-group v-else v-model="level.selected" @change="onPropLevelSelect(lIdx, $event)" style="display:flex;flex-direction:column;width:100%">
+              <el-radio v-for="p in level.params" :key="p.paramCode" :value="p.paramCode" style="margin-bottom:4px;padding:4px 8px;border:1px solid #eee;border-radius:4px;display:flex;align-items:flex-start;text-align:left;width:100%">
                 <span>{{ p.paramName || p.paramCode }}</span>
                 <el-tag size="small" style="margin-left:4px">{{ p.dataType || 'string' }}</el-tag>
               </el-radio>
