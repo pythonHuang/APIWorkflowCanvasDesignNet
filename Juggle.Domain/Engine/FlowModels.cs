@@ -148,6 +148,10 @@ public class FillRule
     /// <summary>INPUT_PARAM / OUTPUT_PARAM / HEADER / VARIABLE / OUTPUT（流程输出参数）/ SUB_PROPERTY</summary>
     [JsonPropertyName("targetType")]
     public string TargetType { get; set; } = "INPUT_PARAM";
+
+    /// <summary>目标子对象属性路径（targetType 为 SUB_PROPERTY 时使用）</summary>
+    [JsonPropertyName("targetPath")]
+    public string TargetPath { get; set; } = "";
 }
 
 /// <summary>赋值规则（ASSIGN 节点）</summary>
@@ -172,6 +176,10 @@ public class AssignRule
     /// <summary>目标类型：VARIABLE（流程变量）/ STATIC（全局静态变量）/ OUTPUT / INPUT / SUB_PROPERTY</summary>
     [JsonPropertyName("targetType")]
     public string TargetType { get; set; } = "VARIABLE";
+
+    /// <summary>目标子对象属性路径（targetType 为 SUB_PROPERTY 时使用），如 "name" 或 "user.id"</summary>
+    [JsonPropertyName("targetPath")]
+    public string TargetPath { get; set; } = "";
 
     /// <summary>数据类型（用于常量解析）：string/integer/double/boolean</summary>
     [JsonPropertyName("dataType")]

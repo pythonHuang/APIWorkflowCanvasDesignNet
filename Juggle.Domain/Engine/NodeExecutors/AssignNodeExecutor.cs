@@ -54,7 +54,7 @@ public class AssignNodeExecutor : INodeExecutor
                         context.SetOutputParameter(rule.Target, value);
                         break;
                     case "SUB_PROPERTY":
-                        context.SetNestedProperty(rule.Target, rule.SourcePath, value);
+                        context.SetNestedProperty(rule.Target, rule.TargetPath, value);
                         break;
                     default:
                         // VARIABLE / INPUT 等
