@@ -834,18 +834,36 @@
           <el-button size="small" type="primary" icon="Plus" @click="addVariable">添加变量</el-button>
         </div>
         <el-table :data="allVariables" border size="small">
-          <el-table-column prop="variableCode" label="变量Code" width="140" />
-          <el-table-column prop="variableName" label="变量名" width="110" />
-          <el-table-column prop="variableType" label="类型" width="80">
+          <el-table-column label="变量Code" width="140">
             <template #default="{ row }">
-              <el-tag size="small" :type="varTypeColor(row.variableType)">{{ varTypeName(row.variableType) }}</el-tag>
+              <el-input v-model="row.variableCode" size="small" placeholder="如: env_result" />
             </template>
           </el-table-column>
-          <el-table-column prop="dataType" label="数据类型" width="80" />
-          <el-table-column prop="defaultValue" label="默认值" />
-          <el-table-column label="操作" width="60">
+          <el-table-column label="变量名" width="110">
+            <template #default="{ row }">
+              <el-input v-model="row.variableName" size="small" placeholder="如: 结果" />
+            </template>
+          </el-table-column>
+          <el-table-column label="类型" width="80">
+            <template #default>
+              <el-tag size="small" type="info">中间</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="数据类型" width="95">
+            <template #default="{ row }">
+              <el-select v-model="row.dataType" size="small" style="width:100%">
+                <el-option v-for="t in dataTypes" :key="t.value" :value="t.value" :label="t.label" />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="默认值">
+            <template #default="{ row }">
+              <el-input v-model="row.defaultValue" size="small" placeholder="可选" />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="55">
             <template #default="{ $index }">
-              <el-button size="small" type="danger" link @click="allVariables.splice($index, 1)">删除</el-button>
+              <el-button size="small" type="danger" link @click="allVariables.splice($index, 1)">删</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -1929,9 +1947,6 @@ async function saveVariables() {
   // 保存成功后重新加载流程信息，确保数据同步
   await loadFlowInfo()
 }
-
-function varTypeName(type: string) { return { VARIABLE: '中间' }[type] || type }
-function varTypeColor(type: string) { return { VARIABLE: 'info' }[type] || '' }
 
 // ====== 保存/部署/调试 ======
 async function saveFlow() {
