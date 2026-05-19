@@ -20,9 +20,14 @@
         </el-descriptions-item>
         <el-descriptions-item label="请求方式">
           <el-tag v-if="apiInfo?.methodType !== 'WEBSERVICE'" :type="methodColor(apiInfo?.requestType)" size="small">{{ apiInfo?.requestType }}</el-tag>
-          <el-tag v-else type="warning" size="small">SOAP 1.1</el-tag>
+          <el-tag v-else type="warning" size="small">SOAP {{ apiInfo?.soapVersion === '12' ? '1.2' : '1.1' }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="内容类型">{{ apiInfo?.methodType === 'WEBSERVICE' ? 'text/xml' : apiInfo?.contentType }}</el-descriptions-item>
+        <el-descriptions-item label="内容类型">{{ apiInfo?.methodType === 'WEBSERVICE' ? (apiInfo?.soapVersion === '12' ? 'application/soap+xml' : 'text/xml') : apiInfo?.contentType }}</el-descriptions-item>
+        <template v-if="apiInfo?.methodType === 'WEBSERVICE'">
+          <el-descriptions-item label="SOAP 操作">{{ apiInfo?.soapMethod || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="命名空间">{{ apiInfo?.soapNamespace || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="SOAPAction">{{ apiInfo?.soapAction || '-' }}</el-descriptions-item>
+        </template>
         <el-descriptions-item label="URL" :span="2">{{ apiInfo?.url }}</el-descriptions-item>
         <el-descriptions-item label="描述" :span="2">{{ apiInfo?.methodDesc || '-' }}</el-descriptions-item>
         <el-descriptions-item label="Mock状态">

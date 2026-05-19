@@ -51,4 +51,24 @@ public class ApiEntity : BaseEntity
     /// 调用方式：HTTP / WEBSERVICE
     /// </summary>
     public string? MethodType { get; set; } = "HTTP";
+
+    /// <summary>
+    /// SOAP 版本: 11=SOAP 1.1, 12=SOAP 1.2
+    /// </summary>
+    public string? SoapVersion { get; set; } = "11";
+
+    /// <summary>
+    /// SOAP 操作名称（对应 wsdl:operation name）
+    /// </summary>
+    public string? SoapMethod { get; set; }
+
+    /// <summary>
+    /// SOAP 命名空间（xmlns）
+    /// </summary>
+    public string? SoapNamespace { get; set; }
+
+    /// <summary>
+    /// SOAPAction 请求头值
+    /// </summary>
+    public string? SoapAction { get; set; }
 }

@@ -11,4 +11,12 @@ public class ApiAddRequest
     public string? MockJson { get; set; }
     /// <summary>HTTP WEBSERVICE</summary>
     public string MethodType { get; set; } = "HTTP";
+    /// <summary>SOAP 版本: 11 / 12</summary>
+    public string? SoapVersion { get; set; }
+    /// <summary>SOAP 操作名</summary>
+    public string? SoapMethod { get; set; }
+    /// <summary>SOAP 命名空间</summary>
+    public string? SoapNamespace { get; set; }
+    /// <summary>SOAPAction 头</summary>
+    public string? SoapAction { get; set; }
 }

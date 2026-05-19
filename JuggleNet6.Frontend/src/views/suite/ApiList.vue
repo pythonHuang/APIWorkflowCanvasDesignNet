@@ -57,8 +57,26 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="URL" prop="url">
-          <el-input v-model="form.url" :placeholder="form.methodType === 'WEBSERVICE' ? 'http://...?wsdl 或 http://...?op=MethodName' : 'http://...'" />
+          <el-input v-model="form.url" :placeholder="form.methodType === 'WEBSERVICE' ? 'http://...?wsdl' : 'http://...'" />
         </el-form-item>
+        <!-- WebService 专用字段 -->
+        <template v-if="form.methodType === 'WEBSERVICE'">
+          <el-form-item label="SOAP 版本">
+            <el-radio-group v-model="form.soapVersion">
+              <el-radio value="11">SOAP 1.1</el-radio>
+              <el-radio value="12">SOAP 1.2</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item label="操作名称">
+            <el-input v-model="form.soapMethod" placeholder="如: SayHello" />
+          </el-form-item>
+          <el-form-item label="命名空间">
+            <el-input v-model="form.soapNamespace" placeholder="如: http://example.com/ws/" />
+          </el-form-item>
+          <el-form-item label="SOAPAction">
+            <el-input v-model="form.soapAction" placeholder="如: urn:example/SayHello" />
+          </el-form-item>
+        </template>
         <el-form-item v-if="form.methodType === 'HTTP'" label="内容类型">
           <el-select v-model="form.contentType">
             <el-option value="JSON" label="JSON" />
@@ -136,7 +154,8 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const formRef = ref()
 const form = reactive({
-  id: 0, suiteCode, methodName: '', methodType: 'HTTP', requestType: 'GET', url: '', contentType: 'JSON', methodDesc: ''
+  id: 0, suiteCode, methodName: '', methodType: 'HTTP', requestType: 'GET', url: '', contentType: 'JSON', methodDesc: '',
+  soapVersion: '11', soapMethod: '', soapNamespace: '', soapAction: ''
 })
 const rules = {
   methodName: [{ required: true, message: '请输入接口名称', trigger: 'blur' }],
@@ -155,20 +174,16 @@ async function loadData() {
 
 function openAdd() {
   isEdit.value = false
-  Object.assign(form, { id: 0, methodName: '', methodType: 'HTTP', requestType: 'GET', url: '', contentType: 'JSON', methodDesc: '' })
+  Object.assign(form, { id: 0, methodName: '', methodType: 'HTTP', requestType: 'GET', url: '', contentType: 'JSON', methodDesc: '', soapVersion: '11', soapMethod: '', soapNamespace: '', soapAction: '' })
   dialogVisible.value = true
 }
 
 function openEdit(row: any) {
   isEdit.value = true
   Object.assign(form, {
-    id: row.id,
-    methodName: row.methodName,
-    methodType: row.methodType || 'HTTP',
-    requestType: row.requestType,
-    url: row.url,
-    contentType: row.contentType,
-    methodDesc: row.methodDesc
+    id: row.id, methodName: row.methodName, methodType: row.methodType || 'HTTP',
+    requestType: row.requestType, url: row.url, contentType: row.contentType, methodDesc: row.methodDesc,
+    soapVersion: row.soapVersion || '11', soapMethod: row.soapMethod || '', soapNamespace: row.soapNamespace || '', soapAction: row.soapAction || ''
   })
   dialogVisible.value = true
 }

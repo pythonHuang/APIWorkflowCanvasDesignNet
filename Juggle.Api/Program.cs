@@ -222,6 +222,11 @@ using (var scope = app.Services.CreateScope())
         // 补建流程定义访问别名字段
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_flow_definition ADD COLUMN service_alias TEXT DEFAULT NULL;"); }
         catch { /* 列已存在则忽略 */ }
+        // 补建 API WebService 字段
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_api ADD COLUMN soap_version TEXT DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_api ADD COLUMN soap_method TEXT DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_api ADD COLUMN soap_namespace TEXT DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_api ADD COLUMN soap_action TEXT DEFAULT NULL;"); } catch { }
     }
 }
 

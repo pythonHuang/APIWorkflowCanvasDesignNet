@@ -134,6 +134,10 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.ContentType).HasColumnName("content_type");
             e.Property(p => p.MockJson).HasColumnName("mock_json").HasColumnType("text");
             e.Property(p => p.MethodType).HasColumnName("method_type");
+            e.Property(p => p.SoapVersion).HasColumnName("soap_version");
+            e.Property(p => p.SoapMethod).HasColumnName("soap_method");
+            e.Property(p => p.SoapNamespace).HasColumnName("soap_namespace");
+            e.Property(p => p.SoapAction).HasColumnName("soap_action");
         });
 
         modelBuilder.Entity<ParameterEntity>(e => {
