@@ -74,12 +74,12 @@
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="必填" width="60" align="center">
+          <el-table-column label="必填" width="55" align="center">
             <template #default="{ row }">
               <el-checkbox v-model="row.required" :true-value="1" :false-value="0" />
             </template>
           </el-table-column>
-          <el-table-column label="位置" width="95">
+          <el-table-column label="位置" width="85">
             <template #default="{ row }">
               <el-select v-model="row.paramPosition" size="small" style="width:100%" clearable>
                 <el-option value="" label="自动" />
@@ -89,7 +89,15 @@
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="默认值" width="110">
+          <el-table-column v-if="hasObjInput" label="关联对象" width="120">
+            <template #default="{ row }">
+              <el-select v-if="row.dataType === 'object' || row.dataType === 'array'" v-model="row.objectCode" size="small" style="width:100%" clearable>
+                <el-option v-for="obj in objectList" :key="obj.id" :label="obj.objectName" :value="obj.objectCode" />
+              </el-select>
+              <span v-else style="color:#ccc;font-size:11px">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="默认值" width="100">
             <template #default="{ row }">
               <el-input v-model="row.defaultValue" size="small" placeholder="可选" />
             </template>
@@ -99,7 +107,7 @@
               <el-input v-model="row.description" size="small" placeholder="可选" />
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="55" align="center">
+          <el-table-column label="操作" width="50" align="center">
             <template #default="{ $index }">
               <el-button size="small" type="danger" link @click="inputParams.splice($index, 1)">删</el-button>
             </template>
@@ -147,9 +155,17 @@
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="JSON路径" width="160">
+          <el-table-column label="JSON路径" width="140">
             <template #default="{ row }">
               <el-input v-model="row.objectCode" size="small" placeholder="如: data.temp" />
+            </template>
+          </el-table-column>
+          <el-table-column v-if="hasObjOutput" label="关联对象" width="120">
+            <template #default="{ row }">
+              <el-select v-if="row.dataType === 'object' || row.dataType === 'array'" v-model="row.childObjectCode" size="small" style="width:100%" clearable>
+                <el-option v-for="obj in objectList" :key="obj.id" :label="obj.objectName" :value="obj.objectCode" />
+              </el-select>
+              <span v-else style="color:#ccc;font-size:11px">—</span>
             </template>
           </el-table-column>
           <el-table-column label="描述">
@@ -157,7 +173,7 @@
               <el-input v-model="row.description" size="small" placeholder="可选" />
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="70" align="center">
+          <el-table-column label="操作" width="55" align="center">
             <template #default="{ $index }">
               <el-button size="small" type="danger" link @click="outputParams.splice($index, 1)">删除</el-button>
             </template>
@@ -267,7 +283,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '../../utils/request'
@@ -284,6 +300,10 @@ const outputParams = ref<any[]>([])
 const headerParams = ref<any[]>([])
 const mockEnabled = ref(false)
 const mockJson = ref('')
+
+// 检测是否有参数使用了 object/array 类型
+const hasObjInput = computed(() => inputParams.value.some(p => p.dataType === 'object' || p.dataType === 'array'))
+const hasObjOutput = computed(() => outputParams.value.some(p => p.dataType === 'object' || p.dataType === 'array'))
 
 // 来自对象功能
 const objectDialogVisible = ref(false)
@@ -305,9 +325,8 @@ onMounted(async () => {
 
     // 加载各类参数
     await Promise.all([
-      loadParams('input'),
-      loadParams('output'),
-      loadParams('header')
+      loadParams('input'), loadParams('output'), loadParams('header'),
+      loadObjects()
     ])
 
     // 加载 Mock 数据
@@ -331,6 +350,13 @@ async function loadParams(type: 'input' | 'output' | 'header') {
   if (type === 'input') inputParams.value = list
   else if (type === 'output') outputParams.value = list
   else headerParams.value = list
+}
+
+async function loadObjects() {
+  try {
+    const res: any = await request.get('/object/list')
+    objectList.value = res.data || []
+  } catch {}
 }
 
 function addParam(type: 'input' | 'output' | 'header') {
