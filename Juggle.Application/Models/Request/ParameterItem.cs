@@ -50,6 +50,11 @@ public class ParameterItem
     public string? Description { get; set; }
 
     /// <summary>
+    /// 参数位置：query=查询参数, body=请求体字段, rawBody=整个请求体
+    /// </summary>
+    public string? ParamPosition { get; set; }
+
+    /// <summary>
     /// 排序号
     /// </summary>
     public int SortNum { get; set; }

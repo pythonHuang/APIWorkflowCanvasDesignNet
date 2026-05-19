@@ -33,18 +33,19 @@ public class ParameterController : ControllerBase
         {
             _db.Parameters.Add(new ParameterEntity
             {
-                OwnerId      = req.OwnerId,
-                OwnerCode    = req.OwnerCode,
-                ParamType    = req.ParamType,
-                ParamCode    = item.ParamCode,
-                ParamName    = item.ParamName,
-                DataType     = item.DataType,
-                ObjectCode   = item.ObjectCode,
-                Required     = item.Required,
-                DefaultValue = item.DefaultValue,
-                Description  = item.Description,
-                SortNum      = sort++,
-                CreatedAt    = DateTime.Now.ToString("o")
+                OwnerId       = req.OwnerId,
+                OwnerCode     = req.OwnerCode,
+                ParamType     = req.ParamType,
+                ParamCode     = item.ParamCode,
+                ParamName     = item.ParamName,
+                DataType      = item.DataType,
+                ObjectCode    = item.ObjectCode,
+                Required      = item.Required,
+                DefaultValue  = item.DefaultValue,
+                ParamPosition = item.ParamPosition,
+                Description   = item.Description,
+                SortNum       = sort++,
+                CreatedAt     = DateTime.Now.ToString("o")
             });
         }
         await _db.SaveChangesAsync();

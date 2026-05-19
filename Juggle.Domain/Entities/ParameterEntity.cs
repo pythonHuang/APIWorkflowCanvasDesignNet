@@ -68,6 +68,11 @@ public class ParameterEntity : BaseEntity
     public string? Description { get; set; }
 
     /// <summary>
+    /// 参数位置：query=查询参数, body=请求体字段, rawBody=整个请求体, ""=自动
+    /// </summary>
+    public string? ParamPosition { get; set; }
+
+    /// <summary>
     /// 排序号（用于参数展示顺序）
     /// </summary>
     public int SortNum { get; set; } = 0;

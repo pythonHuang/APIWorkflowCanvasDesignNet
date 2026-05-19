@@ -74,12 +74,22 @@
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="必填" width="70" align="center">
+          <el-table-column label="必填" width="60" align="center">
             <template #default="{ row }">
               <el-checkbox v-model="row.required" :true-value="1" :false-value="0" />
             </template>
           </el-table-column>
-          <el-table-column label="默认值" width="130">
+          <el-table-column label="位置" width="95">
+            <template #default="{ row }">
+              <el-select v-model="row.paramPosition" size="small" style="width:100%" clearable>
+                <el-option value="" label="自动" />
+                <el-option value="query" label="Query" />
+                <el-option value="body" label="Body" />
+                <el-option value="rawBody" label="RawBody" />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="默认值" width="110">
             <template #default="{ row }">
               <el-input v-model="row.defaultValue" size="small" placeholder="可选" />
             </template>
@@ -89,9 +99,9 @@
               <el-input v-model="row.description" size="small" placeholder="可选" />
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="70" align="center">
+          <el-table-column label="操作" width="55" align="center">
             <template #default="{ $index }">
-              <el-button size="small" type="danger" link @click="inputParams.splice($index, 1)">删除</el-button>
+              <el-button size="small" type="danger" link @click="inputParams.splice($index, 1)">删</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -184,6 +194,11 @@
           <el-table-column label="必填" width="70" align="center">
             <template #default="{ row }">
               <el-checkbox v-model="row.required" :true-value="1" :false-value="0" />
+            </template>
+          </el-table-column>
+          <el-table-column label="默认值" width="120">
+            <template #default="{ row }">
+              <el-input v-model="row.defaultValue" size="small" placeholder="可选" />
             </template>
           </el-table-column>
           <el-table-column label="操作" width="70" align="center">
@@ -321,7 +336,7 @@ async function loadParams(type: 'input' | 'output' | 'header') {
 function addParam(type: 'input' | 'output' | 'header') {
   const param = {
     paramCode: '', paramName: '', dataType: 'string',
-    objectCode: '', required: 0, defaultValue: '', description: ''
+    paramPosition: '', objectCode: '', required: 0, defaultValue: '', description: ''
   }
   if (type === 'input') inputParams.value.push(param)
   else if (type === 'output') outputParams.value.push(param)

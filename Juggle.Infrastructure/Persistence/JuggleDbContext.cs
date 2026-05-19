@@ -158,6 +158,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.DefaultValue).HasColumnName("default_value");
             e.Property(p => p.Description).HasColumnName("description");
             e.Property(p => p.SortNum).HasColumnName("sort_num");
+            e.Property(p => p.ParamPosition).HasColumnName("param_position");
         });
 
         modelBuilder.Entity<ObjectEntity>(e => {

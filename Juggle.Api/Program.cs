@@ -227,6 +227,8 @@ using (var scope = app.Services.CreateScope())
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_api ADD COLUMN soap_method TEXT DEFAULT NULL;"); } catch { }
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_api ADD COLUMN soap_namespace TEXT DEFAULT NULL;"); } catch { }
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_api ADD COLUMN soap_action TEXT DEFAULT NULL;"); } catch { }
+        // 补建参数位置字段
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_parameter ADD COLUMN param_position TEXT DEFAULT NULL;"); } catch { }
     }
 }
 

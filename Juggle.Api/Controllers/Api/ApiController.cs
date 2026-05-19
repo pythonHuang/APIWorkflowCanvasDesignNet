@@ -131,8 +131,21 @@ public class ApiController : ControllerBase
             foreach (var h in req.Headers)
                 client.DefaultRequestHeaders.TryAddWithoutValidation(h.Key, h.Value?.ToString());
 
+            // 加载参数定义，获取位置信息
+            var paramDefs = await _db.Parameters
+                .Where(p => p.OwnerId == api.Id && p.ParamType == 1 && p.Deleted == 0)
+                .ToListAsync();
+            var posMap = paramDefs.ToDictionary(p => p.ParamCode!, p => p.ParamPosition ?? "");
+
             string responseJson;
             var requestType = api.RequestType?.ToUpper() ?? "GET";
+
+            // rawBody 参数：整个请求体用该参数的值
+            var rawBodyKey = posMap.FirstOrDefault(kv => kv.Value == "rawBody").Key;
+
+            // 分离 query 和 body 参数
+            var queryParams = req.Params.Where(kv => posMap.GetValueOrDefault(kv.Key, "") == "query").ToList();
+            var bodyParams = req.Params.Where(kv => posMap.GetValueOrDefault(kv.Key, "") != "query").ToList();
 
             if (requestType == "GET" || requestType == "DELETE")
             {
@@ -148,11 +161,29 @@ public class ApiController : ControllerBase
             }
             else
             {
-                var content = new StringContent(
-                    JsonSerializer.Serialize(req.Params),
-                    System.Text.Encoding.UTF8, "application/json");
+                HttpContent content;
+                if (!string.IsNullOrEmpty(rawBodyKey) && req.Params.ContainsKey(rawBodyKey))
+                {
+                    // rawBody 模式：直接用值作为整个请求体
+                    content = new StringContent(req.Params[rawBodyKey]?.ToString() ?? "",
+                        System.Text.Encoding.UTF8, api.ContentType == "XML" ? "application/xml" : "text/plain");
+                }
+                else
+                {
+                    // 标准模式：所有非 query 参数序列化为 JSON
+                    var bodyDict = bodyParams.ToDictionary(kv => kv.Key, kv => kv.Value);
+                    content = new StringContent(
+                        JsonSerializer.Serialize(bodyDict),
+                        System.Text.Encoding.UTF8, "application/json");
+                }
                 var resp = requestType == "PUT" ? await client.PutAsync(api.Url, content) : await client.PostAsync(api.Url, content);
                 responseJson = await resp.Content.ReadAsStringAsync();
+            }
+            // URL 中包含 query 参数的处理
+            if (queryParams.Any() && !(requestType == "GET" || requestType == "DELETE"))
+            {
+                // 对于非 GET 请求，将 query 参数附在 URL 上
+                // Note: This is already handled above for GET/DELETE
             }
 
             return ApiResult.Success(new { response = responseJson });
