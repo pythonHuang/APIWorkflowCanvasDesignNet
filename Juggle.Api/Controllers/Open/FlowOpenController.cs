@@ -271,7 +271,7 @@ public class FlowOpenController : ControllerBase
         if (definition == null) return Content("流程定义不存在", "text/plain");
 
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
-        var triggerUrl = $"{baseUrl}/open/flow/trigger/{key}";
+        var triggerUrl = $"{baseUrl}/open/flow/soap/{key}";
         var wsdl = GenerateWsdl(definition, flowVersion, triggerUrl, key);
         return Content(wsdl, "text/xml; charset=utf-8", Encoding.UTF8);
     }
@@ -291,7 +291,7 @@ public class FlowOpenController : ControllerBase
         if (definition == null) return Content("流程定义不存在", "text/plain");
 
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
-        var triggerUrl = $"{baseUrl}/open/flow/trigger/{version}/{key}";
+        var triggerUrl = $"{baseUrl}/open/flow/soap/{version}/{key}";
         var wsdl = GenerateWsdl(definition, flowVersion, triggerUrl, key);
         return Content(wsdl, "text/xml; charset=utf-8", Encoding.UTF8);
     }
@@ -313,7 +313,7 @@ public class FlowOpenController : ControllerBase
         if (flowVersion == null) return Content("未找到已发布的流程版本", "text/plain");
 
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
-        var triggerUrl = $"{baseUrl}/open/services/{alias}";
+        var triggerUrl = $"{baseUrl}/open/services/{alias}/soap";
         var wsdl = GenerateWsdl(definition, flowVersion, triggerUrl, definition.FlowKey);
         return Content(wsdl, "text/xml; charset=utf-8", Encoding.UTF8);
     }
@@ -322,7 +322,7 @@ public class FlowOpenController : ControllerBase
     // SOAP 触发支持（无需额外认证，复用 Token 校验）
     // ──────────────────────────────────────────────
 
-    /// <summary>SOAP 触发流程（通过 flowKey）</summary>
+    /// <summary>SOAP 触发流程（通过 flowKey，最新版本）</summary>
     [HttpPost("soap/{key}")]
     public async Task<IActionResult> SoapTrigger(string key,
         [FromHeader(Name = "SOAPAction")] string? soapAction,
@@ -334,6 +334,20 @@ public class FlowOpenController : ControllerBase
             return new ContentResult { Content = BuildSoapFault("该 Token 无权访问此流程"), ContentType = "text/xml; charset=utf-8", StatusCode = 403 };
 
         return await ExecuteSoapFlow(key, soapAction);
+    }
+
+    /// <summary>SOAP 触发流程（通过 flowKey，指定版本）</summary>
+    [HttpPost("soap/{version}/{key}")]
+    public async Task<IActionResult> SoapTriggerVersioned(string version, string key,
+        [FromHeader(Name = "SOAPAction")] string? soapAction,
+        [FromHeader(Name = "X-Access-Token")] string? token)
+    {
+        if (!await ValidateToken(token))
+            return new ContentResult { Content = BuildSoapFault("无效的 Access Token"), ContentType = "text/xml; charset=utf-8", StatusCode = 401 };
+        if (!await ValidateFlowPermission(token, key))
+            return new ContentResult { Content = BuildSoapFault("该 Token 无权访问此流程"), ContentType = "text/xml; charset=utf-8", StatusCode = 403 };
+
+        return await ExecuteSoapFlowVersioned(version, key);
     }
 
     /// <summary>SOAP 触发流程（通过服务别名）</summary>
@@ -369,7 +383,7 @@ public class FlowOpenController : ControllerBase
             return new ContentResult { Content = BuildSoapFault($"SOAP 解析失败: {ex.Message}"), ContentType = "text/xml; charset=utf-8", StatusCode = 400 };
         }
 
-        // 执行流程
+        // 执行流程（最新已发布版本）
         var flowVersion = await _db.FlowVersions
             .Where(v => v.FlowKey == key && v.Status == 1 && v.Deleted == 0)
             .OrderByDescending(v => v.Id)
@@ -377,6 +391,36 @@ public class FlowOpenController : ControllerBase
         if (flowVersion == null)
             return new ContentResult { Content = BuildSoapFault("未找到已发布的流程版本"), ContentType = "text/xml; charset=utf-8", StatusCode = 404 };
 
+        return await RunSoapFlow(key, flowVersion, inputParams);
+    }
+
+    private async Task<IActionResult> ExecuteSoapFlowVersioned(string version, string key)
+    {
+        // 解析 SOAP body 提取参数
+        Dictionary<string, object?> inputParams;
+        try
+        {
+            Request.Body.Position = 0;
+            using var reader = new StreamReader(Request.Body, Encoding.UTF8, leaveOpen: true);
+            var soapXml = await reader.ReadToEndAsync();
+            inputParams = ParseSoapBody(soapXml);
+        }
+        catch (Exception ex)
+        {
+            return new ContentResult { Content = BuildSoapFault($"SOAP 解析失败: {ex.Message}"), ContentType = "text/xml; charset=utf-8", StatusCode = 400 };
+        }
+
+        var flowVersion = await _db.FlowVersions
+            .FirstOrDefaultAsync(v => v.FlowKey == key && v.Version == version
+                                   && v.Status == 1 && v.Deleted == 0);
+        if (flowVersion == null)
+            return new ContentResult { Content = BuildSoapFault("流程版本不存在或已禁用"), ContentType = "text/xml; charset=utf-8", StatusCode = 404 };
+
+        return await RunSoapFlow(key, flowVersion, inputParams);
+    }
+
+    private async Task<IActionResult> RunSoapFlow(string key, FlowVersionEntity flowVersion, Dictionary<string, object?> inputParams)
+    {
         var definition = await _db.FlowDefinitions
             .FirstOrDefaultAsync(f => f.FlowKey == key && f.Deleted == 0);
         if (definition == null)
@@ -388,7 +432,6 @@ public class FlowOpenController : ControllerBase
         if (!result.Success)
             return new ContentResult { Content = BuildSoapFault(result.ErrorMessage ?? "执行失败"), ContentType = "text/xml; charset=utf-8" };
 
-        // 构建 SOAP 响应
         var ns = GetFlowNamespace(key);
         var responseXml = BuildSoapResponse(result.OutputData, ns, key);
         return new ContentResult { Content = responseXml, ContentType = "text/xml; charset=utf-8" };
