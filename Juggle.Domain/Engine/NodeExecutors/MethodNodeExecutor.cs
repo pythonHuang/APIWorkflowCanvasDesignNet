@@ -34,7 +34,7 @@ public class MethodNodeExecutor : INodeExecutor
         foreach (var rule in method.InputFillRules)
         {
             var val = ResolveSource(rule, context);
-            inputParams[rule.Target] = val;
+            SetNestedTarget(inputParams, rule.Target, val);
         }
 
         // 2. 发起 HTTP 或 WebService 请求（Mock 模式直接返回预设数据）
@@ -215,5 +215,21 @@ public class MethodNodeExecutor : INodeExecutor
             JsonValueKind.Null => null,
             _ => current.ToString()
         };
+    }
+
+    /// <summary>按点号分隔的路径设置嵌套字典值，如 "user.name" → dict["user"]["name"]</summary>
+    private static void SetNestedTarget(Dictionary<string, object?> dict, string path, object? value)
+    {
+        var parts = path.Split('.');
+        for (int i = 0; i < parts.Length - 1; i++)
+        {
+            if (!dict.TryGetValue(parts[i], out var next) || next is not Dictionary<string, object?> nested)
+            {
+                nested = new Dictionary<string, object?>();
+                dict[parts[i]] = nested;
+            }
+            dict = nested;
+        }
+        dict[parts[^1]] = value;
     }
 }
