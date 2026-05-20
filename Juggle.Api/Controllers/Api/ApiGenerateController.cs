@@ -421,7 +421,7 @@ public class ApiGenerateController : ControllerBase
                                 var childMin = childEl.Attribute("minOccurs")?.Value;
                                 var childMax = childEl.Attribute("maxOccurs")?.Value;
                                 // 数组类型
-                                var childDataType = childType;
+                                var childDataType = NormalizeDataType(childType);
                                 if (childMax == "unbounded")
                                     childDataType = "array";
                                 params_.Add(new GeneratedParam
@@ -470,7 +470,7 @@ public class ApiGenerateController : ControllerBase
                     // type 属性 → 简单类型，直接用 part name
                     var dt = typeRef;
                     if (dt.Contains(':')) dt = dt.Split(':').Last();
-                    paramList.Add(new GeneratedParam { ParamCode = pName, ParamName = pName, DataType = dt });
+                    paramList.Add(new GeneratedParam { ParamCode = pName, ParamName = pName, DataType = NormalizeDataType(dt) });
                 }
                 else
                 {
@@ -707,18 +707,20 @@ public class ApiGenerateController : ControllerBase
                         MethodType = "HTTP",
                         RequestType = verb,
                         Url = httpUrl,
+                        ContentType = "FORM",
                         InputParams = new List<GeneratedParam>(inputParams),
                         OutputParams = new List<GeneratedParam>(outputParams)
                     };
 
-                    if (verb == "POST")
+                    // HTTP GET/POST 都添加 Content-Type header
+                    var ctValue = verb == "POST"
+                        ? "application/x-www-form-urlencoded"
+                        : "text/xml; charset=utf-8";
+                    api.Headers.Add(new GeneratedParam
                     {
-                        api.Headers.Add(new GeneratedParam
-                        {
-                            ParamCode = "Content-Type", ParamName = "Content-Type",
-                            DataType = "string", DefaultValue = "application/x-www-form-urlencoded"
-                        });
-                    }
+                        ParamCode = "Content-Type", ParamName = "Content-Type",
+                        DataType = "string", DefaultValue = ctValue
+                    });
                 }
 
                 result.Add(api);
@@ -736,6 +738,23 @@ public class ApiGenerateController : ControllerBase
         public string? Location { get; set; }
         public string? HeaderMessage { get; set; }
         public string? HeaderPart { get; set; }
+    }
+
+    /// <summary>规范化数据类型，ArrayOfXxx / Array 等映射为 array</summary>
+    private static string NormalizeDataType(string typeName)
+    {
+        if (string.IsNullOrEmpty(typeName)) return "string";
+        var t = typeName.ToLower();
+        if (t.StartsWith("arrayof") || t == "array" || t.EndsWith("[]")) return "array";
+        return t switch
+        {
+            "int" or "integer" or "long" or "short" => "integer",
+            "double" or "float" or "decimal" or "number" => "double",
+            "bool" or "boolean" => "boolean",
+            "string" or "varchar" or "nvarchar" => "string",
+            "datetime" or "date" or "time" => "date",
+            _ => typeName
+        };
     }
 
     private string GenerateMethodName(string url, string method)
@@ -780,6 +799,7 @@ public class GeneratedApiItem
     public string MethodType { get; set; } = "HTTP";
     public string RequestType { get; set; } = "GET";
     public string Url { get; set; } = "";
+    public string? ContentType { get; set; }
     public string? SoapVersion { get; set; } = "11";
     public string? SoapMethod { get; set; }
     public string? SoapNamespace { get; set; }
