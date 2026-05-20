@@ -5,11 +5,17 @@
         <el-button icon="ArrowLeft" link @click="router.back()">返回</el-button>
         <h2 style="display:inline;margin-left:8px">接口管理 - {{ suiteCode }}</h2>
       </div>
-      <el-button type="primary" icon="Plus" @click="openAdd">新建接口</el-button>
+      <div>
+        <el-button size="small" @click="batchGenerateVisible = true">批量生成</el-button>
+        <el-button size="small" @click="importVisible = true">导入</el-button>
+        <el-button size="small" :disabled="selectedIds.length === 0" @click="doExport">导出选中</el-button>
+        <el-button type="primary" icon="Plus" @click="openAdd">新建接口</el-button>
+      </div>
     </div>
 
     <el-card class="table-card">
-      <el-table :data="tableData" stripe v-loading="loading" height="100%">
+      <el-table :data="tableData" stripe v-loading="loading" height="100%" @selection-change="onSelectionChange">
+        <el-table-column type="selection" width="40" />
         <el-table-column prop="methodCode" label="接口Code" width="220" show-overflow-tooltip />
         <el-table-column prop="methodName" label="接口名称" />
         <el-table-column label="类型" width="110">
@@ -26,11 +32,12 @@
           </template>
         </el-table-column>
         <el-table-column prop="url" label="URL" show-overflow-tooltip />
-        <el-table-column label="操作" width="210" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" link @click="openDetail(row)">详情/参数</el-button>
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
             <el-button size="small" type="success" link @click="openTest(row)">测试</el-button>
+            <el-button size="small" type="warning" link @click="copyCurl(row)">cURL</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -136,6 +143,72 @@
         <el-button type="primary" :loading="testLoading" @click="executeTest">发送请求</el-button>
       </template>
     </el-dialog>
+
+    <!-- 导入对话框 -->
+    <el-dialog v-model="importVisible" title="导入接口" width="550px" destroy-on-close>
+      <el-form label-width="80px">
+        <el-form-item label="JSON文件">
+          <el-upload :auto-upload="false" :on-change="onImportFileChange" :limit="1" accept=".json" drag>
+            <el-icon><UploadFilled /></el-icon>
+            <div>拖拽或点击上传 JSON 文件</div>
+          </el-upload>
+        </el-form-item>
+        <el-form-item v-if="importPreview.length > 0" label="预览">
+          <div style="max-height:200px;overflow-y:auto;border:1px solid #eee;border-radius:4px;padding:8px">
+            <div v-for="(api, idx) in importPreview" :key="idx" style="padding:4px 0;border-bottom:1px solid #f0f0f0">
+              <el-tag size="small">{{ api.requestType }}</el-tag>
+              <span style="margin-left:8px">{{ api.methodName }}</span>
+              <span style="color:#888;margin-left:8px;font-size:12px">{{ api.url }}</span>
+            </div>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="importVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="importPreview.length === 0" @click="doImport">确认导入</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量生成对话框 -->
+    <el-dialog v-model="batchGenerateVisible" title="批量生成接口" width="750px" destroy-on-close>
+      <el-tabs v-model="genTab">
+        <el-tab-pane label="CURL命令" name="curl">
+          <el-input v-model="genCurl" type="textarea" :rows="4" placeholder="粘贴 CURL 命令..." />
+          <el-button type="primary" size="small" style="margin-top:8px" @click="doGenerate('curl')">解析 CURL</el-button>
+        </el-tab-pane>
+        <el-tab-pane label="Swagger URL" name="swaggerUrl">
+          <el-input v-model="genSwaggerUrl" placeholder="如: https://petstore.swagger.io/v2/swagger.json" />
+          <el-button type="primary" size="small" style="margin-top:8px" @click="doGenerate('swaggerUrl')">从 URL 获取</el-button>
+        </el-tab-pane>
+        <el-tab-pane label="Swagger JSON" name="swaggerJson">
+          <el-input v-model="genSwaggerJson" type="textarea" :rows="8" placeholder="粘贴 Swagger/OpenAPI JSON..." />
+          <el-button type="primary" size="small" style="margin-top:8px" @click="doGenerate('swaggerJson')">解析 JSON</el-button>
+        </el-tab-pane>
+        <el-tab-pane label="WSDL URL" name="wsdlUrl">
+          <el-input v-model="genWsdlUrl" placeholder="如: http://example.com/service?wsdl" />
+          <el-button type="primary" size="small" style="margin-top:8px" @click="doGenerate('wsdlUrl')">从 URL 获取</el-button>
+        </el-tab-pane>
+        <el-tab-pane label="WSDL 内容" name="wsdlContent">
+          <el-input v-model="genWsdlContent" type="textarea" :rows="8" placeholder="粘贴 WSDL XML 内容..." />
+          <el-button type="primary" size="small" style="margin-top:8px" @click="doGenerate('wsdlContent')">解析 WSDL</el-button>
+        </el-tab-pane>
+      </el-tabs>
+      <!-- 生成结果 -->
+      <div v-if="genResults.length > 0" style="margin-top:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-weight:600">解析结果 ({{ genResults.length }} 个接口)</span>
+          <el-button size="small" type="success" @click="doBatchCreate">批量创建</el-button>
+        </div>
+        <div style="max-height:250px;overflow-y:auto;border:1px solid #eee;border-radius:4px;padding:8px">
+          <div v-for="(api, idx) in genResults" :key="idx" style="padding:6px 0;border-bottom:1px solid #f0f0f0">
+            <el-checkbox v-model="genSelected[idx]" style="margin-right:8px" />
+            <el-tag size="small">{{ api.methodType === 'WEBSERVICE' ? 'SOAP' : api.requestType }}</el-tag>
+            <span style="margin-left:8px;font-weight:500">{{ api.methodName }}</span>
+            <span style="color:#888;margin-left:8px;font-size:12px">{{ api.url }}</span>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -143,6 +216,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { UploadFilled } from '@element-plus/icons-vue'
 import request from '../../utils/request'
 
 const route = useRoute()
@@ -275,6 +349,113 @@ function methodColor(type: string) {
   const map: Record<string, string> = { GET: 'success', POST: 'primary', PUT: 'warning', DELETE: 'danger' }
   return map[type] || 'info'
 }
+
+// ========== 导出/导入 ==========
+const selectedIds = ref<number[]>([])
+function onSelectionChange(rows: any[]) { selectedIds.value = rows.map(r => r.id) }
+
+async function doExport() {
+  const res: any = await request.post('/suite/api/export', { suiteCode, ids: selectedIds.value })
+  const json = JSON.stringify(res.data, null, 2)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = `export_${suiteCode}.json`; a.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success('导出成功')
+}
+
+const importVisible = ref(false)
+const importPreview = ref<any[]>([])
+function onImportFileChange(file: any) {
+  const reader = new FileReader()
+  reader.onload = (e: any) => {
+    try {
+      importPreview.value = JSON.parse(e.target.result)
+      if (!Array.isArray(importPreview.value)) importPreview.value = [importPreview.value]
+    } catch { ElMessage.error('JSON 解析失败') }
+  }
+  reader.readAsText(file.raw)
+}
+
+async function doImport() {
+  await request.post('/suite/api/import', { suiteCode, apis: importPreview.value })
+  ElMessage.success(`导入 ${importPreview.value.length} 个接口成功`)
+  importVisible.value = false
+  importPreview.value = []
+  loadData()
+}
+
+// ========== CURL 生成 ==========
+function copyCurl(row: any) {
+  let curl = `curl -X ${row.requestType || 'GET'}`
+  curl += ` "${row.url}"`
+  if (row.methodType === 'WEBSERVICE') {
+    curl += ` -H "Content-Type: text/xml"`
+    if (row.soapAction) curl += ` -H "SOAPAction: ${row.soapAction}"`
+  }
+  navigator.clipboard?.writeText(curl).then(() => ElMessage.success('cURL 已复制到剪贴板'))
+    .catch(() => ElMessage.warning('复制失败，请手动复制'))
+}
+
+// ========== 批量生成 ==========
+const batchGenerateVisible = ref(false)
+const genTab = ref('curl')
+const genCurl = ref('')
+const genSwaggerUrl = ref('')
+const genSwaggerJson = ref('')
+const genWsdlUrl = ref('')
+const genWsdlContent = ref('')
+const genResults = ref<any[]>([])
+const genSelected = ref<boolean[]>([])
+
+async function doGenerate(source: string) {
+  genLoading.value = true
+  try {
+    let res: any
+    switch (source) {
+      case 'curl':
+        res = await request.post('/suite/api/generate/from-curl', { curl: genCurl.value })
+        break
+      case 'swaggerUrl':
+        res = await request.post('/suite/api/generate/from-swagger-url', { url: genSwaggerUrl.value })
+        break
+      case 'swaggerJson':
+        res = await request.post('/suite/api/generate/from-swagger-json', { json: genSwaggerJson.value })
+        break
+      case 'wsdlUrl':
+        res = await request.post('/suite/api/generate/from-wsdl-url', { url: genWsdlUrl.value })
+        break
+      case 'wsdlContent':
+        res = await request.post('/suite/api/generate/from-wsdl-content', { wsdlContent: genWsdlContent.value, url: genWsdlUrl.value || undefined })
+        break
+      default:
+        return
+    }
+    if (res.code === 200) {
+      genResults.value = res.data || []
+      genSelected.value = genResults.value.map(() => true)
+      ElMessage.success(`解析到 ${genResults.value.length} 个接口`)
+    } else {
+      ElMessage.error(res.message || '解析失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.message || '请求失败')
+  } finally {
+    genLoading.value = false
+  }
+}
+
+async function doBatchCreate() {
+  const selected = genResults.value.filter((_: any, i: number) => genSelected.value[i])
+  if (selected.length === 0) { ElMessage.warning('请选择要创建的接口'); return }
+  await request.post('/suite/api/import', { suiteCode, apis: selected })
+  ElMessage.success(`批量创建 ${selected.length} 个接口成功`)
+  batchGenerateVisible.value = false
+  genResults.value = []
+  loadData()
+}
+const genLoading = ref(false)
 </script>
 
 <style scoped>

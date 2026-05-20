@@ -252,4 +252,181 @@ public class ApiController : ControllerBase
         var responseText = await resp.Content.ReadAsStringAsync();
         return ApiResult.Success(new { response = responseText, soapBody });
     }
+
+    /// <summary>导出接口（含参数）</summary>
+    [HttpPost("export")]
+    public async Task<ApiResult> Export([FromBody] ApiExportRequest req)
+    {
+        var apis = await _db.Apis
+            .Where(a => a.SuiteCode == req.SuiteCode && a.Deleted == 0)
+            .OrderBy(a => a.Id)
+            .ToListAsync();
+
+        if (req.Ids is { Count: > 0 })
+            apis = apis.Where(a => req.Ids.Contains(a.Id)).ToList();
+
+        var result = new List<object>();
+        foreach (var api in apis)
+        {
+            var inputParams = await _db.Parameters
+                .Where(p => p.OwnerId == api.Id && p.ParamType == 1 && p.Deleted == 0)
+                .OrderBy(p => p.SortNum).ToListAsync();
+            var outputParams = await _db.Parameters
+                .Where(p => p.OwnerId == api.Id && p.ParamType == 2 && p.Deleted == 0)
+                .OrderBy(p => p.SortNum).ToListAsync();
+            var headerParams = await _db.Parameters
+                .Where(p => p.OwnerId == api.Id && p.ParamType == 4 && p.Deleted == 0)
+                .OrderBy(p => p.SortNum).ToListAsync();
+
+            result.Add(new
+            {
+                api.MethodName, api.MethodDesc, api.Url, api.RequestType, api.ContentType,
+                api.MockJson, api.MethodType, api.SoapVersion, api.SoapMethod, api.SoapNamespace, api.SoapAction,
+                InputParams = inputParams.Select(p => new
+                {
+                    p.ParamCode, p.ParamName, p.DataType, p.ObjectCode, p.Required,
+                    p.DefaultValue, p.ParamPosition, p.Description
+                }),
+                OutputParams = outputParams.Select(p => new
+                {
+                    p.ParamCode, p.ParamName, p.DataType, p.ObjectCode, p.Required,
+                    p.DefaultValue, p.ParamPosition, p.Description
+                }),
+                HeaderParams = headerParams.Select(p => new
+                {
+                    p.ParamCode, p.ParamName, p.DataType, p.ObjectCode, p.Required,
+                    p.DefaultValue, p.ParamPosition, p.Description
+                })
+            });
+        }
+        return ApiResult.Success(result);
+    }
+
+    /// <summary>导入接口（含参数）</summary>
+    [HttpPost("import")]
+    public async Task<ApiResult> Import([FromBody] ApiImportRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.SuiteCode)) return ApiResult.Fail("套件Code不能为空");
+        if (req.Apis == null || req.Apis.Count == 0) return ApiResult.Fail("没有要导入的接口");
+
+        foreach (var item in req.Apis)
+        {
+            var code = $"api_{Guid.NewGuid():N}";
+            var entity = new ApiEntity
+            {
+                SuiteCode = req.SuiteCode,
+                MethodCode = code,
+                MethodName = item.MethodName,
+                MethodDesc = item.MethodDesc,
+                Url = item.Url,
+                RequestType = item.RequestType ?? "GET",
+                ContentType = item.ContentType,
+                MockJson = item.MockJson,
+                MethodType = item.MethodType ?? "HTTP",
+                SoapVersion = item.SoapVersion,
+                SoapMethod = item.SoapMethod,
+                SoapNamespace = item.SoapNamespace,
+                SoapAction = item.SoapAction,
+                CreatedAt = DateTime.Now.ToString("o")
+            };
+            _db.Apis.Add(entity);
+            await _db.SaveChangesAsync();
+
+            // 导入入参
+            int sort = 1;
+            if (item.InputParams != null)
+            {
+                foreach (var p in item.InputParams)
+                {
+                    _db.Parameters.Add(new ParameterEntity
+                    {
+                        OwnerId = entity.Id, OwnerCode = code, ParamType = 1,
+                        ParamCode = p.ParamCode ?? "", ParamName = p.ParamName ?? "",
+                        DataType = p.DataType ?? "string", ObjectCode = p.ObjectCode,
+                        Required = p.Required, DefaultValue = p.DefaultValue,
+                        ParamPosition = p.ParamPosition, Description = p.Description,
+                        SortNum = sort++, CreatedAt = DateTime.Now.ToString("o")
+                    });
+                }
+            }
+            // 导入出参
+            sort = 1;
+            if (item.OutputParams != null)
+            {
+                foreach (var p in item.OutputParams)
+                {
+                    _db.Parameters.Add(new ParameterEntity
+                    {
+                        OwnerId = entity.Id, OwnerCode = code, ParamType = 2,
+                        ParamCode = p.ParamCode ?? "", ParamName = p.ParamName ?? "",
+                        DataType = p.DataType ?? "string", ObjectCode = p.ObjectCode,
+                        Required = p.Required, DefaultValue = p.DefaultValue,
+                        ParamPosition = p.ParamPosition, Description = p.Description,
+                        SortNum = sort++, CreatedAt = DateTime.Now.ToString("o")
+                    });
+                }
+            }
+            // 导入 Header
+            sort = 1;
+            if (item.HeaderParams != null)
+            {
+                foreach (var p in item.HeaderParams)
+                {
+                    _db.Parameters.Add(new ParameterEntity
+                    {
+                        OwnerId = entity.Id, OwnerCode = code, ParamType = 4,
+                        ParamCode = p.ParamCode ?? "", ParamName = p.ParamName ?? "",
+                        DataType = p.DataType ?? "string", ObjectCode = p.ObjectCode,
+                        Required = p.Required, DefaultValue = p.DefaultValue,
+                        ParamPosition = p.ParamPosition, Description = p.Description,
+                        SortNum = sort++, CreatedAt = DateTime.Now.ToString("o")
+                    });
+                }
+            }
+        }
+        await _db.SaveChangesAsync();
+        return ApiResult.Success();
+    }
+}
+
+public class ApiExportRequest
+{
+    public string SuiteCode { get; set; } = "";
+    public List<long>? Ids { get; set; }
+}
+
+public class ApiImportRequest
+{
+    public string SuiteCode { get; set; } = "";
+    public List<ApiImportItem> Apis { get; set; } = new();
+}
+
+public class ApiImportItem
+{
+    public string MethodName { get; set; } = "";
+    public string? MethodDesc { get; set; }
+    public string Url { get; set; } = "";
+    public string? RequestType { get; set; }
+    public string? ContentType { get; set; }
+    public string? MockJson { get; set; }
+    public string? MethodType { get; set; }
+    public string? SoapVersion { get; set; }
+    public string? SoapMethod { get; set; }
+    public string? SoapNamespace { get; set; }
+    public string? SoapAction { get; set; }
+    public List<ApiImportParam>? InputParams { get; set; }
+    public List<ApiImportParam>? OutputParams { get; set; }
+    public List<ApiImportParam>? HeaderParams { get; set; }
+}
+
+public class ApiImportParam
+{
+    public string? ParamCode { get; set; }
+    public string? ParamName { get; set; }
+    public string? DataType { get; set; }
+    public string? ObjectCode { get; set; }
+    public int Required { get; set; }
+    public string? DefaultValue { get; set; }
+    public string? ParamPosition { get; set; }
+    public string? Description { get; set; }
 }
