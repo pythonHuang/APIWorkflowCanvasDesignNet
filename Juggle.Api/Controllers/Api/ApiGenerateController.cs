@@ -388,16 +388,57 @@ public class ApiGenerateController : ControllerBase
         if (!xdoc.Root!.Name.NamespaceName.Contains("schemas.xmlsoap.org"))
             wsdl = xdoc.Root.Name.Namespace;
 
-        // 获取 types 中的 namespace
+        // ===== 解析 XSD types → 构建 element 定义查找表 =====
         var typesEl = xdoc.Descendants(wsdl + "types").FirstOrDefault();
         var schemaNs = "";
+        // xsdElements: elementQName → [{ ParamCode, ParamName, DataType }]
+        var xsdElements = new Dictionary<string, List<GeneratedParam>>();
         if (typesEl != null)
         {
             var schemaEl = typesEl.Elements().FirstOrDefault(e => e.Name == xs + "schema");
-            if (schemaEl != null) schemaNs = schemaEl.Attribute("targetNamespace")?.Value ?? "";
+            if (schemaEl != null)
+            {
+                schemaNs = schemaEl.Attribute("targetNamespace")?.Value ?? "";
+
+                // 遍历所有顶级 element 定义
+                foreach (var elemEl in schemaEl.Elements(xs + "element"))
+                {
+                    var elemName = elemEl.Attribute("name")?.Value ?? "";
+                    if (string.IsNullOrEmpty(elemName)) continue;
+                    var params_ = new List<GeneratedParam>();
+                    var complexEl = elemEl.Element(xs + "complexType");
+                    if (complexEl != null)
+                    {
+                        var seqEl = complexEl.Element(xs + "sequence")
+                            ?? complexEl.Element(xs + "all");
+                        if (seqEl != null)
+                        {
+                            foreach (var childEl in seqEl.Elements(xs + "element"))
+                            {
+                                var childName = childEl.Attribute("name")?.Value ?? "";
+                                var childType = childEl.Attribute("type")?.Value ?? "string";
+                                if (childType.Contains(':')) childType = childType.Split(':').Last();
+                                var childMin = childEl.Attribute("minOccurs")?.Value;
+                                var childMax = childEl.Attribute("maxOccurs")?.Value;
+                                // 数组类型
+                                var childDataType = childType;
+                                if (childMax == "unbounded")
+                                    childDataType = "array";
+                                params_.Add(new GeneratedParam
+                                {
+                                    ParamCode = childName,
+                                    ParamName = childName,
+                                    DataType = childDataType
+                                });
+                            }
+                        }
+                    }
+                    xsdElements[elemName] = params_;
+                }
+            }
         }
 
-        // 获取所有 messages
+        // ===== 获取所有 messages =====
         var messages = new Dictionary<string, List<GeneratedParam>>();
         foreach (var msgEl in xdoc.Descendants(wsdl + "message"))
         {
@@ -406,9 +447,36 @@ public class ApiGenerateController : ControllerBase
             foreach (var partEl in msgEl.Elements(wsdl + "part"))
             {
                 var pName = partEl.Attribute("name")?.Value ?? "";
-                var pType = partEl.Attribute("element")?.Value ?? partEl.Attribute("type")?.Value ?? "";
-                if (pType.Contains(':')) pType = pType.Split(':').Last();
-                paramList.Add(new GeneratedParam { ParamCode = pName, ParamName = pName, DataType = pType });
+                var elemRef = partEl.Attribute("element")?.Value ?? "";
+                var typeRef = partEl.Attribute("type")?.Value ?? "";
+
+                // element 属性 → 展开为 XSD element 的子元素
+                if (!string.IsNullOrEmpty(elemRef))
+                {
+                    var elemName = elemRef;
+                    if (elemName.Contains(':')) elemName = elemName.Split(':').Last();
+                    if (xsdElements.TryGetValue(elemName, out var expanded))
+                    {
+                        paramList.AddRange(expanded);
+                    }
+                    else
+                    {
+                        // fallback: 无法解析则用 element 名作为单个参数
+                        paramList.Add(new GeneratedParam { ParamCode = pName, ParamName = pName, DataType = elemName });
+                    }
+                }
+                else if (!string.IsNullOrEmpty(typeRef))
+                {
+                    // type 属性 → 简单类型，直接用 part name
+                    var dt = typeRef;
+                    if (dt.Contains(':')) dt = dt.Split(':').Last();
+                    paramList.Add(new GeneratedParam { ParamCode = pName, ParamName = pName, DataType = dt });
+                }
+                else
+                {
+                    // 无 element 也无 type → 用 part name 作为参数名
+                    paramList.Add(new GeneratedParam { ParamCode = pName, ParamName = pName, DataType = "string" });
+                }
             }
             messages[msgName] = paramList;
         }
