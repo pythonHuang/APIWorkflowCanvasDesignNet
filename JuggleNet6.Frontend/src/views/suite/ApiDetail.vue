@@ -162,7 +162,7 @@
           </el-table-column>
           <el-table-column v-if="hasObjOutput" label="关联对象" width="120">
             <template #default="{ row }">
-              <el-select v-if="row.dataType === 'object' || row.dataType === 'array'" v-model="row.childObjectCode" size="small" style="width:100%" clearable>
+              <el-select v-if="row.dataType === 'object' || row.dataType === 'array'" v-model="row.objectCode" size="small" style="width:100%" clearable>
                 <el-option v-for="obj in objectList" :key="obj.id" :label="obj.objectName" :value="obj.objectCode" />
               </el-select>
               <span v-else style="color:#ccc;font-size:11px">—</span>
