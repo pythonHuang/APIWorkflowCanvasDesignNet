@@ -690,14 +690,11 @@ public class ApiGenerateController : ControllerBase
                 else // HTTP_GET or HTTP_POST
                 {
                     var verb = bindType == "HTTP_POST" ? "POST" : "GET";
-                    // URL: wsdl地址去掉?wsdl + ?op=方法名
+                    // URL: wsdl地址去掉?wsdl + /方法名
                     var httpUrl = sourceUrl;
-                    if (httpUrl.Contains('?'))
-                    {
-                        var qIdx = httpUrl.IndexOf('?');
-                        httpUrl = httpUrl[..qIdx];
-                    }
-                    httpUrl += "?op=" + opName;
+                    var qIdx = httpUrl.IndexOf('?');
+                    if (qIdx >= 0) httpUrl = httpUrl[..qIdx];
+                    httpUrl += "/" + opName;
 
                     api = new GeneratedApiItem
                     {
@@ -709,7 +706,7 @@ public class ApiGenerateController : ControllerBase
                         OutputParams = new List<GeneratedParam>(outputParams)
                     };
 
-                    // HTTP GET/POST 都添加 Content-Type header
+                    // Content-Type header
                     var ctValue = verb == "POST"
                         ? "application/x-www-form-urlencoded"
                         : "text/xml; charset=utf-8";
@@ -717,6 +714,12 @@ public class ApiGenerateController : ControllerBase
                     {
                         ParamCode = "Content-Type", ParamName = "Content-Type",
                         DataType = "string", DefaultValue = ctValue
+                    });
+                    // Accept header
+                    api.Headers.Add(new GeneratedParam
+                    {
+                        ParamCode = "Accept", ParamName = "Accept",
+                        DataType = "string", DefaultValue = "text/html,application/xhtml+xml,application/xml"
                     });
                 }
 
