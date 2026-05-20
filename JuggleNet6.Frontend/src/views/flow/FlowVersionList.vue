@@ -25,6 +25,9 @@
             <el-tooltip content="复制此版本调用地址">
               <el-button size="small" link icon="CopyDocument" @click="copyVersionUrl(row)" />
             </el-tooltip>
+            <el-tooltip content="打开此版本 WSDL">
+              <el-button size="small" link @click="openWsdl(row)">WSDL</el-button>
+            </el-tooltip>
             <el-button size="small" :type="row.status === 1 ? 'warning' : 'success'" link
               @click="toggleStatus(row)">
               {{ row.status === 1 ? '禁用' : '启用' }}
@@ -234,6 +237,11 @@ function copyVersionUrl(row: any) {
   const baseUrl = window.location.origin
   const url = `${baseUrl}/open/flow/trigger/${row.version}/${flowKey}\nMethod: POST\nHeader: X-Access-Token: <your-token>\nBody: {"flowData": {}}`
   copyToClipboard(url)
+}
+
+function openWsdl(row: any) {
+  const baseUrl = window.location.origin
+  window.open(`${baseUrl}/open/flow/wsdl/${row.version}/${flowKey}`, '_blank')
 }
 
 function openDiffDialog() {

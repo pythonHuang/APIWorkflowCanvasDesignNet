@@ -58,13 +58,16 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="320" fixed="right">
+        <el-table-column label="操作" width="370" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" link @click="goDesign(row)">设计</el-button>
             <el-button size="small" type="success" link @click="doDeploy(row)">部署</el-button>
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
             <el-button size="small" type="info" link @click="doClone(row)">克隆</el-button>
             <el-button size="small" type="warning" link @click="doExport(row)">导出</el-button>
+            <el-tooltip v-if="row.serviceAlias" :content="`WSDL: /open/services/${row.serviceAlias}/wsdl`">
+              <el-button size="small" link @click="openServiceWsdl(row)">WSDL</el-button>
+            </el-tooltip>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -190,6 +193,11 @@ async function doClone(row: any) {
   const res: any = await request.post(`/flow/definition/clone/${row.id}`, {})
   ElMessage.success(`克隆成功：${res.data?.flowName || ''}`)
   loadData()
+}
+
+function openServiceWsdl(row: any) {
+  const baseUrl = window.location.origin
+  window.open(`${baseUrl}/open/services/${row.serviceAlias}/wsdl`, '_blank')
 }
 
 async function doDelete(row: any) {
