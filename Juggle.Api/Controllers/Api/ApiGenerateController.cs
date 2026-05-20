@@ -376,32 +376,25 @@ public class ApiGenerateController : ControllerBase
     {
         var result = new List<GeneratedApiItem>();
         XDocument xdoc;
-        try
-        {
-            xdoc = XDocument.Parse(xml);
-        }
+        try { xdoc = XDocument.Parse(xml); }
         catch { return result; }
 
         XNamespace wsdl = "http://schemas.xmlsoap.org/wsdl/";
         XNamespace soap = "http://schemas.xmlsoap.org/wsdl/soap/";
         XNamespace soap12 = "http://schemas.xmlsoap.org/wsdl/soap12/";
+        XNamespace http = "http://schemas.xmlsoap.org/wsdl/http/";
         XNamespace xs = "http://www.w3.org/2001/XMLSchema";
 
-        // 没有命名空间前缀的情况
         if (!xdoc.Root!.Name.NamespaceName.Contains("schemas.xmlsoap.org"))
-        {
             wsdl = xdoc.Root.Name.Namespace;
-        }
 
-        // 获取 service URL
-        var serviceUrl = sourceUrl;
-        var addressEl = xdoc.Descendants()
-            .FirstOrDefault(e => e.Name.LocalName == "address" &&
-                (e.Name.Namespace == soap || e.Name.Namespace == soap12));
-        if (addressEl != null)
+        // 获取 types 中的 namespace
+        var typesEl = xdoc.Descendants(wsdl + "types").FirstOrDefault();
+        var schemaNs = "";
+        if (typesEl != null)
         {
-            var loc = addressEl.Attribute("location")?.Value;
-            if (!string.IsNullOrEmpty(loc)) serviceUrl = loc;
+            var schemaEl = typesEl.Elements().FirstOrDefault(e => e.Name == xs + "schema");
+            if (schemaEl != null) schemaNs = schemaEl.Attribute("targetNamespace")?.Value ?? "";
         }
 
         // 获取所有 messages
@@ -409,51 +402,261 @@ public class ApiGenerateController : ControllerBase
         foreach (var msgEl in xdoc.Descendants(wsdl + "message"))
         {
             var msgName = msgEl.Attribute("name")?.Value ?? "";
-            var params_ = new List<GeneratedParam>();
+            var paramList = new List<GeneratedParam>();
             foreach (var partEl in msgEl.Elements(wsdl + "part"))
             {
                 var pName = partEl.Attribute("name")?.Value ?? "";
                 var pType = partEl.Attribute("element")?.Value ?? partEl.Attribute("type")?.Value ?? "";
                 if (pType.Contains(':')) pType = pType.Split(':').Last();
-                params_.Add(new GeneratedParam { ParamCode = pName, ParamName = pName, DataType = pType });
+                paramList.Add(new GeneratedParam { ParamCode = pName, ParamName = pName, DataType = pType });
             }
-            messages[msgName] = params_;
+            messages[msgName] = paramList;
+        }
+
+        // 解析 bindings → 获取每个操作的协议信息
+        // bindingInfo: operationName → { type, soapAction, location, verb }
+        var bindingOps = new Dictionary<string, WsdlBindingInfo>();
+
+        foreach (var bindingEl in xdoc.Descendants(wsdl + "binding"))
+        {
+            var bindingName = bindingEl.Attribute("name")?.Value ?? "";
+            // 检查 binding 类型
+            var soapBinding = bindingEl.Element(soap + "binding");
+            var soap12Binding = bindingEl.Element(soap12 + "binding");
+            var httpBinding = bindingEl.Element(http + "binding");
+
+            string bindType;
+            if (soap12Binding != null)
+                bindType = "SOAP12";
+            else if (soapBinding != null)
+                bindType = "SOAP11";
+            else if (httpBinding != null)
+            {
+                var verb = httpBinding.Attribute("verb")?.Value?.ToUpper() ?? "GET";
+                bindType = verb == "POST" ? "HTTP_POST" : "HTTP_GET";
+            }
+            else
+                continue;
+
+            // 遍历 binding 中的每个 operation
+            foreach (var bOpEl in bindingEl.Elements(wsdl + "operation"))
+            {
+                var opName = bOpEl.Attribute("name")?.Value ?? "";
+                if (string.IsNullOrEmpty(opName)) continue;
+
+                var info = new WsdlBindingInfo { Type = bindType };
+
+                // SOAP 操作
+                var soapOp = bOpEl.Element(soap + "operation");
+                var soap12Op = bOpEl.Element(soap12 + "operation");
+                if (soap12Op != null)
+                    info.SoapAction = soap12Op.Attribute("soapAction")?.Value ?? "";
+                else if (soapOp != null)
+                    info.SoapAction = soapOp.Attribute("soapAction")?.Value ?? "";
+
+                // HTTP 操作
+                var httpOp = bOpEl.Element(http + "operation");
+                if (httpOp != null)
+                    info.Location = httpOp.Attribute("location")?.Value ?? "";
+
+                // SOAP header (wsdl:input → soap:header)
+                var bInput = bOpEl.Element(wsdl + "input");
+                if (bInput != null)
+                {
+                    var soapHeader = bInput.Element(soap + "header");
+                    var soap12Header = bInput.Element(soap12 + "header");
+                    var headerEl = soap12Header ?? soapHeader;
+                    if (headerEl != null)
+                    {
+                        info.HeaderMessage = headerEl.Attribute("message")?.Value ?? "";
+                        info.HeaderPart = headerEl.Attribute("part")?.Value ?? "";
+                    }
+                }
+
+                bindingOps[opName] = info;
+            }
+        }
+
+        // 解析 service → port → address，获取各 binding 对应的 URL
+        var bindingUrls = new Dictionary<string, string>(); // bindingName → url
+        foreach (var serviceEl in xdoc.Descendants(wsdl + "service"))
+        {
+            foreach (var portEl in serviceEl.Elements(wsdl + "port"))
+            {
+                var bName = portEl.Attribute("binding")?.Value ?? "";
+                if (bName.Contains(':')) bName = bName.Split(':').Last();
+                var addr = portEl.Elements(soap + "address").FirstOrDefault()
+                    ?? portEl.Elements(soap12 + "address").FirstOrDefault()
+                    ?? portEl.Elements(http + "address").FirstOrDefault();
+                if (addr != null)
+                {
+                    var loc = addr.Attribute("location")?.Value ?? sourceUrl;
+                    bindingUrls[bName] = loc;
+                }
+            }
+        }
+
+        // 构建 binding → URL 映射（通过 portType 关联）
+        var bindingPortTypes = new Dictionary<string, string>(); // bindingName → portTypeName
+        foreach (var bEl in xdoc.Descendants(wsdl + "binding"))
+        {
+            var bName = bEl.Attribute("name")?.Value ?? "";
+            var ptName = bEl.Attribute("type")?.Value ?? "";
+            if (ptName.Contains(':')) ptName = ptName.Split(':').Last();
+            bindingPortTypes[bName] = ptName;
+        }
+
+        // portType → binding URL 查找
+        string getUrlForPortType(string portTypeName)
+        {
+            foreach (var kv in bindingPortTypes)
+            {
+                if (kv.Value == portTypeName && bindingUrls.TryGetValue(kv.Key, out var url))
+                    return url;
+            }
+            return sourceUrl;
+        }
+
+        // 获取所属 portType（通过 wsdl:portType 下的 operation name 匹配）
+        var portTypeOps = new Dictionary<string, string>(); // operationName → portTypeName
+        foreach (var ptEl in xdoc.Descendants(wsdl + "portType"))
+        {
+            var ptName = ptEl.Attribute("name")?.Value ?? "";
+            foreach (var opEl in ptEl.Elements(wsdl + "operation"))
+            {
+                var oName = opEl.Attribute("name")?.Value ?? "";
+                if (!string.IsNullOrEmpty(oName)) portTypeOps[oName] = ptName;
+            }
         }
 
         // 获取所有 portType operations
         foreach (var opEl in xdoc.Descendants(wsdl + "operation"))
         {
             var opName = opEl.Attribute("name")?.Value ?? "";
+            // 只处理 portType 下的 operation（排除 binding 下的同名 operation）
+            if (opEl.Parent?.Name != wsdl + "portType") continue;
+
             var inputMsg = opEl.Element(wsdl + "input")?.Attribute("message")?.Value ?? "";
             var outputMsg = opEl.Element(wsdl + "output")?.Attribute("message")?.Value ?? "";
-
             if (inputMsg.Contains(':')) inputMsg = inputMsg.Split(':').Last();
             if (outputMsg.Contains(':')) outputMsg = outputMsg.Split(':').Last();
 
-            var api = new GeneratedApiItem
-            {
-                MethodName = opName,
-                MethodType = "WEBSERVICE",
-                RequestType = "POST",
-                Url = serviceUrl,
-                SoapMethod = opName,
-                InputParams = messages.GetValueOrDefault(inputMsg, new List<GeneratedParam>()),
-                OutputParams = messages.GetValueOrDefault(outputMsg, new List<GeneratedParam>())
-            };
+            var info = bindingOps.GetValueOrDefault(opName);
+            var bindType = info?.Type ?? "SOAP11";
+            var soapAction = info?.SoapAction ?? "";
+            var httpLocation = info?.Location ?? "";
 
-            // 尝试获取 namespace
-            var typesEl = xdoc.Descendants(wsdl + "types").FirstOrDefault();
-            if (typesEl != null)
+            // 获取该操作对应的 URL
+            var ptName = portTypeOps.GetValueOrDefault(opName, "");
+            var opUrl = getUrlForPortType(ptName);
+
+            var inputParams = new List<GeneratedParam>(messages.GetValueOrDefault(inputMsg, new List<GeneratedParam>()));
+            var outputParams = new List<GeneratedParam>(messages.GetValueOrDefault(outputMsg, new List<GeneratedParam>()));
+
+            GeneratedApiItem api;
+
+            if (bindType == "SOAP11" || bindType == "SOAP12")
             {
-                var schemaEl = typesEl.Elements().FirstOrDefault(e => e.Name == xs + "schema");
-                if (schemaEl != null)
-                    api.SoapNamespace = schemaEl.Attribute("targetNamespace")?.Value ?? "";
+                api = new GeneratedApiItem
+                {
+                    MethodName = opName,
+                    MethodType = "WEBSERVICE",
+                    RequestType = "POST",
+                    Url = opUrl,
+                    SoapMethod = opName,
+                    SoapNamespace = schemaNs,
+                    SoapVersion = bindType == "SOAP12" ? "12" : "11",
+                    SoapAction = soapAction,
+                    InputParams = inputParams,
+                    OutputParams = outputParams
+                };
+
+                // 添加 SOAPAction header
+                if (!string.IsNullOrEmpty(soapAction))
+                {
+                    api.Headers.Add(new GeneratedParam
+                    {
+                        ParamCode = "SOAPAction",
+                        ParamName = "SOAPAction",
+                        DataType = "string",
+                        DefaultValue = soapAction
+                    });
+                }
+                // 添加 Content-Type header
+                api.Headers.Add(new GeneratedParam
+                {
+                    ParamCode = "Content-Type",
+                    ParamName = "Content-Type",
+                    DataType = "string",
+                    DefaultValue = "text/xml; charset=utf-8"
+                });
+
+                // 处理 soap:header（从 binding 输入中提取）
+                if (!string.IsNullOrEmpty(info?.HeaderMessage))
+                {
+                    var headerMsg = info.HeaderMessage;
+                    if (headerMsg.Contains(':')) headerMsg = headerMsg.Split(':').Last();
+                    if (messages.TryGetValue(headerMsg, out var hParams))
+                    {
+                        foreach (var hp in hParams)
+                            api.Headers.Add(new GeneratedParam
+                            {
+                                ParamCode = hp.ParamCode,
+                                ParamName = hp.ParamName,
+                                DataType = hp.DataType,
+                                Required = 1
+                            });
+                    }
+                }
+            }
+            else // HTTP_GET or HTTP_POST
+            {
+                var verb = bindType == "HTTP_POST" ? "POST" : "GET";
+                // 构建 HTTP URL
+                var httpUrl = opUrl;
+                if (!string.IsNullOrEmpty(httpLocation))
+                {
+                    // 替换 URL 中的路径部分
+                    var uri = new Uri(httpUrl);
+                    httpUrl = $"{uri.Scheme}://{uri.Host}:{uri.Port}{httpLocation}";
+                }
+
+                api = new GeneratedApiItem
+                {
+                    MethodName = opName,
+                    MethodType = "HTTP",
+                    RequestType = verb,
+                    Url = httpUrl,
+                    InputParams = inputParams,
+                    OutputParams = outputParams
+                };
+
+                // HTTP 接口默认 POST 用 FORM, GET 用 query
+                if (verb == "POST")
+                {
+                    api.Headers.Add(new GeneratedParam
+                    {
+                        ParamCode = "Content-Type",
+                        ParamName = "Content-Type",
+                        DataType = "string",
+                        DefaultValue = "application/x-www-form-urlencoded"
+                    });
+                }
             }
 
             result.Add(api);
         }
 
         return result;
+    }
+
+    private class WsdlBindingInfo
+    {
+        public string Type { get; set; } = "SOAP11";
+        public string? SoapAction { get; set; }
+        public string? Location { get; set; }
+        public string? HeaderMessage { get; set; }
+        public string? HeaderPart { get; set; }
     }
 
     private string GenerateMethodName(string url, string method)
@@ -513,4 +716,5 @@ public class GeneratedParam
     public string ParamName { get; set; } = "";
     public string DataType { get; set; } = "string";
     public int Required { get; set; } = 0;
+    public string? DefaultValue { get; set; }
 }
