@@ -875,33 +875,6 @@
         </template>
       </el-dialog>
 
-      <!-- 属性浏览器对话框 -->
-      <el-dialog v-model="propBrowserVisible" title="选择对象属性" width="600px" append-to-body>
-        <div style="display:flex;gap:12px;overflow-x:auto;min-height:200px">
-          <div v-for="(level, lIdx) in propBrowserLevels" :key="lIdx" style="min-width:180px;flex-shrink:0">
-            <div style="font-size:12px;color:#999;margin-bottom:4px">
-              {{ lIdx === 0 ? '选择属性' : '子属性' }}
-              <el-tag v-if="level.objectCode" size="small" style="margin-left:4px">{{ level.objectCode }}</el-tag>
-            </div>
-            <div v-if="!level.params || level.params.length === 0" style="color:#ccc;font-size:13px;padding:8px">
-              {{ level.label || '无可用属性' }}
-            </div>
-            <el-radio-group v-else v-model="level.selected" @change="onPropLevelSelect(lIdx, $event)" style="display:flex;flex-direction:column;width:100%">
-              <el-radio v-for="p in level.params" :key="p.paramCode" :value="p.paramCode" style="margin-bottom:4px;padding:4px 8px;border:1px solid #eee;border-radius:4px;display:flex;align-items:flex-start;text-align:left;width:100%">
-                <span>{{ p.paramName || p.paramCode }}</span>
-                <el-tag size="small" style="margin-left:4px">{{ p.dataType || 'string' }}</el-tag>
-              </el-radio>
-            </el-radio-group>
-          </div>
-        </div>
-        <div v-if="propBrowserLevels.length > 0 && propBrowserLevels.some(l => l.selected)" style="margin-top:8px;color:#1890ff;font-size:12px">
-          已选路径: {{ propBrowserLevels.filter(l => l.selected).map(l => l.selected).join(' → ') }}
-        </div>
-        <template #footer>
-          <el-button @click="propBrowserVisible = false">取消</el-button>
-          <el-button type="primary" @click="confirmPropSelection">确定</el-button>
-        </template>
-      </el-dialog>
     </el-drawer>
 
     <!-- ========== 变量管理抽屉 ========== -->
@@ -987,8 +960,36 @@
       </el-dialog>
     </el-drawer>
 
+    <!-- 属性浏览器对话框 -->
+    <el-dialog v-model="propBrowserVisible" title="选择对象属性" width="620px" append-to-body>
+      <div style="display:flex;gap:12px;overflow-x:auto;min-height:200px">
+        <div v-for="(level, lIdx) in propBrowserLevels" :key="lIdx" style="min-width:180px;flex-shrink:0">
+          <div style="font-size:12px;color:#999;margin-bottom:4px">
+            {{ lIdx === 0 ? '选择属性' : '子属性' }}
+            <el-tag v-if="level.objectCode" size="small" style="margin-left:4px">{{ level.objectCode }}</el-tag>
+          </div>
+          <div v-if="!level.params || level.params.length === 0" style="color:#ccc;font-size:13px;padding:8px">
+            {{ level.label || '无可用属性' }}
+          </div>
+          <el-radio-group v-else v-model="level.selected" @change="onPropLevelSelect(lIdx, $event)" style="display:flex;flex-direction:column;width:100%;row-gap:4px">
+            <el-radio v-for="p in level.params" :key="p.paramCode" :value="p.paramCode" style="padding:4px 8px;border:1px solid #eee;border-radius:4px;display:flex;align-items:flex-start;text-align:left;width:100%;margin-right:0">
+              <span>{{ p.paramName || p.paramCode }}</span>
+              <el-tag size="small" style="margin-left:4px;flex-shrink:0">{{ p.dataType || 'string' }}</el-tag>
+            </el-radio>
+          </el-radio-group>
+        </div>
+      </div>
+      <div v-if="propBrowserLevels.length > 0 && propBrowserLevels.some(l => l.selected)" style="margin-top:8px;color:#1890ff;font-size:12px">
+        已选路径: {{ propBrowserLevels.filter(l => l.selected).map(l => l.selected).join(' → ') }}
+      </div>
+      <template #footer>
+        <el-button @click="propBrowserVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmPropSelection">确定</el-button>
+      </template>
+    </el-dialog>
+
     <!-- ========== 调试弹窗 ========== -->
-    <el-dialog v-model="debugVisible" title="🐛 流程调试" width="780px" :close-on-click-modal="false">
+    <el-dialog v-model="debugVisible" title="🐛 流程调试" width="780px" :close-on-click-modal="false" :modal="false" draggable>
       <div style="margin-bottom:8px;color:#666;font-size:13px">
         已定义的入参：
         <el-tag v-for="p in flowInputParams" :key="p.paramCode" size="small" style="margin-right:4px">
