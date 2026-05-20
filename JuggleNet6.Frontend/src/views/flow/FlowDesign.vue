@@ -993,7 +993,7 @@
       <div style="margin-bottom:8px;color:#666;font-size:13px">
         已定义的入参：
         <el-tag v-for="p in flowInputParams" :key="p.paramCode" size="small" style="margin-right:4px">
-          {{ p.paramCode }}({{ p.dataType }})
+          {{ p.paramCode }}[{{ p.paramName }}]({{ p.dataType }})
         </el-tag>
         <span v-if="!flowInputParams.length" style="color:#aaa">无</span>
       </div>
