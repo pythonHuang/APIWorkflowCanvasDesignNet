@@ -690,16 +690,14 @@ public class ApiGenerateController : ControllerBase
                 else // HTTP_GET or HTTP_POST
                 {
                     var verb = bindType == "HTTP_POST" ? "POST" : "GET";
-                    var httpUrl = opUrl;
-                    if (!string.IsNullOrEmpty(httpLocation))
+                    // URL: wsdl地址去掉?wsdl + ?op=方法名
+                    var httpUrl = sourceUrl;
+                    if (httpUrl.Contains('?'))
                     {
-                        try
-                        {
-                            var uri = new Uri(httpUrl);
-                            httpUrl = $"{uri.Scheme}://{uri.Host}:{uri.Port}{httpLocation}";
-                        }
-                        catch { /* 保持原 URL */ }
+                        var qIdx = httpUrl.IndexOf('?');
+                        httpUrl = httpUrl[..qIdx];
                     }
+                    httpUrl += "?op=" + opName;
 
                     api = new GeneratedApiItem
                     {
@@ -707,7 +705,6 @@ public class ApiGenerateController : ControllerBase
                         MethodType = "HTTP",
                         RequestType = verb,
                         Url = httpUrl,
-                        ContentType = "FORM",
                         InputParams = new List<GeneratedParam>(inputParams),
                         OutputParams = new List<GeneratedParam>(outputParams)
                     };
