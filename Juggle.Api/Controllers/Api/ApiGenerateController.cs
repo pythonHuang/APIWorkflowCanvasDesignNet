@@ -154,7 +154,7 @@ public class ApiGenerateController : ControllerBase
         {
             api.InputParams.AddRange(bodyParams.Select(kv => new GeneratedParam { ParamCode = kv.Key, ParamName = kv.Key, DataType = "string" }));
         }
-        api.Headers = headers.Select(kv => new GeneratedParam { ParamCode = kv.Key, ParamName = kv.Key, DataType = "string" }).ToList();
+        api.HeaderParams = headers.Select(kv => new GeneratedParam { ParamCode = kv.Key, ParamName = kv.Key, DataType = "string" }).ToList();
 
         result.Add(api);
         return result;
@@ -281,7 +281,7 @@ public class ApiGenerateController : ControllerBase
                         var pRequired = 0;
                         if (paramEl.TryGetProperty("required", out var reqEl) && reqEl.ValueKind == JsonValueKind.True) pRequired = 1;
                         if (pIn == "header")
-                            api.Headers.Add(new GeneratedParam { ParamCode = pCode, ParamName = pCode, DataType = pType, Required = pRequired });
+                            api.HeaderParams.Add(new GeneratedParam { ParamCode = pCode, ParamName = pCode, DataType = pType, Required = pRequired });
                         else
                             api.InputParams.Add(new GeneratedParam { ParamCode = pCode, ParamName = pCode, DataType = pType, Required = pRequired });
                     }
@@ -657,13 +657,13 @@ public class ApiGenerateController : ControllerBase
 
                     if (!string.IsNullOrEmpty(soapAction))
                     {
-                        api.Headers.Add(new GeneratedParam
+                        api.HeaderParams.Add(new GeneratedParam
                         {
                             ParamCode = "SOAPAction", ParamName = "SOAPAction",
                             DataType = "string", DefaultValue = soapAction
                         });
                     }
-                    api.Headers.Add(new GeneratedParam
+                    api.HeaderParams.Add(new GeneratedParam
                     {
                         ParamCode = "Content-Type", ParamName = "Content-Type",
                         DataType = "string",
@@ -679,7 +679,7 @@ public class ApiGenerateController : ControllerBase
                         if (messages.TryGetValue(headerMsg, out var hParams))
                         {
                             foreach (var hp in hParams)
-                                api.Headers.Add(new GeneratedParam
+                                api.HeaderParams.Add(new GeneratedParam
                                 {
                                     ParamCode = hp.ParamCode, ParamName = hp.ParamName,
                                     DataType = hp.DataType, Required = 1
@@ -710,13 +710,13 @@ public class ApiGenerateController : ControllerBase
                     var ctValue = verb == "POST"
                         ? "application/x-www-form-urlencoded"
                         : "text/xml; charset=utf-8";
-                    api.Headers.Add(new GeneratedParam
+                    api.HeaderParams.Add(new GeneratedParam
                     {
                         ParamCode = "Content-Type", ParamName = "Content-Type",
                         DataType = "string", DefaultValue = ctValue
                     });
                     // Accept header
-                    api.Headers.Add(new GeneratedParam
+                    api.HeaderParams.Add(new GeneratedParam
                     {
                         ParamCode = "Accept", ParamName = "Accept",
                         DataType = "string", DefaultValue = "text/html,application/xhtml+xml,application/xml"
@@ -806,7 +806,7 @@ public class GeneratedApiItem
     public string? SoapAction { get; set; }
     public List<GeneratedParam> InputParams { get; set; } = new();
     public List<GeneratedParam> OutputParams { get; set; } = new();
-    public List<GeneratedParam> Headers { get; set; } = new();
+    public List<GeneratedParam> HeaderParams { get; set; } = new();
 }
 
 public class GeneratedParam
