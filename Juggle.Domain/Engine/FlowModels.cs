@@ -184,6 +184,22 @@ public class AssignRule
     /// <summary>数据类型（用于常量解析）：string/integer/double/boolean</summary>
     [JsonPropertyName("dataType")]
     public string? DataType { get; set; }
+
+    /// <summary>数组操作类型（sourceType/targetType 为 ARRAY_OPERATION 时使用）</summary>
+    [JsonPropertyName("arrayOpType")]
+    public string? ArrayOpType { get; set; }
+
+    /// <summary>数组操作-页码（分页操作）</summary>
+    [JsonPropertyName("arrayOpPageNum")]
+    public string? ArrayOpPageNum { get; set; }
+
+    /// <summary>数组操作-每页数量（分页操作）</summary>
+    [JsonPropertyName("arrayOpPageSize")]
+    public string? ArrayOpPageSize { get; set; }
+
+    /// <summary>数组操作-索引（获取第几个/插入）</summary>
+    [JsonPropertyName("arrayOpIndex")]
+    public string? ArrayOpIndex { get; set; }
 }
 
 /// <summary>代码节点配置（CODE 节点）</summary>

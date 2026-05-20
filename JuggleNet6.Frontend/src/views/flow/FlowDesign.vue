@@ -514,12 +514,13 @@
             </div>
             <div v-for="(rule, i) in selectedNode.assignRules" :key="i" class="assign-rule">
               <div class="assign-row">
-                <el-select v-model="rule.sourceType" size="small" style="width:80px;flex-shrink:0">
+                <el-select v-model="rule.sourceType" size="small" style="width:80px;flex-shrink:0" @change="onSourceTypeChange(rule)">
                   <el-option value="CONSTANT" label="常量" />
                   <el-option value="VARIABLE" label="变量" />
                   <el-option value="STATIC" label="静态" />
                   <el-option value="INPUT" label="入参" />
                   <el-option value="SUB_PROPERTY" label="子对象" />
+                  <el-option value="ARRAY_OPERATION" label="数组操作" />
                 </el-select>
                 <template v-if="rule.sourceType === 'CONSTANT'">
                   <el-input v-model="rule.source" placeholder="常量值" size="small" style="flex:1" />
@@ -544,6 +545,11 @@
                     <el-option v-for="c in allComplexTypes" :key="c.code" :value="c.code" :label="`${c.name}(${c.code}) [${sourceTypeTag(c.type)}]`" />
                   </el-select>
                 </template>
+                <template v-else-if="rule.sourceType === 'ARRAY_OPERATION'">
+                  <el-select v-model="rule.source" placeholder="选择数组" size="small" style="flex:1" @change="rule.sourcePath = ''; rule.arrayOpType = ''">
+                    <el-option v-for="a in allArrayTypes" :key="a.code" :value="a.code" :label="`${a.name}(${a.code}) [${sourceTypeTag(a.type)}]`" />
+                  </el-select>
+                </template>
               </div>
               <!-- 源属性路径行 -->
               <div v-if="rule.sourceType === 'SUB_PROPERTY'" class="assign-row" style="margin-top:2px;">
@@ -551,14 +557,34 @@
                 <el-input v-model="rule.sourcePath" placeholder="如: name 或 user.id" size="small" style="flex:1" />
                 <el-button size="small" icon="Search" @click="browseSource(rule)" style="flex-shrink:0">浏览</el-button>
               </div>
+              <!-- 源数组操作行 -->
+              <div v-if="rule.sourceType === 'ARRAY_OPERATION'" class="assign-row" style="margin-top:2px;">
+                <span style="font-size:11px;color:#888;width:80px;flex-shrink:0">数组操作</span>
+                <el-select v-model="rule.arrayOpType" placeholder="操作方式" size="small" style="width:90px;flex-shrink:0">
+                  <el-option value="PAGINATE" label="分页" />
+                  <el-option value="GET_INDEX" label="取第n个" />
+                  <el-option value="TO_JSON" label="转JSON" />
+                </el-select>
+                <template v-if="rule.arrayOpType === 'PAGINATE'">
+                  <span style="font-size:11px;color:#666">页</span>
+                  <el-input v-model="rule.arrayOpPageNum" placeholder="0" size="small" style="width:60px" />
+                  <span style="font-size:11px;color:#666">每页</span>
+                  <el-input v-model="rule.arrayOpPageSize" placeholder="10" size="small" style="width:60px" />
+                </template>
+                <template v-else-if="rule.arrayOpType === 'GET_INDEX'">
+                  <span style="font-size:11px;color:#666">索引</span>
+                  <el-input v-model="rule.arrayOpIndex" placeholder="0" size="small" style="width:80px" />
+                </template>
+              </div>
               <div class="assign-row" style="margin-top:4px">
                 <span style="font-size:12px;color:#666;width:72px;flex-shrink:0">→ 赋值给</span>
-                <el-select v-model="rule.targetType" size="small" style="width:80px;flex-shrink:0">
+                <el-select v-model="rule.targetType" size="small" style="width:80px;flex-shrink:0" @change="onTargetTypeChange(rule)">
                   <el-option value="VARIABLE" label="变量" />
                   <el-option value="OUTPUT" label="出参" />
                   <el-option value="STATIC" label="静态" />
                   <el-option value="INPUT" label="入参" />
                   <el-option value="SUB_PROPERTY" label="子对象" />
+                  <el-option value="ARRAY_OPERATION" label="数组操作" />
                 </el-select>
                 <el-select v-model="rule.target" :placeholder="getTargetPlaceholder(rule.targetType)" size="small" style="flex:1">
                   <template v-if="rule.targetType === 'VARIABLE'">
@@ -576,8 +602,11 @@
                   <template v-else-if="rule.targetType === 'SUB_PROPERTY'">
                     <el-option v-for="c in allComplexTypes" :key="c.code" :value="c.code" :label="`${c.name}(${c.code}) [${sourceTypeTag(c.type)}]`" />
                   </template>
+                  <template v-else-if="rule.targetType === 'ARRAY_OPERATION'">
+                    <el-option v-for="a in allArrayTypes" :key="a.code" :value="a.code" :label="`${a.name}(${a.code}) [${sourceTypeTag(a.type)}]`" />
+                  </template>
                 </el-select>
-                <el-select v-model="rule.dataType" size="small" style="width:72px;flex-shrink:0">
+                <el-select v-if="rule.targetType !== 'ARRAY_OPERATION'" v-model="rule.dataType" size="small" style="width:72px;flex-shrink:0">
                   <el-option value="string" label="string" />
                   <el-option value="integer" label="integer" />
                   <el-option value="double" label="double" />
@@ -590,6 +619,25 @@
                 <span style="font-size:11px;color:#888;width:80px;flex-shrink:0">目标属性</span>
                 <el-input v-model="rule.targetPath" placeholder="如: name 或 user.id" size="small" style="flex:1" />
                 <el-button size="small" icon="Search" @click="browseTarget(rule)" style="flex-shrink:0">浏览</el-button>
+              </div>
+              <!-- 目标数组操作行 -->
+              <div v-if="rule.targetType === 'ARRAY_OPERATION'" class="assign-row" style="margin-top:2px;">
+                <span style="font-size:11px;color:#888;width:80px;flex-shrink:0">数组操作</span>
+                <el-select v-model="rule.arrayOpType" placeholder="操作方式" size="small" style="width:90px;flex-shrink:0">
+                  <el-option value="PAGINATE" label="分页" />
+                  <el-option value="GET_INDEX" label="取第n个" />
+                  <el-option value="TO_JSON" label="转JSON" />
+                </el-select>
+                <template v-if="rule.arrayOpType === 'PAGINATE'">
+                  <span style="font-size:11px;color:#666">页</span>
+                  <el-input v-model="rule.arrayOpPageNum" placeholder="0" size="small" style="width:60px" />
+                  <span style="font-size:11px;color:#666">每页</span>
+                  <el-input v-model="rule.arrayOpPageSize" placeholder="10" size="small" style="width:60px" />
+                </template>
+                <template v-else-if="rule.arrayOpType === 'GET_INDEX'">
+                  <span style="font-size:11px;color:#666">索引</span>
+                  <el-input v-model="rule.arrayOpIndex" placeholder="0" size="small" style="width:80px" />
+                </template>
               </div>
             </div>
           </template>
@@ -1321,6 +1369,24 @@ const allComplexTypes = computed(() => {
   return items
 })
 
+// 所有数组类型的参数/变量，供"数组操作"选择
+const allArrayTypes = computed(() => {
+  const items: any[] = []
+  for (const p of flowInputParams.value) {
+    if (p.dataType === 'array') items.push({ code: p.paramCode, name: p.paramName, type: 'input', objectCode: p.objectCode })
+  }
+  for (const p of flowOutputParams.value) {
+    if (p.dataType === 'array') items.push({ code: p.paramCode, name: p.paramName, type: 'output', objectCode: p.objectCode })
+  }
+  for (const v of allVariables.value) {
+    if (v.dataType === 'array') items.push({ code: v.variableCode, name: v.variableName, type: 'variable', objectCode: v.objectCode })
+  }
+  for (const s of staticVariables.value) {
+    if (s.dataType === 'array') items.push({ code: s.varCode, name: s.varName, type: 'static', objectCode: s.objectCode })
+  }
+  return items
+})
+
 const selectedNode = computed(() => businessNodes.value.find(n => n.key === selectedNodeKey.value) || null)
 const selectedEdgeInfo = computed(() => selectedEdgeId.value ? vfEdges.value.find(e => e.id === selectedEdgeId.value) : null)
 const hasStart = computed(() => businessNodes.value.some(n => n.elementType === 'START'))
@@ -1993,7 +2059,22 @@ function addHeaderRule() {
 
 function addAssignRule() {
   if (!selectedNode.value?.assignRules) return
-  selectedNode.value.assignRules.push({ source: '', sourceType: 'CONSTANT', sourcePath: '', target: '', targetType: 'VARIABLE', targetPath: '', dataType: 'string' })
+  selectedNode.value.assignRules.push({ source: '', sourceType: 'CONSTANT', sourcePath: '', target: '', targetType: 'VARIABLE', targetPath: '', dataType: 'string', arrayOpType: '', arrayOpPageNum: '', arrayOpPageSize: '', arrayOpIndex: '' })
+}
+
+function onSourceTypeChange(rule: any) {
+  rule.sourcePath = ''
+  rule.arrayOpType = ''
+  rule.arrayOpPageNum = ''
+  rule.arrayOpPageSize = ''
+  rule.arrayOpIndex = ''
+}
+function onTargetTypeChange(rule: any) {
+  rule.targetPath = ''
+  rule.arrayOpType = ''
+  rule.arrayOpPageNum = ''
+  rule.arrayOpPageSize = ''
+  rule.arrayOpIndex = ''
 }
 
 // 属性浏览器状态
