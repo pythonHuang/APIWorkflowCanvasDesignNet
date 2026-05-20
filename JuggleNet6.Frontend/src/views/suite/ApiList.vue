@@ -387,13 +387,65 @@ async function doImport() {
 }
 
 // ========== CURL 生成 ==========
-function copyCurl(row: any) {
+async function copyCurl(row: any) {
+  // 加载该接口的入参和 Header
+  const [inputRes, headerRes]: any[] = await Promise.all([
+    request.get('/parameter/list', { params: { ownerId: row.id, paramType: 1 } }),
+    request.get('/parameter/list', { params: { ownerId: row.id, paramType: 4 } })
+  ])
+  const inputParams = (inputRes.data || []) as any[]
+  const headerParams = (headerRes.data || []) as any[]
+
   let curl = `curl -X ${row.requestType || 'GET'}`
-  curl += ` "${row.url}"`
+
+  // 添加 Content-Type
   if (row.methodType === 'WEBSERVICE') {
-    curl += ` -H "Content-Type: text/xml"`
-    if (row.soapAction) curl += ` -H "SOAPAction: ${row.soapAction}"`
+    curl += ` -H "Content-Type: text/xml; charset=utf-8"`
+    if (row.soapAction) curl += ` -H "SOAPAction: \"${row.soapAction}\""`
+  } else if (row.contentType === 'FORM') {
+    curl += ` -H "Content-Type: application/x-www-form-urlencoded"`
+  } else if (row.requestType === 'POST' || row.requestType === 'PUT') {
+    curl += ` -H "Content-Type: application/json"`
   }
+
+  // 添加 Header 参数
+  for (const h of headerParams) {
+    const val = h.defaultValue || h.paramCode
+    curl += ` -H "${h.paramCode}: ${val}"`
+  }
+
+  // 添加查询参数 (GET/DELETE)
+  const queryParams = inputParams.filter((p: any) => p.paramPosition === 'query')
+  const bodyParams = inputParams.filter((p: any) => p.paramPosition !== 'query' && p.paramPosition !== 'rawBody')
+  const rawBodyParam = inputParams.find((p: any) => p.paramPosition === 'rawBody')
+
+  let url = row.url || ''
+  if (queryParams.length > 0 && (row.requestType === 'GET' || row.requestType === 'DELETE')) {
+    const qs = queryParams.map((p: any) => `${encodeURIComponent(p.paramCode)}=${encodeURIComponent(p.defaultValue || '')}`).join('&')
+    url += (url.includes('?') ? '&' : '?') + qs
+  }
+  curl += ` "${url}"`
+
+  // 添加 Body 参数 (POST/PUT)
+  if (row.methodType !== 'WEBSERVICE' && (row.requestType === 'POST' || row.requestType === 'PUT')) {
+    if (rawBodyParam) {
+      curl += ` -d '${rawBodyParam.defaultValue || ''}'`
+    } else if (bodyParams.length > 0) {
+      const body: Record<string, string> = {}
+      for (const p of bodyParams) body[p.paramCode] = p.defaultValue || ''
+      curl += ` -d '${JSON.stringify(body)}'`
+    }
+  }
+
+  // WebService SOAP 请求体
+  if (row.methodType === 'WEBSERVICE' && inputParams.length > 0) {
+    const paramXml = inputParams.map((p: any) => `<${p.paramCode}>${p.defaultValue || ''}</${p.paramCode}>`).join('\n  ')
+    const ns = row.soapNamespace || 'http://example.com/'
+    const methodName = row.soapMethod || 'Request'
+    const soapBody = `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">\n  <soap:Body>\n    <${methodName} xmlns="${ns}">\n      ${paramXml}\n    </${methodName}>\n  </soap:Body>\n</soap:Envelope>`
+    curl += ` -d '${soapBody}'`
+  }
+
   navigator.clipboard?.writeText(curl).then(() => ElMessage.success('cURL 已复制到剪贴板'))
     .catch(() => ElMessage.warning('复制失败，请手动复制'))
 }

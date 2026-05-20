@@ -306,10 +306,68 @@ public class ApiGenerateController : ControllerBase
                     }
                 }
 
+                // Response → 出参 (OpenAPI 3.x & Swagger 2.0)
+                ExtractResponseParams(methodProp.Value, api);
+
                 result.Add(api);
             }
         }
         return result;
+    }
+
+    /// <summary>从 responses 中提取出参（支持 OpenAPI 3.x 和 Swagger 2.0）</summary>
+    private void ExtractResponseParams(JsonElement methodEl, GeneratedApiItem api)
+    {
+        if (!methodEl.TryGetProperty("responses", out var responsesEl)) return;
+
+        // 取第一个成功响应 (200/201/default)
+        JsonElement targetResp = default;
+        foreach (var respProp in responsesEl.EnumerateObject())
+        {
+            if (respProp.Name == "200" || respProp.Name == "201" || respProp.Name == "default" || respProp.Name == "2XX")
+            {
+                targetResp = respProp.Value;
+                break;
+            }
+        }
+        if (targetResp.ValueKind != JsonValueKind.Object) return;
+
+        // OpenAPI 3.x: responses.200.content.application/json.schema.properties
+        if (targetResp.TryGetProperty("content", out var contentEl))
+        {
+            foreach (var ctProp in contentEl.EnumerateObject())
+            {
+                if (ctProp.Value.TryGetProperty("schema", out var schemaEl))
+                {
+                    ExtractSchemaProps(schemaEl, api.OutputParams);
+                    return;
+                }
+            }
+        }
+
+        // Swagger 2.0: responses.200.schema.properties
+        if (targetResp.TryGetProperty("schema", out var swSchemaEl))
+        {
+            ExtractSchemaProps(swSchemaEl, api.OutputParams);
+        }
+    }
+
+    private void ExtractSchemaProps(JsonElement schema, List<GeneratedParam> target)
+    {
+        if (schema.TryGetProperty("properties", out var propsEl))
+        {
+            foreach (var pp in propsEl.EnumerateObject())
+            {
+                var pType = pp.Value.TryGetProperty("type", out var pt) ? pt.GetString() ?? "string" : "string";
+                target.Add(new GeneratedParam { ParamCode = pp.Name, ParamName = pp.Name, DataType = pType });
+            }
+        }
+        // 处理 allOf / oneOf 等组合 schema
+        if (schema.TryGetProperty("allOf", out var allOfEl))
+        {
+            foreach (var sub in allOfEl.EnumerateArray())
+                ExtractSchemaProps(sub, target);
+        }
     }
 
     // ========== WSDL 解析 ==========
