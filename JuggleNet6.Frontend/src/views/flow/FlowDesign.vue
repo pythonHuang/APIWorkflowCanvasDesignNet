@@ -456,7 +456,7 @@
               <div v-if="rule.sourceType==='SUB_PROPERTY'" class="fill-rule-row" style="margin-top:2px;">
                 <span style="font-size:11px;color:#888;width:70px;flex-shrink:0">属性</span>
                 <el-input v-model="rule.sourcePath" placeholder="如: name 或 user.id" size="small" style="flex:1" />
-                <el-button size="small" icon="Search" @click="browseProperties(rule, 'source')" style="flex-shrink:0">浏览</el-button>
+                <el-button size="small" icon="Search" @click="browseSource(rule)" style="flex-shrink:0">浏览</el-button>
               </div>
             </div>
 
@@ -500,7 +500,7 @@
               <div v-if="rule.targetType==='SUB_PROPERTY'" class="fill-rule-row" style="margin-top:2px;">
                 <span style="font-size:11px;color:#888;width:80px;flex-shrink:0">目标属性</span>
                 <el-input v-model="rule.targetPath" placeholder="如: name 或 user.id" size="small" style="flex:1" />
-                <el-button size="small" icon="Search" @click="browseProperties(rule, 'target')" style="flex-shrink:0">浏览</el-button>
+                <el-button size="small" icon="Search" @click="browseTarget(rule)" style="flex-shrink:0">浏览</el-button>
               </div>
             </div>
           </template>
@@ -549,13 +549,7 @@
               <div v-if="rule.sourceType === 'SUB_PROPERTY'" class="assign-row" style="margin-top:2px;">
                 <span style="font-size:11px;color:#888;width:80px;flex-shrink:0">源属性</span>
                 <el-input v-model="rule.sourcePath" placeholder="如: name 或 user.id" size="small" style="flex:1" />
-                <el-button size="small" icon="Search" @click="browseProperties(rule, 'source')" style="flex-shrink:0">浏览</el-button>
-              </div>
-              <!-- 目标属性路径行 -->
-              <div v-if="rule.targetType === 'SUB_PROPERTY'" class="assign-row" style="margin-top:2px;">
-                <span style="font-size:11px;color:#888;width:80px;flex-shrink:0">目标属性</span>
-                <el-input v-model="rule.targetPath" placeholder="如: name 或 user.id" size="small" style="flex:1" />
-                <el-button size="small" icon="Search" @click="browseProperties(rule, 'target')" style="flex-shrink:0">浏览</el-button>
+                <el-button size="small" icon="Search" @click="browseSource(rule)" style="flex-shrink:0">浏览</el-button>
               </div>
               <div class="assign-row" style="margin-top:4px">
                 <span style="font-size:12px;color:#666;width:72px;flex-shrink:0">→ 赋值给</span>
@@ -590,6 +584,12 @@
                   <el-option value="boolean" label="bool" />
                 </el-select>
                 <el-button size="small" icon="Delete" circle type="danger" @click="selectedNode.assignRules.splice(i, 1)" />
+              </div>
+              <!-- 目标属性路径行 -->
+              <div v-if="rule.targetType === 'SUB_PROPERTY'" class="assign-row" style="margin-top:2px;">
+                <span style="font-size:11px;color:#888;width:80px;flex-shrink:0">目标属性</span>
+                <el-input v-model="rule.targetPath" placeholder="如: name 或 user.id" size="small" style="flex:1" />
+                <el-button size="small" icon="Search" @click="browseTarget(rule)" style="flex-shrink:0">浏览</el-button>
               </div>
             </div>
           </template>
@@ -2000,18 +2000,28 @@ const propBrowserRule = ref<any>(null)
 const propBrowserMode = ref<'source' | 'target'>('source') // 浏览的是源属性还是目标属性
 const propBrowserLevels = ref<any[]>([]) // 级联层级 [{ params: [], selected: '' }]
 
+function browseSource(rule: any) { browseProperties(rule, 'source') }
+function browseTarget(rule: any) { browseProperties(rule, 'target') }
+
 async function browseProperties(rule: any, mode: 'source' | 'target') {
   propBrowserRule.value = rule
   propBrowserMode.value = mode
   propBrowserLevels.value = []
+  // 确保目标对象存在 targetPath 字段（兼容旧数据）
+  if (mode === 'target' && rule.targetPath === undefined) rule.targetPath = ''
   // 根据模式选择要查找的对象code
   const searchCode = mode === 'source' ? rule.source : rule.target
   const srcItem = allComplexTypes.value.find((c: any) => c.code === searchCode)
   if (!srcItem?.objectCode) {
     propBrowserLevels.value = [{ params: [], label: '该参数未关联对象类型' }]
-    propBrowserVisible.value = true; return
+    propBrowserVisible.value = true
+    return
   }
-  await loadPropLevel(0, srcItem.objectCode)
+  try {
+    await loadPropLevel(0, srcItem.objectCode)
+  } catch {
+    propBrowserLevels.value = [{ params: [], label: '加载属性失败，请检查网络' }]
+  }
   propBrowserVisible.value = true
 }
 
