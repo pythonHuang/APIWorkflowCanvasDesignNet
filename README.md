@@ -75,6 +75,9 @@ docker-compose up -d
 ### 核心流程
 - ✅ 可视化流程设计器（节点画布）
 - ✅ **14 种节点**：START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / DB / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY / TRANSFORM（模板转换）
+- ✅ **对象子属性级联选择**（赋值/方法节点支持 object/array 类型属性树形选择）
+- ✅ **数组操作**（赋值节点支持分页/取第n个/转JSON）
+- ✅ **方法节点参数树**（API 入参/出参递归展开子属性）
 - ✅ 节点超时 & 重试策略
 - ✅ 流程版本管理 & 版本对比
 - ✅ 流程克隆 / 导入 / 导出（含 Word 文档）
@@ -86,11 +89,17 @@ docker-compose up -d
 - ✅ Webhook 触发（含签名验证）
 - ✅ 定时任务调度
 - ✅ 服务别名（`/open/services/别名` 快捷访问）
+- ✅ **SOAP 调用**（`POST /open/flow/soap/{key}`）
+- ✅ **WSDL 自动生成**（`GET /open/flow/wsdl/{key}`，无需认证）
 
 ### 套件 & 接口
 - ✅ 套件 / 接口 / 对象 / 参数管理
 - ✅ 接口 Mock 功能
 - ✅ WebService（SOAP 1.1 / 1.2）支持
+- ✅ **接口导入 / 导出（JSON 格式）**
+- ✅ **批量生成接口**（5 种方式：CURL / Swagger URL / Swagger JSON / WSDL URL / WSDL 内容）
+- ✅ **cURL 一键复制**（含 Header + 入参完整配置）
+- ✅ 对象子属性级联选择（object/array 类型参数关联全局对象）
 
 ### 监控 & 测试
 - ✅ 监控仪表盘
@@ -215,7 +224,10 @@ docker-compose up -d
 
 ### Core Workflow
 - ✅ Visual workflow designer (node canvas)
-- ✅ **13 Node Types**: START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / DB / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY
+- ✅ **14 Node Types**: START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / DB / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY / TRANSFORM
+- ✅ **Object sub-property cascading** (ASSIGN/METHOD nodes support object/array tree property selection)
+- ✅ **Array operations** (ASSIGN node: paginate / get by index / to JSON)
+- ✅ **Method node param tree** (API I/O params recursively expand sub-properties)
 - ✅ Node timeout & retry policies
 - ✅ Workflow version management & comparison
 - ✅ Clone / Import / Export (with Word docs)
@@ -226,10 +238,18 @@ docker-compose up -d
 - ✅ Asynchronous trigger + result query
 - ✅ Webhook trigger (with signature verification)
 - ✅ Scheduled task scheduling
+- ✅ Service alias (`/open/services/{alias}` quick access)
+- ✅ **SOAP trigger** (`POST /open/flow/soap/{key}`)
+- ✅ **Auto WSDL generation** (`GET /open/flow/wsdl/{key}`, no auth required)
 
 ### Suite & API Management
 - ✅ Suite / API / Object / Parameter management
 - ✅ API Mock functionality
+- ✅ WebService (SOAP 1.1 / 1.2) support
+- ✅ **API Import / Export (JSON)**
+- ✅ **Batch API generation** (5 sources: CURL / Swagger URL / Swagger JSON / WSDL URL / WSDL content)
+- ✅ **cURL one-click copy** (with full Headers + Input params)
+- ✅ Object sub-property cascading selection (object/array type params linked to global objects)
 
 ### Monitoring & Testing
 - ✅ Monitoring dashboard
