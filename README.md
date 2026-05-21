@@ -131,6 +131,43 @@ docker-compose up -d
 
 ---
 
+## 📋 更新日志
+
+### v1.7（最新）
+
+- 🧩 **WSDL 自动生成** — 流程版本/别名均支持自动生成 WSDL 描述文件，无需认证即可访问；生成端点同步支持 SOAP 1.1 调用
+- 📥 **接口批量生成** — 支持 5 种方式批量创建接口：CURL 命令、Swagger URL、Swagger JSON、WSDL URL、WSDL 内容；WSDL 解析器自动识别 SOAP 1.1/1.2/HTTP GET/HTTP POST 绑定
+- 📦 **接口导入/导出** — 支持多选接口导出为 JSON 文件，可跨项目导入复用
+- 📋 **cURL 一键复制** — 每个接口自动生成含 Header + 入参完整配置的 cURL 命令
+- 🔢 **数组操作** — 赋值节点新增数组操作类型，支持分页/取第n个/转JSON
+- 🌳 **对象子属性级联选择** — 赋值节点/方法节点均支持 object/array 类型参数的属性树形浏览和选择
+- 🌲 **方法节点参数树** — API 入参/出参递归展开子属性，下拉框缩进展示层级
+
+### v1.6
+
+- 🔄 **TRANSFORM 模板转换节点** — 支持 `${var|pipe}` 模板语法，静态方法/实例方法双模式
+- 🌐 **WebService SOAP 1.2** — 支持 SOAP 1.1/1.2 双版本，可配置操作名/命名空间/SOAPAction
+- 📍 **参数位置配置** — 入参支持 query/body/rawBody 位置，Debug 调试适配不同位置策略
+- 🔧 **流程变量内联编辑** — 变量管理表格支持直接编辑，无需弹窗
+- 🎯 **来自对象导入** — 流程参数配置支持从全局对象类型一键导入属性作为入参/出参
+- 🔗 **服务别名** — 流程可配置访问别名（`/open/services/alias`），支持 GET/POST
+
+### v1.5
+
+- 📊 **监控仪表盘** — 从流程管理独立为一级菜单
+- 🔀 **赋值节点扩展** — 支持常量/变量/静态变量/入参多种来源
+- 🧪 **版本触发测试** — 版本管理页增加触发测试弹窗
+
+### v1.0
+
+- 🎨 可视化流程设计器（VueFlow 画布 + 14 种节点）
+- 🚀 同步/异步/Webhook/定时 多触发方式
+- 🗄️ 多数据库支持（SQLite/MySQL/PostgreSQL/SQLServer/Oracle/达梦）
+- 🔐 JWT + RBAC 权限 + 多租户数据隔离
+- 🐳 Docker 一键部署（含 CI/CD GitHub Actions）
+
+---
+
 ## 📚 文档
 
 - [原项目文档](https://juggle.plus/docs/guide/introduce/introduce.html)（Java 版本参考）
@@ -266,6 +303,43 @@ docker-compose up -d
 ### Database Support
 - **System Database**: SQLite / MySQL / PostgreSQL / SQLServer
 - **Business Data Sources**: SQLite / MySQL / PostgreSQL / SQLServer / Oracle / Dameng
+
+---
+
+## 📋 Changelog
+
+### v1.7（Latest）
+
+- 🧩 **WSDL auto-generation** — Flow versions & aliases auto-generate WSDL files, publicly accessible without auth; sync SOAP 1.1 call support
+- 📥 **Batch API generation** — 5 sources: CURL / Swagger URL / Swagger JSON / WSDL URL / WSDL content; WSDL parser auto-detects SOAP 1.1/1.2/HTTP GET/HTTP POST bindings
+- 📦 **API import/export** — Multi-select export to JSON, cross-project import
+- 📋 **cURL one-click copy** — Full cURL command with Headers + Input params
+- 🔢 **Array operations** — ASSIGN node: paginate / get by index / to JSON
+- 🌳 **Object sub-property cascading** — ASSIGN/METHOD nodes support object/array tree property browser and selection
+- 🌲 **Method node param tree** — API I/O params recursively expand sub-properties with indented dropdown
+
+### v1.6
+
+- 🔄 **TRANSFORM node** — `${var|pipe}` template syntax, static/instance method transforms
+- 🌐 **WebService SOAP 1.2** — Dual SOAP version support, configurable operation/namespace/SOAPAction
+- 📍 **Param position** — Input params: query/body/rawBody; debug adapts per position
+- 🔧 **Inline variable editing** — Flow variable table supports inline edit
+- 🎯 **Import from object** — One-click import properties from global objects to flow params
+- 🔗 **Service alias** — Custom access alias for flows (`/open/services/alias`)
+
+### v1.5
+
+- 📊 **Dashboard** — Promoted to independent top-level menu
+- 🔀 **ASSIGN node extensions** — CONSTANT/VARIABLE/STATIC/INPUT source types
+- 🧪 **Version trigger test** — Inline trigger test dialog in version management
+
+### v1.0
+
+- 🎨 Visual flow designer (VueFlow canvas + 14 node types)
+- 🚀 Sync/Async/Webhook/Scheduled triggers
+- 🗄️ Multi-database (SQLite/MySQL/PostgreSQL/SQLServer/Oracle/Dameng)
+- 🔐 JWT + RBAC + Multi-tenant isolation
+- 🐳 Docker one-click deploy (with CI/CD GitHub Actions)
 
 ---
 
