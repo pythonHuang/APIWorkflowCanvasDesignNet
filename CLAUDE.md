@@ -52,6 +52,7 @@ Controller 直接注入 `JuggleDbContext`——CRUD 操作**不走 Service 层**
 **13 种节点类型**: START、END、METHOD（HTTP调用）、CONDITION（分支判断）、MERGE（分支汇聚）、ASSIGN（赋值）、CODE（JS脚本）、MYSQL/DB（SQL执行）、SUB_FLOW（递归调用子流程）、LOOP（循环）、DELAY（延迟）、PARALLEL（并行）、NOTIFY（通知）。
 
 **变量命名约定**（理解数据流转的关键）:
+
 - `input_*` — 流程入参（来自调用方）
 - `output_*` — 流程出参（返回给调用方）
 - `env_*` — 内部中间变量（流程内使用）
@@ -64,6 +65,7 @@ Controller 直接注入 `JuggleDbContext`——CRUD 操作**不走 Service 层**
 ## 多租户数据隔离
 
 `ICurrentTenantProvider`（定义在 Infrastructure 层，在 Api 层由 `HttpContextTenantProvider` 实现）从 JWT Claims 中提取租户 ID。`JuggleDbContext` 通过**全局查询过滤器**（`HasQueryFilter`）使用它：
+
 - **严格隔离**（`e.TenantId == CurrentTenantId`）：流程、数据源、Token、静态变量等
 - **宽松隔离**（`e.TenantId == null || e.TenantId == CurrentTenantId`）：套件、API、参数、角色——TenantId 为 null 的记录为"全局"数据，对所有租户可见
 
@@ -77,11 +79,12 @@ Controller 直接注入 `JuggleDbContext`——CRUD 操作**不走 Service 层**
 
 ## API URL 规范
 
-| 前缀 | 认证方式 | 用途 |
-|------|---------|------|
-| `/api/` | JWT Bearer | 管理控制台 |
-| `/open/` | X-Access-Token 请求头 | 外部流程触发 |
-| `/api/health` | 无 | Docker 健康检查 |
+
+| 前缀          | 认证方式              | 用途            |
+| ------------- | --------------------- | --------------- |
+| `/api/`       | JWT Bearer            | 管理控制台      |
+| `/open/`      | X-Access-Token 请求头 | 外部流程触发    |
+| `/api/health` | 无                    | Docker 健康检查 |
 
 ## 关键环境变量
 
@@ -101,3 +104,10 @@ Controller 直接注入 `JuggleDbContext`——CRUD 操作**不走 Service 层**
 - **软删除**: 所有实体使用 `deleted` 列（0/1）
 - **前端**: `<script setup>` 语法（Composition API），API 调用通过 service 层文件，使用 Pinia 管理状态
 - **流程内容**: 以 JSON 字符串存储在 `flow_content` 列（TEXT 类型）
+
+Git 仓库
+
+- **仓库地址**：`https://github.com/pythonHuang/JuggleNet6.git`
+- **本地路径**：`d:\WorkBuddyMyWorkSpace\Juggle接口编排Net6\JuggleNet6\`（子目录独立 Git 仓库）
+- **用户偏好**：每完成一个 Bug 修复或需求开发，立即单独 git commit + push GitHub（不攒多个）
+- **.gitignore 已忽略**：`*.db / *.db-shm / *.db-wal / wwwroot/ / node_modules/ / dist/`

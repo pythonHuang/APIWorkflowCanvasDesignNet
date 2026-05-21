@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",
+      "Read(//d/WorkBuddyMyWorkSpace/Juggle接口编排Net6/JuggleNet6.JS/src/views/suite/**)"
+    ],
+    "additionalDirectories": [
+      "\\tmp",
+      "d:\\tmp"
+    ]
+  }
+}

@@ -1,10 +1,16 @@
 {
   "permissions": {
     "allow": [
+      "Bash(*)",
       "Bash(dotnet --version)",
       "Bash(dotnet restore *)",
       "Bash(npm install *)",
-      "Bash(dotnet run *)"
+      "Bash(dotnet run *)",
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(dotnet build *)",
+      "Bash(taskkill //PID 49488 //F)"
     ]
   }
 }
