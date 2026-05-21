@@ -170,11 +170,28 @@ public class ApiController : ControllerBase
                 }
                 else
                 {
-                    // 标准模式：所有非 query 参数序列化为 JSON
-                    var bodyDict = bodyParams.ToDictionary(kv => kv.Key, kv => kv.Value);
-                    content = new StringContent(
-                        JsonSerializer.Serialize(bodyDict),
-                        System.Text.Encoding.UTF8, "application/json");
+                    // 根据 Header 配置或接口类型决定 Content-Type
+                    var ctHeader = req.Headers?.FirstOrDefault(h =>
+                        string.Equals(h.Key, "Content-Type", StringComparison.OrdinalIgnoreCase)).Value?.ToString() ?? "";
+                    var contentType = !string.IsNullOrEmpty(ctHeader) ? ctHeader
+                        : api.ContentType == "FORM" ? "application/x-www-form-urlencoded"
+                        : "application/json";
+
+                    if (contentType.Contains("x-www-form-urlencoded"))
+                    {
+                        // Form URL-Encoded 模式
+                        var formStr = string.Join("&", bodyParams.Select(kv =>
+                            $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value?.ToString() ?? "")}"));
+                        content = new StringContent(formStr, System.Text.Encoding.UTF8, contentType);
+                    }
+                    else
+                    {
+                        // JSON 或其他模式
+                        var bodyDict = bodyParams.ToDictionary(kv => kv.Key, kv => kv.Value);
+                        content = new StringContent(
+                            JsonSerializer.Serialize(bodyDict),
+                            System.Text.Encoding.UTF8, contentType);
+                    }
                 }
                 var resp = requestType == "PUT" ? await client.PutAsync(api.Url, content) : await client.PostAsync(api.Url, content);
                 responseJson = await resp.Content.ReadAsStringAsync();
