@@ -74,7 +74,7 @@ public class ApiGenerateController : ControllerBase
         {
             var client = _httpClientFactory.CreateClient();
             var xml = await client.GetStringAsync(req.Url);
-            var apis = ParseWsdl(xml, req.Url);
+            var apis = ParseWsdl(xml, req.Url, new List<string>());
             return ApiResult.Success(apis);
         }
         catch (Exception ex)
@@ -90,7 +90,7 @@ public class ApiGenerateController : ControllerBase
         if (string.IsNullOrWhiteSpace(req.WsdlContent)) return ApiResult.Fail("WSDL 内容不能为空");
         try
         {
-            var apis = ParseWsdl(req.WsdlContent, req.Url ?? "");
+            var apis = ParseWsdl(req.WsdlContent, req.Url ?? "", req.SchemaUrls ?? new List<string>());
             return ApiResult.Success(apis);
         }
         catch (Exception ex)
@@ -372,7 +372,7 @@ public class ApiGenerateController : ControllerBase
 
     // ========== WSDL 解析 ==========
 
-    private List<GeneratedApiItem> ParseWsdl(string xml, string sourceUrl)
+    private List<GeneratedApiItem> ParseWsdl(string xml, string sourceUrl, List<string> schemaUrls)
     {
         var result = new List<GeneratedApiItem>();
         XDocument xdoc;
@@ -453,6 +453,20 @@ public class ApiGenerateController : ControllerBase
             }
         }
 
+        // ===== 从用户提供的附加 schema URL 中加载 element 定义 =====
+        foreach (var sUrl in schemaUrls)
+        {
+            if (string.IsNullOrEmpty(sUrl)) continue;
+            try
+            {
+                var absUrl = ResolveUrl(sourceUrl, sUrl);
+                var sXml = _httpClientFactory.CreateClient().GetStringAsync(absUrl).GetAwaiter().GetResult();
+                var sDoc = XDocument.Parse(sXml);
+                if (sDoc.Root != null && sDoc.Root.Name.LocalName == "schema")
+                    ParseSchemaElements(sDoc.Root);
+            }
+            catch { /* 附加 schema 加载失败不阻塞 */ }
+        }
 
         // ===== 获取所有 messages =====
         var messages = new Dictionary<string, List<GeneratedParam>>();
@@ -849,6 +863,7 @@ public class GenerateFromWsdlRequest
 {
     public string WsdlContent { get; set; } = "";
     public string? Url { get; set; }
+    public List<string>? SchemaUrls { get; set; }
 }
 
 public class GeneratedApiItem

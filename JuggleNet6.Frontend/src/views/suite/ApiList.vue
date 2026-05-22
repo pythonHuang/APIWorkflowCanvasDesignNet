@@ -189,7 +189,8 @@
           <el-button type="primary" size="small" style="margin-top:8px" @click="doGenerate('wsdlUrl')">从 URL 获取</el-button>
         </el-tab-pane>
         <el-tab-pane label="WSDL 内容" name="wsdlContent">
-          <el-input v-model="genWsdlContent" type="textarea" :rows="8" placeholder="粘贴 WSDL XML 内容..." />
+          <el-input v-model="genWsdlContent" type="textarea" :rows="6" placeholder="粘贴 WSDL XML 内容..." />
+          <el-input v-model="genWsdlSchemaUrls" type="textarea" :rows="2" placeholder="附加 Schema 地址（每行一个，如 xsd:include/import 的 schemaLocation）" style="margin-top:6px" />
           <el-button type="primary" size="small" style="margin-top:8px" @click="doGenerate('wsdlContent')">解析 WSDL</el-button>
         </el-tab-pane>
       </el-tabs>
@@ -458,6 +459,7 @@ const genSwaggerUrl = ref('')
 const genSwaggerJson = ref('')
 const genWsdlUrl = ref('')
 const genWsdlContent = ref('')
+const genWsdlSchemaUrls = ref('')
 const genResults = ref<any[]>([])
 const genSelected = ref<boolean[]>([])
 
@@ -479,7 +481,8 @@ async function doGenerate(source: string) {
         res = await request.post('/suite/api/generate/from-wsdl-url', { url: genWsdlUrl.value })
         break
       case 'wsdlContent':
-        res = await request.post('/suite/api/generate/from-wsdl-content', { wsdlContent: genWsdlContent.value, url: genWsdlUrl.value || undefined })
+        var schemaUrls = genWsdlSchemaUrls.value.split('\n').map(s => s.trim()).filter(s => s)
+        res = await request.post('/suite/api/generate/from-wsdl-content', { wsdlContent: genWsdlContent.value, url: genWsdlUrl.value || undefined, schemaUrls })
         break
       default:
         return
