@@ -393,7 +393,7 @@ public class ApiGenerateController : ControllerBase
         var schemaNs = "";
         var xsdElements = new Dictionary<string, List<GeneratedParam>>();
 
-        // 解析单个 schema 中的 element 定义
+        // 解析单个 schema 中的 element 定义（含 xsd:include/import 递归加载）
         void ParseSchemaElements(XElement schemaEl)
         {
             if (schemaEl == null) return;
@@ -406,6 +406,23 @@ public class ApiGenerateController : ControllerBase
                 if (xsdElements.ContainsKey(elemName)) continue;
                 var paramList = ExtractElementParams(elemEl, xs);
                 xsdElements[elemName] = paramList;
+            }
+            // xsd:include / xsd:import schemaLocation 递归加载
+            foreach (var incEl in schemaEl.Elements().Where(e =>
+                (e.Name == xs + "include" || e.Name == xs + "import") &&
+                e.Attribute("schemaLocation") != null))
+            {
+                var incLocation = incEl.Attribute("schemaLocation")?.Value ?? "";
+                if (string.IsNullOrEmpty(incLocation)) continue;
+                try
+                {
+                    var incUrl = ResolveUrl(sourceUrl, incLocation);
+                    var incXml = _httpClientFactory.CreateClient().GetStringAsync(incUrl).GetAwaiter().GetResult();
+                    var incDoc = XDocument.Parse(incXml);
+                    if (incDoc.Root != null && incDoc.Root.Name.LocalName == "schema")
+                        ParseSchemaElements(incDoc.Root); // 递归处理嵌套 include
+                }
+                catch { /* include 加载失败不阻塞 */ }
             }
         }
 
