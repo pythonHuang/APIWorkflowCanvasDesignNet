@@ -391,52 +391,51 @@ public class ApiGenerateController : ControllerBase
         // ===== 解析 XSD types → 构建 element 定义查找表 =====
         var typesEl = xdoc.Descendants(wsdl + "types").FirstOrDefault();
         var schemaNs = "";
-        // xsdElements: elementQName → [{ ParamCode, ParamName, DataType }]
         var xsdElements = new Dictionary<string, List<GeneratedParam>>();
-        if (typesEl != null)
-        {
-            var schemaEl = typesEl.Elements().FirstOrDefault(e => e.Name == xs + "schema");
-            if (schemaEl != null)
-            {
-                schemaNs = schemaEl.Attribute("targetNamespace")?.Value ?? "";
 
-                // 遍历所有顶级 element 定义
-                foreach (var elemEl in schemaEl.Elements(xs + "element"))
-                {
-                    var elemName = elemEl.Attribute("name")?.Value ?? "";
-                    if (string.IsNullOrEmpty(elemName)) continue;
-                    var params_ = new List<GeneratedParam>();
-                    var complexEl = elemEl.Element(xs + "complexType");
-                    if (complexEl != null)
-                    {
-                        var seqEl = complexEl.Element(xs + "sequence")
-                            ?? complexEl.Element(xs + "all");
-                        if (seqEl != null)
-                        {
-                            foreach (var childEl in seqEl.Elements(xs + "element"))
-                            {
-                                var childName = childEl.Attribute("name")?.Value ?? "";
-                                var childType = childEl.Attribute("type")?.Value ?? "string";
-                                if (childType.Contains(':')) childType = childType.Split(':').Last();
-                                var childMin = childEl.Attribute("minOccurs")?.Value;
-                                var childMax = childEl.Attribute("maxOccurs")?.Value;
-                                // 数组类型
-                                var childDataType = NormalizeDataType(childType);
-                                if (childMax == "unbounded")
-                                    childDataType = "array";
-                                params_.Add(new GeneratedParam
-                                {
-                                    ParamCode = childName,
-                                    ParamName = childName,
-                                    DataType = childDataType
-                                });
-                            }
-                        }
-                    }
-                    xsdElements[elemName] = params_;
-                }
+        // 解析单个 schema 中的 element 定义
+        void ParseSchemaElements(XElement schemaEl)
+        {
+            if (schemaEl == null) return;
+            if (string.IsNullOrEmpty(schemaNs))
+                schemaNs = schemaEl.Attribute("targetNamespace")?.Value ?? "";
+            foreach (var elemEl in schemaEl.Elements(xs + "element"))
+            {
+                var elemName = elemEl.Attribute("name")?.Value ?? "";
+                if (string.IsNullOrEmpty(elemName)) continue;
+                if (xsdElements.ContainsKey(elemName)) continue;
+                var paramList = ExtractElementParams(elemEl, xs);
+                xsdElements[elemName] = paramList;
             }
         }
+
+        if (typesEl != null)
+        {
+            foreach (var schemaEl in typesEl.Elements(xs + "schema"))
+                ParseSchemaElements(schemaEl);
+        }
+
+        // ===== 从 wsdl:documentation 中查找 generatedXSD 并加载 =====
+        var xsdBaseUri = sourceUrl;
+        foreach (var docEl in xdoc.Descendants(wsdl + "documentation"))
+        {
+            foreach (var generatedXsd in docEl.Descendants("generatedXSD"))
+            {
+                var xsdLocation = generatedXsd.Attribute("location")?.Value ?? "";
+                if (string.IsNullOrEmpty(xsdLocation)) continue;
+                try
+                {
+                    var xsdUrl = ResolveUrl(xsdBaseUri, xsdLocation);
+                    var xsdXml = _httpClientFactory.CreateClient().GetStringAsync(xsdUrl).GetAwaiter().GetResult();
+                    var xsdDoc = XDocument.Parse(xsdXml);
+                    var xsdRoot = xsdDoc.Root;
+                    if (xsdRoot != null && xsdRoot.Name == xs + "schema")
+                        ParseSchemaElements(xsdRoot);
+                }
+                catch { /* XSD 加载失败不阻塞主流程 */ }
+            }
+        }
+
 
         // ===== 获取所有 messages =====
         var messages = new Dictionary<string, List<GeneratedParam>>();
@@ -738,6 +737,48 @@ public class ApiGenerateController : ControllerBase
         public string? Location { get; set; }
         public string? HeaderMessage { get; set; }
         public string? HeaderPart { get; set; }
+    }
+
+    /// <summary>从 XSD element 的 complexType→sequence 提取子元素参数</summary>
+    private static List<GeneratedParam> ExtractElementParams(XElement elemEl, XNamespace xs)
+    {
+        var result = new List<GeneratedParam>();
+        var complexEl = elemEl.Element(xs + "complexType");
+        if (complexEl == null) return result;
+        var seqEl = complexEl.Element(xs + "sequence") ?? complexEl.Element(xs + "all");
+        if (seqEl == null) return result;
+        foreach (var childEl in seqEl.Elements(xs + "element"))
+        {
+            var childName = childEl.Attribute("name")?.Value ?? "";
+            var childType = childEl.Attribute("type")?.Value ?? "string";
+            if (childType.Contains(':')) childType = childType.Split(':').Last();
+            var childMax = childEl.Attribute("maxOccurs")?.Value;
+            var childDataType = NormalizeDataType(childType);
+            if (childMax == "unbounded") childDataType = "array";
+            result.Add(new GeneratedParam { ParamCode = childName, ParamName = childName, DataType = childDataType });
+        }
+        return result;
+    }
+
+    private static string ResolveUrl(string baseUrl, string relativePath)
+    {
+        if (string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(relativePath))
+            return relativePath;
+        if (relativePath.StartsWith("http://") || relativePath.StartsWith("https://"))
+            return relativePath;
+        try
+        {
+            var baseUri = new Uri(baseUrl);
+            var resolved = new Uri(baseUri, relativePath);
+            return resolved.ToString();
+        }
+        catch
+        {
+            // Fallback: 拼接路径
+            var base_part = baseUrl.TrimEnd('/');
+            var rel_part = relativePath.TrimStart('/');
+            return $"{base_part}/{rel_part}";
+        }
     }
 
     /// <summary>规范化数据类型，ArrayOfXxx / Array 等映射为 array</summary>
