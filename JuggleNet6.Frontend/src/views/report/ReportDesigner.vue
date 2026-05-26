@@ -7,16 +7,7 @@
         <el-input v-model="form.groupName" placeholder="分组" size="small" style="width:100px" />
       </div>
       <div style="display:flex;gap:8px;align-items:center">
-        <el-select v-model="form.sourceType" size="small" style="width:110px" @change="onSourceTypeChange">
-          <el-option value="dataview" label="数据视图" />
-          <el-option value="sql" label="自定义SQL" />
-          <el-option value="flow" label="流程" />
-          <el-option value="api" label="接口" />
-        </el-select>
-        <el-select v-if="form.sourceType==='dataview'" v-model="form.sourceRef" size="small" style="width:180px" placeholder="选择数据视图">
-          <el-option v-for="dv in dvList" :key="dv.id" :label="dv.name" :value="String(dv.id)" />
-        </el-select>
-        <el-button size="small" @click="loadFields">字段</el-button>
+        <span style="font-size:11px;color:#aaa">{{ datasets.length }} 个数据集</span>
         <el-button size="small" @click="pageSettingsVisible=true" icon="Setting">页面</el-button>
         <el-button size="small" type="primary" @click="saveReport">保存</el-button>
         <el-button size="small" type="success" @click="openPreview">预览</el-button>
@@ -24,9 +15,29 @@
     </div>
     <div class="designer-body">
       <div class="left-panel">
-        <h4 style="margin:0 0 8px">数据字段</h4>
-        <div v-if="fields.length===0" style="color:#aaa;font-size:12px">选择数据源后加载字段</div>
-        <div v-for="f in fields" :key="f" class="field-item" draggable="true" @dragstart="onDragField($event,f)">{{ f }}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <h4 style="margin:0">数据集</h4>
+          <el-button size="small" type="primary" icon="Plus" circle @click="openDsDialog" />
+        </div>
+        <div v-if="datasets.length===0" style="color:#aaa;font-size:12px">点击 + 添加数据集</div>
+        <div v-for="(ds, di) in datasets" :key="ds.id" style="margin-bottom:4px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;background:#f0f0f0;border-radius:4px;font-size:12px">
+            <span style="font-weight:600;cursor:pointer" @click="ds.expanded=!ds.expanded">
+              {{ ds.expanded?'▼':'▶' }} {{ ds.name }}
+            </span>
+            <span style="color:#888;font-size:10px">{{ sourceLabel(ds.sourceType) }}</span>
+            <el-button size="small" type="danger" link @click="datasets.splice(di,1)" style="padding:0">×</el-button>
+          </div>
+          <div v-if="ds.expanded" style="padding:2px 0 2px 12px">
+            <div v-if="ds.loading" style="color:#aaa;font-size:11px">加载中...</div>
+            <div v-for="f in ds.fields" :key="f" class="field-item"
+              draggable="true" @dragstart="onDragField($event,f,ds.name)"
+              @click="insertField(ds.name, f)"
+              style="cursor:pointer">{{ f }}</div>
+            <div v-if="ds.fields.length===0 && !ds.loading" style="color:#aaa;font-size:11px">点击加载字段</div>
+            <el-button v-if="ds.fields.length===0 && !ds.loading" size="small" text @click="loadDsFields(di)">↻ 加载字段</el-button>
+          </div>
+        </div>
       </div>
       <div class="center-panel">
         <div class="style-toolbar">
@@ -130,6 +141,43 @@
       <template #footer><el-button @click="pageSettingsVisible=false">确定</el-button></template>
     </el-dialog>
 
+    <!-- 添加数据集对话框 -->
+    <el-dialog v-model="dsDialogVisible" title="添加数据集" width="520px">
+      <el-form :model="dsForm" label-width="90px" size="small">
+        <el-form-item label="数据集名称"><el-input v-model="dsForm.name" placeholder="如: 主数据、子表1" /></el-form-item>
+        <el-form-item label="数据来源">
+          <el-radio-group v-model="dsForm.sourceType">
+            <el-radio value="dataview">数据视图</el-radio>
+            <el-radio value="sql">自定义SQL</el-radio>
+            <el-radio value="flow">流程</el-radio>
+            <el-radio value="api">接口</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <template v-if="dsForm.sourceType==='dataview'">
+          <el-form-item label="选择视图">
+            <el-select v-model="dsForm.sourceRef" style="width:100%"><el-option v-for="dv in dvList" :key="dv.id" :label="`${dv.name} (${dv.groupName||''})`" :value="String(dv.id)" /></el-select>
+          </el-form-item>
+        </template>
+        <template v-else-if="dsForm.sourceType==='sql'">
+          <el-form-item label="数据源">
+            <el-select v-model="dsForm.dataSourceId" style="width:100%" filterable><el-option v-for="ds_ in dsList" :key="ds_.id" :label="`${ds_.dataSourceName} (${ds_.dataSourceType})`" :value="ds_.id" /></el-select>
+          </el-form-item>
+          <el-form-item label="SQL"><el-input v-model="dsForm.customSql" type="textarea" :rows="3" placeholder="SELECT * FROM t WHERE id=@id" /></el-form-item>
+        </template>
+        <template v-else-if="dsForm.sourceType==='flow'">
+          <el-form-item label="选择流程">
+            <el-select v-model="dsForm.sourceRef" style="width:100%" filterable @change="flowSelChange"><el-option v-for="f in flowList" :key="f.flowKey" :label="`${f.flowName}(${f.flowKey})`" :value="f.flowKey" /></el-select>
+          </el-form-item>
+        </template>
+        <template v-else-if="dsForm.sourceType==='api'">
+          <el-form-item label="选择接口">
+            <el-select v-model="dsForm.sourceRef" style="width:100%" filterable><el-option v-for="a in apiList" :key="a.methodCode" :label="`${a.methodName}(${a.methodCode})`" :value="a.methodCode" /></el-select>
+          </el-form-item>
+        </template>
+      </el-form>
+      <template #footer><el-button @click="dsDialogVisible=false">取消</el-button><el-button type="primary" @click="addDataset">添加</el-button></template>
+    </el-dialog>
+
     <!-- 预览 -->
     <el-dialog v-model="showPreview" title="预览" width="90%" top="5vh">
       <div v-if="previewParams.length>0" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
@@ -153,8 +201,13 @@ const router = useRouter()
 const rptId = Number(route.params.id) || 0
 
 const form = reactive({ id:0, name:'', groupName:'', sourceType:'dataview', sourceRef:'', customSql:'', paramsConfig:'[]', layoutJson:'{}', status:1 })
-const dvList = ref<any[]>([])
-const fields = ref<string[]>([])
+const dvList = ref<any[]>([]), dsList = ref<any[]>([]), flowList = ref<any[]>([]), apiList = ref<any[]>([])
+
+// 数据集管理
+interface Dataset { id: string; name: string; sourceType: string; sourceRef: string; customSql: string; dataSourceId: string|number; fields: string[]; expanded: boolean; loading: boolean }
+const datasets = ref<Dataset[]>([])
+const dsDialogVisible = ref(false)
+const dsForm = reactive({ name:'', sourceType:'dataview', sourceRef:'', customSql:'', dataSourceId:'' })
 const maxRows = ref(10), maxCols = ref(6)
 const rowHeights = ref<(number|string)[]>([])
 const colWidths = ref<(number|string)[]>([])
@@ -180,18 +233,88 @@ const hasSelection = computed(() => selR.value >= 0 && selC.value >= 0)
 onMounted(() => {
   document.addEventListener('keydown', (e) => { if (e.key==='Control') ctrlDown.value = true })
   document.addEventListener('keyup', (e) => { if (e.key==='Control') ctrlDown.value = false })
-  loadDvList(); if (rptId>0) loadReport()
+  loadDvList(); loadDsList(); loadFlowList(); loadApiList()
+  if (rptId>0) loadReport()
   resizeGrid()
 })
 
 async function loadDvList() {
   try { const res = await request.post('/report/dataview/page', { pageNum:1, pageSize:200 }); dvList.value = res.data?.list||[] } catch {}
 }
+async function loadDsList() {
+  try { const res = await request.get('/system/datasource/list'); dsList.value = res.data||[] } catch {}
+}
+async function loadFlowList() {
+  try { const res = await request.get('/flow/definition/list'); flowList.value = res.data||[] } catch {}
+}
+async function loadApiList() {
+  try { const res = await request.post('/suite/api/list', { suiteCode: '' }); apiList.value = res.data||[] } catch {}
+}
+
+function sourceLabel(t: string) { const m: Record<string,string>={dataview:'视图',sql:'SQL',flow:'流程',api:'接口'}; return m[t]||t }
+function flowSelChange() {}
+
+function openDsDialog() {
+  Object.assign(dsForm, { name:'', sourceType:'dataview', sourceRef:'', customSql:'', dataSourceId:'' })
+  dsDialogVisible.value = true
+}
+
+function addDataset() {
+  if (!dsForm.name) { dsForm.name = dsForm.sourceType + '_' + (datasets.value.length+1) }
+  const ds: Dataset = { id: Date.now().toString(), name: dsForm.name, sourceType: dsForm.sourceType, sourceRef: dsForm.sourceRef, customSql: dsForm.customSql, dataSourceId: dsForm.dataSourceId, fields: [], expanded: true, loading: false }
+  datasets.value.push(ds)
+  dsDialogVisible.value = false
+  loadDsFields(datasets.value.length - 1)
+}
+
+async function loadDsFields(di: number) {
+  const ds = datasets.value[di]
+  ds.loading = true
+  try {
+    switch (ds.sourceType) {
+      case 'dataview':
+        const dv = dvList.value.find(d => String(d.id) === ds.sourceRef)
+        if (dv) {
+          try { const res = await request.post('/report/dataview/preview', { id: Number(ds.sourceRef), params: {} }); ds.fields = res.data?.columns||[] } catch {}
+          const params = JSON.parse(dv.parameters||'[]')
+          previewParams.value = [...previewParams.value, ...params.filter((p:any)=>!previewParams.value.find((q:any)=>q.name===p.name))]
+        }
+        break
+      case 'sql':
+        if (ds.dataSourceId && ds.customSql) {
+          try { const res = await request.post('/report/dataview/preview', { id: 0, sql: ds.customSql, dataSourceId: Number(ds.dataSourceId), params: {} }); ds.fields = res.data?.columns||[] } catch {}
+        }
+        break
+      case 'flow':
+        if (ds.sourceRef) {
+          try { const res = await request.get(`/flow/definition/output-params/${ds.sourceRef}`); ds.fields = res.data||[] } catch { ds.fields = [] }
+        }
+        break
+      case 'api':
+        if (ds.sourceRef) {
+          try { const res = await request.get(`/suite/api/output-params/${ds.sourceRef}`); ds.fields = res.data||[] } catch { ds.fields = [] }
+        }
+        break
+    }
+  } finally { ds.loading = false }
+}
+
+function insertField(dsName: string, field: string) {
+  if (selR.value<0||selC.value<0) return
+  const key=`${selR.value},${selC.value}`, existing=cells.value[key]||{}
+  cells.value[key] = {...existing, value: `\${${dsName}.${field}}`}
+  cellValue.value = `\${${dsName}.${field}}`
+}
+
+function onDragField(_e:DragEvent, field:string, dsName?:string) {
+  const val = dsName ? `\${${dsName}.${field}}` : `\${${field}}`
+  _e.dataTransfer?.setData('field', val)
+}
 
 async function loadReport() {
   try { const res = await request.post('/report/page', { pageNum:1, pageSize:200 })
     const rpt = (res.data?.list||[]).find((r:any)=>r.id===rptId)
-    if (rpt) { Object.assign(form, rpt); loadLayoutJson(); loadFields() }
+    if (rpt) { Object.assign(form, rpt); loadLayoutJson() }
   } catch {}
 }
 
@@ -206,6 +329,7 @@ function loadLayoutJson() {
     pageHeader.value = layout.page?.header||''; pageFooter.value = layout.page?.footer||''
     cells.value = {}; if (layout.cells) for (const c of layout.cells) cells.value[`${c.r},${c.c}`] = c
     previewParams.value = layout.params||[]
+    if (layout.datasets) datasets.value = layout.datasets.map((d:any)=>({...d,expanded:true,loading:false}))
   } catch {}
 }
 
@@ -343,29 +467,19 @@ function startRowResize(e:MouseEvent, ri:number) {
 function autoFitCol(c:number) { colWidths.value[c]=200 }
 function autoFitRow(r:number) { rowHeights.value[r]=30 }
 
-function onDragField(e:DragEvent, field:string) { e.dataTransfer?.setData('field',field) }
-function onCellDrop(e:DragEvent, r:number, c:number) { const field = e.dataTransfer?.getData('field'); if (field) { const key=`${r},${c}`,ex=cells.value[key]||{}; cells.value[key]={...ex,value:`\${${field}}`} } }
+function onCellDrop(e:DragEvent, r:number, c:number) { const field = e.dataTransfer?.getData('field'); if (field) { const key=`${r},${c}`,ex=cells.value[key]||{}; cells.value[key]={...ex,value:field} } }
 
 function onGridScroll() {}
-
-async function loadFields() {
-  if (form.sourceType==='dataview' && form.sourceRef) {
-    try { const dv=dvList.value.find(d=>String(d.id)===form.sourceRef)
-      if (dv) { try { previewParams.value=JSON.parse(dv.parameters||'[]') } catch { previewParams.value=[] } }
-      const res = await request.post('/report/dataview/preview',{id:Number(form.sourceRef),params:{}}); fields.value=res.data?.columns||[] }
-    catch { fields.value=[] }
-  }
-}
-
-function onSourceTypeChange() { form.sourceRef=''; fields.value=[] }
 
 function saveLayoutJson() {
   const rows=[]; for (let r=0;r<maxRows.value;r++) rows.push({height:typeof rowHeights.value[r]==='string'?25:(rowHeights.value[r]||25),type:rowHeights.value[r]==='data'?'data':'header'})
   const cols=[]; for (let c=0;c<maxCols.value;c++) cols.push({width:colWidths.value[c]||100})
   const cellArr=Object.entries(cells.value).map(([k,v]:any)=>({r:Number(k.split(',')[0]),c:Number(k.split(',')[1]),...v}))
+  const dsArr = datasets.value.map(d=>({id:d.id,name:d.name,sourceType:d.sourceType,sourceRef:d.sourceRef,customSql:d.customSql,dataSourceId:d.dataSourceId,fields:d.fields}))
   form.layoutJson = JSON.stringify({
     page:{size:pageSize.value,orientation:pageOrientation.value,margin:{...pageMargin},header:pageHeader.value,footer:pageFooter.value},
-    params:previewParams.value, rows, cols, cells:cellArr
+    params:previewParams.value, rows, cols, cells:cellArr,
+    datasets: dsArr
   })
 }
 
