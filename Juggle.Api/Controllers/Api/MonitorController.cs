@@ -166,9 +166,9 @@ public class MonitorController : ControllerBase
         }
 
         // 将 healthMap/dbHealthMap 合并回 allNodes（重建节点避免匿名类型不可写）
-        allNodes = allNodes.Select(n =>
+        var rebuiltNodes = new List<object>();
+        foreach (dynamic dn in allNodes)
         {
-            dynamic dn = n;
             string id = dn.id;
             string nType = dn.nodeType;
             string finalStatus = dn.status;
@@ -176,15 +176,31 @@ public class MonitorController : ControllerBase
                 finalStatus = "warning";
             else if (nType == "db" && dbHealthMap.ContainsKey(id))
                 finalStatus = "warning";
-            return new
+
+            if (nType == "db")
             {
-                id, label = dn.label, nodeType = nType,
-                apiCount = dn.apiCount, apis = dn.apis,
-                status = finalStatus, totalCalls = dn.totalCalls,
-                totalSuccess = dn.totalSuccess, totalFail = dn.totalFail,
-                dbName = dn.dbName, dbType = dn.dbType, dbHost = dn.dbHost
-            } as object;
-        }).ToList();
+                rebuiltNodes.Add(new
+                {
+                    id, label = dn.label, nodeType = nType,
+                    apiCount = 0, apis = new List<object>(),
+                    status = finalStatus, totalCalls = dn.totalCalls,
+                    totalSuccess = dn.totalSuccess, totalFail = dn.totalFail,
+                    dbName = dn.dbName, dbType = dn.dbType, dbHost = dn.dbHost
+                });
+            }
+            else
+            {
+                rebuiltNodes.Add(new
+                {
+                    id, label = dn.label, nodeType = nType,
+                    apiCount = dn.apiCount, apis = dn.apis,
+                    status = finalStatus, totalCalls = dn.totalCalls,
+                    totalSuccess = dn.totalSuccess, totalFail = dn.totalFail,
+                    dbName = (string?)null, dbType = (string?)null, dbHost = (string?)null
+                });
+            }
+        }
+        allNodes = rebuiltNodes;
 
         // ===== 连线：遍历所有节点, 递归追踪到下一个业务节点 =====
         var skipTypes = new HashSet<string> { "CONDITION", "MERGE", "ASSIGN", "CODE", "DELAY", "LOOP", "PARALLEL", "NOTIFY", "START", "END", "TRANSFORM", "SUB_FLOW" };
