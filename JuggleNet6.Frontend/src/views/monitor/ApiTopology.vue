@@ -2,6 +2,11 @@
   <div class="page-container">
     <div class="page-header">
       <h2>API 拓扑图</h2>
+      <span style="font-size:12px;color:#888">
+        <span class="status-dot" style="background:#52c41a"></span> 正常
+        <span class="status-dot" style="background:#faad14;margin-left:8px"></span> 告警
+        <span class="status-dot" style="background:#ff4d4f;margin-left:8px"></span> 离线
+      </span>
       <el-button size="small" @click="loadData" :loading="loading">刷新</el-button>
     </div>
     <div style="display:flex;height:calc(100% - 50px);gap:12px">
@@ -9,25 +14,35 @@
         <VueFlow v-model:nodes="vfNodes" v-model:edges="vfEdges" :default-viewport="{ x: 0, y: 0, zoom: 1 }" :min-zoom="0.2" :max-zoom="2" fit-view-on-init>
           <Background :variant="'dots'" :gap="20" :size="1" :color="'#ddd'" />
           <template #node-custom="{ data }">
-            <div :class="['topo-node', 'topo-' + data.status]" @click="selectHost(data.hostId)">
+            <div :class="['topo-node', 'topo-' + data.status]" @click="selectHost(data)">
               <div class="topo-node-title">{{ data.label }}</div>
-              <div class="topo-node-count">{{ data.apiCount }} 个接口</div>
+              <div class="topo-node-count">{{ data.apiCount }} 个接口 | 调用 {{ data.totalCalls }} 次</div>
             </div>
-          </template>
-          <template #edge-custom="{ data }">
-            <div style="font-size:10px;color:#666;background:#fff;padding:1px 4px;border-radius:2px;white-space:nowrap">{{ data.label }}</div>
           </template>
         </VueFlow>
       </div>
-      <div v-if="selectedHost" style="width:340px;border:1px solid #e0e0e0;border-radius:8px;padding:12px;overflow-y:auto">
-        <h4 style="margin:0 0 8px">{{ selectedHost }} 的接口</h4>
+      <div v-if="selectedHost" style="width:360px;border:1px solid #e0e0e0;border-radius:8px;padding:12px;overflow-y:auto">
+        <h4 style="margin:0 0 4px">{{ selectedHost }}</h4>
+        <div style="font-size:12px;color:#888;margin-bottom:8px">
+          总调用 {{ selectedStats?.totalCalls || 0 }} 次 |
+          成功 {{ selectedStats?.totalSuccess || 0 }} |
+          失败 {{ selectedStats?.totalFail || 0 }}
+          <el-tag size="small" :type="selectedStats?.status === 'offline' ? 'danger' : selectedStats?.status === 'warning' ? 'warning' : 'success'" style="margin-left:8px">
+            {{ selectedStats?.status === 'offline' ? '离线' : selectedStats?.status === 'warning' ? '告警' : '正常' }}
+          </el-tag>
+        </div>
         <div v-for="api in selectedApis" :key="api.id" style="padding:8px;margin-bottom:4px;border:1px solid #eee;border-radius:4px">
-          <div style="display:flex;gap:6px;align-items:center">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <el-tag :type="api.status === 1 ? 'success' : 'danger'" size="small">{{ api.status === 1 ? '启用' : '停用' }}</el-tag>
             <el-tag size="small">{{ api.requestType }}</el-tag>
             <span style="font-weight:500">{{ api.methodName }}</span>
           </div>
-          <div style="font-size:12px;color:#888;margin-top:4px">{{ api.url }}</div>
+          <div style="font-size:12px;color:#888;margin-top:2px">{{ api.url }}</div>
+          <div style="font-size:11px;margin-top:2px">
+            调用 <b>{{ api.callCount || 0 }}</b> 次 |
+            成功 <b style="color:#52c41a">{{ api.successCount || 0 }}</b> |
+            失败 <b style="color:#ff4d4f">{{ api.failCount || 0 }}</b>
+          </div>
         </div>
         <el-empty v-if="selectedApis.length === 0" description="该节点无接口" />
       </div>
@@ -45,49 +60,61 @@ import '@vue-flow/core/dist/theme-default.css'
 
 const loading = ref(false)
 const selectedHost = ref('')
+const selectedStats = ref<any>(null)
 const selectedApis = ref<any[]>([])
 const vfNodes = ref<any[]>([])
 const vfEdges = ref<any[]>([])
+const allNodes = ref<any[]>([])
 
 onMounted(loadData)
+
+function statusColor(s: string) {
+  return s === 'offline' ? '#ff4d4f' : s === 'warning' ? '#faad14' : '#52c41a'
+}
 
 async function loadData() {
   loading.value = true
   try {
     const res: any = await request.get('/monitor/topology')
     if (res.data?.nodes) {
+      allNodes.value = res.data.nodes
       vfNodes.value = res.data.nodes.map((n: any, i: number) => ({
         id: n.id,
         type: 'custom',
-        position: { x: (i % 4) * 220, y: Math.floor(i / 4) * 120 },
-        data: { label: n.label, apiCount: n.apiCount, status: n.status, hostId: n.id, apis: n.apis || [] }
+        position: { x: (i % 4) * 240, y: Math.floor(i / 4) * 140 },
+        data: { label: n.label, apiCount: n.apiCount, status: n.status, hostId: n.id, apis: n.apis || [], totalCalls: n.totalCalls || 0, totalSuccess: n.totalSuccess || 0, totalFail: n.totalFail || 0 }
       }))
-      vfEdges.value = (res.data.edges || []).map((e: any, i: number) => ({
-        id: `e${i}`,
-        source: e.source,
-        target: e.target,
-        label: e.label,
-        labelBgStyle: { fill: '#fff' },
-        labelStyle: { fontSize: '10px', fill: '#666' },
-        style: { stroke: '#1890ff', strokeWidth: 2 },
-        markerEnd: { type: 'arrowclosed', width: 16, height: 16, color: '#1890ff' },
-        animated: true
-      }))
+      vfEdges.value = (res.data.edges || []).map((e: any, i: number) => {
+        const color = statusColor(e.status || 'online')
+        return {
+          id: `e${i}`,
+          source: e.source,
+          target: e.target,
+          label: e.label,
+          labelBgStyle: { fill: '#fff' },
+          labelStyle: { fontSize: '10px', fill: '#666' },
+          style: { stroke: color, strokeWidth: 2 },
+          markerEnd: { type: 'arrowclosed' as any, width: 14, height: 14, color },
+          animated: true
+        }
+      })
     }
   } finally { loading.value = false }
 }
 
-function selectHost(hostId: string) {
-  selectedHost.value = hostId
-  const node = vfNodes.value.find(n => n.id === hostId)
-  selectedApis.value = node?.data?.apis || []
+function selectHost(data: any) {
+  selectedHost.value = data.hostId
+  selectedStats.value = data
+  selectedApis.value = data.apis || []
 }
 </script>
 
 <style scoped>
 .page-container { padding:16px;height:100%;display:flex;flex-direction:column;box-sizing:border-box }
-.page-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-shrink:0 }
-.topo-node { padding:12px 16px;border-radius:8px;text-align:center;cursor:pointer;min-width:140px;border:2px solid #52c41a;background:#f6ffed }
+.page-header { display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-shrink:0 }
+.page-header h2 { margin:0 }
+.status-dot { display:inline-block;width:10px;height:10px;border-radius:50% }
+.topo-node { padding:12px 16px;border-radius:8px;text-align:center;cursor:pointer;min-width:150px;border:2px solid #52c41a;background:#f6ffed }
 .topo-node.topo-warning { border-color:#faad14;background:#fffbe6 }
 .topo-node.topo-offline { border-color:#ff4d4f;background:#fff2f0 }
 .topo-node-title { font-weight:600;font-size:13px;word-break:break-all }

@@ -25,65 +25,59 @@ public class MonitorController : ControllerBase
             .OrderByDescending(v => v.Id)
             .ToListAsync();
 
-        // 节点：按 host 聚合 API
+        // 访问统计：最近200条日志
+        var recentLogs = await _db.FlowLogs
+            .Where(l => l.Deleted == 0)
+            .OrderByDescending(l => l.Id)
+            .Take(200)
+            .ToListAsync();
+
+        // 节点：按 host 聚合 API + 统计
         var hostMap = new Dictionary<string, List<object>>();
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
         foreach (var api in apis)
         {
             var host = ExtractHost(api.Url);
             if (!hostMap.ContainsKey(host)) hostMap[host] = new List<object>();
+            // API 级别统计
+            var apiLogs = FindApiLogs(recentLogs, flows, api, host);
             hostMap[host].Add(new
             {
                 api.Id, api.MethodCode, api.MethodName, api.RequestType,
-                api.Url, api.MethodType, api.Status, api.ServiceAlias
+                api.Url, api.MethodType, api.Status, api.ServiceAlias,
+                callCount = apiLogs.calls, successCount = apiLogs.success, failCount = apiLogs.fail
             });
         }
 
-        var nodes = hostMap.Select(kv => new
+        // 健康检查
+        var hostHealth = new Dictionary<string, string>();
+        foreach (var host in hostMap.Keys)
         {
-            id = kv.Key,
-            label = kv.Key,
-            apiCount = kv.Value.Count,
-            apis = kv.Value
-        }).ToList();
-
-        // 连线：从流程设计中取 METHOD 节点调用链
-        var edges = new List<object>();
-        foreach (var flowVer in flows)
-        {
-            if (string.IsNullOrEmpty(flowVer.FlowContent)) continue;
             try
             {
-                var nodes_ = JsonSerializer.Deserialize<List<JsonElement>>(flowVer.FlowContent);
-                if (nodes_ == null) continue;
-                // 找 METHOD 节点并按执行顺序（通过 outgoings 连接）构建调用链
-                var methodNodes = nodes_.Where(n =>
-                    n.TryGetProperty("elementType", out var et) && et.GetString() == "METHOD").ToList();
-                for (int i = 0; i < methodNodes.Count; i++)
+                var resp = await httpClient.GetAsync(host, HttpCompletionOption.ResponseHeadersRead);
+                hostHealth[host] = resp.IsSuccessStatusCode ? "online" : "warning";
+            }
+            catch { hostHealth[host] = "offline"; }
+        }
+
+        // 检查日志中的失败
+        foreach (var log in recentLogs.Where(l => l.Status == "FAILED"))
+        {
+            var flowVer = flows.FirstOrDefault(v => v.FlowKey == log.FlowKey);
+            if (flowVer?.FlowContent == null) continue;
+            try
+            {
+                var fNodes = JsonSerializer.Deserialize<List<JsonElement>>(flowVer.FlowContent);
+                if (fNodes != null)
                 {
-                    var mn = methodNodes[i];
-                    var key = mn.TryGetProperty("key", out var k) ? k.GetString() ?? "" : "";
-                    // 查找该 METHOD 节点的后继节点
-                    var outgoings = new List<string>();
-                    if (mn.TryGetProperty("outgoings", out var og) && og.ValueKind == JsonValueKind.Array)
-                        foreach (var o in og.EnumerateArray()) outgoings.Add(o.GetString() ?? "");
-                    // 找后继 METHOD 节点
-                    foreach (var outKey in outgoings)
+                    foreach (var n in fNodes)
                     {
-                        var nextMethod = methodNodes.FirstOrDefault(n =>
-                            n.TryGetProperty("key", out var nk) && nk.GetString() == outKey);
-                        if (nextMethod.ValueKind == JsonValueKind.Undefined) continue;
-                        var srcHost = GetMethodHost(mn, apis);
-                        var tgtHost = GetMethodHost(nextMethod, apis);
-                        if (!string.IsNullOrEmpty(srcHost) && !string.IsNullOrEmpty(tgtHost) && srcHost != tgtHost)
+                        if (n.TryGetProperty("elementType", out var et) && et.GetString() == "METHOD")
                         {
-                            var srcApi = GetMethodApiName(mn, apis);
-                            var tgtApi = GetMethodApiName(nextMethod, apis);
-                            edges.Add(new
-                            {
-                                source = srcHost, target = tgtHost,
-                                label = $"{srcApi}→{tgtApi}",
-                                flowKey = flowVer.FlowKey
-                            });
+                            var host = GetMethodHost(n, apis);
+                            if (!string.IsNullOrEmpty(host) && hostHealth.GetValueOrDefault(host) == "online")
+                                hostHealth[host] = "warning";
                         }
                     }
                 }
@@ -91,55 +85,100 @@ public class MonitorController : ControllerBase
             catch { }
         }
 
-        // 去重连线
+        var nodes = hostMap.Select(kv =>
+        {
+            var status = hostHealth.GetValueOrDefault(kv.Key, "online");
+            var totalCalls = kv.Value.Sum(a => (int)((dynamic)a).callCount);
+            var totalSuccess = kv.Value.Sum(a => (int)((dynamic)a).successCount);
+            var totalFail = kv.Value.Sum(a => (int)((dynamic)a).failCount);
+            return new
+            {
+                id = kv.Key, label = kv.Key,
+                apiCount = kv.Value.Count, apis = kv.Value,
+                status, totalCalls, totalSuccess, totalFail
+            };
+        }).ToList();
+
+        // 连线
+        var edges = new List<object>();
+        foreach (var flowVer in flows)
+        {
+            if (string.IsNullOrEmpty(flowVer.FlowContent)) continue;
+            try
+            {
+                var fNodes = JsonSerializer.Deserialize<List<JsonElement>>(flowVer.FlowContent);
+                if (fNodes == null) continue;
+                var methodNodes = fNodes.Where(n =>
+                    n.TryGetProperty("elementType", out var et) && et.GetString() == "METHOD").ToList();
+                for (int i = 0; i < methodNodes.Count; i++)
+                {
+                    var mn = methodNodes[i];
+                    var outgoings = new List<string>();
+                    if (mn.TryGetProperty("outgoings", out var og) && og.ValueKind == JsonValueKind.Array)
+                        foreach (var o in og.EnumerateArray()) outgoings.Add(o.GetString() ?? "");
+                    foreach (var outKey in outgoings)
+                    {
+                        var nextMethod = methodNodes.FirstOrDefault(n =>
+                            n.TryGetProperty("key", out var nk) && nk.GetString() == outKey);
+                        if (nextMethod.ValueKind == JsonValueKind.Undefined) continue;
+                        var srcHost = GetMethodHost(mn, apis);
+                        var tgtHost = GetMethodHost(nextMethod, apis);
+                        if (srcHost == tgtHost || string.IsNullOrEmpty(srcHost) || string.IsNullOrEmpty(tgtHost)) continue;
+                        var srcApi = GetMethodApiName(mn, apis);
+                        var tgtApi = GetMethodApiName(nextMethod, apis);
+                        var edgeStatus = hostHealth.GetValueOrDefault(tgtHost, "online");
+                        edges.Add(new
+                        {
+                            source = srcHost, target = tgtHost,
+                            label = $"{srcApi}→{tgtApi}",
+                            flowKey = flowVer.FlowKey,
+                            status = edgeStatus
+                        });
+                    }
+                }
+            }
+            catch { }
+        }
+
         var uniqueEdges = edges.GroupBy(e =>
         {
             dynamic d = e;
-            return $"{d.source}→{d.target}";
+            return $"{(string)d.source}→{(string)d.target}";
         }).Select(g => g.First()).ToList();
 
-        // 状态：检查最近调用日志
-        var recentLogs = await _db.FlowLogs
-            .Where(l => l.Deleted == 0)
-            .OrderByDescending(l => l.Id)
-            .Take(100)
-            .ToListAsync();
-        var failedHosts = new HashSet<string>();
-        foreach (var log in recentLogs)
+        return ApiResult.Success(new { nodes, edges = uniqueEdges });
+    }
+
+    private static (int calls, int success, int fail) FindApiLogs(
+        List<Domain.Entities.FlowLogEntity> logs, List<Domain.Entities.FlowVersionEntity> flows,
+        Domain.Entities.ApiEntity api, string host)
+    {
+        int calls = 0, success = 0, fail = 0;
+        foreach (var log in logs)
         {
-            if (log.Status == "FAILED" && !string.IsNullOrEmpty(log.FlowKey))
+            var flowVer = flows.FirstOrDefault(v => v.FlowKey == log.FlowKey);
+            if (flowVer?.FlowContent == null) continue;
+            try
             {
-                // 查找该流程的METHOD节点涉及的hosts
-                var flowVer = flows.FirstOrDefault(v => v.FlowKey == log.FlowKey);
-                if (flowVer?.FlowContent != null)
+                var fNodes = JsonSerializer.Deserialize<List<JsonElement>>(flowVer.FlowContent);
+                if (fNodes == null) continue;
+                foreach (var n in fNodes)
                 {
-                    try
+                    if (!n.TryGetProperty("elementType", out var et) || et.GetString() != "METHOD") continue;
+                    if (!n.TryGetProperty("method", out var m)) continue;
+                    var sc = m.TryGetProperty("suiteCode", out var scc) ? scc.GetString() ?? "" : "";
+                    var mc = m.TryGetProperty("methodCode", out var mcc) ? mcc.GetString() ?? "" : "";
+                    if (sc == api.SuiteCode && mc == api.MethodCode)
                     {
-                        var fNodes = JsonSerializer.Deserialize<List<JsonElement>>(flowVer.FlowContent);
-                        if (fNodes != null)
-                        {
-                            foreach (var n in fNodes)
-                            {
-                                if (n.TryGetProperty("elementType", out var et) && et.GetString() == "METHOD")
-                                {
-                                    var host = GetMethodHost(n, apis);
-                                    if (!string.IsNullOrEmpty(host)) failedHosts.Add(host);
-                                }
-                            }
-                        }
+                        calls++;
+                        if (log.Status == "SUCCESS") success++;
+                        else fail++;
                     }
-                    catch { }
                 }
             }
+            catch { }
         }
-
-        var nodeStatus = nodes.Select(n =>
-        {
-            var status = failedHosts.Contains(n.id) ? "warning" : "online";
-            return new { n.id, n.label, n.apiCount, n.apis, status };
-        }).ToList();
-
-        return ApiResult.Success(new { nodes = nodeStatus, edges = uniqueEdges });
+        return (calls, success, fail);
     }
 
     /// <summary>指定流程拓扑图</summary>
