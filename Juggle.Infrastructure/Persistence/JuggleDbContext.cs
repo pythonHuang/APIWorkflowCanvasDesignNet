@@ -91,7 +91,40 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<AlertRuleEntity>().ToTable("t_alert_rule");
         modelBuilder.Entity<AlertRecordEntity>().ToTable("t_alert_record");
         modelBuilder.Entity<DataViewEntity>().ToTable("t_data_view");
+        modelBuilder.Entity<DataViewEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.GroupName).HasColumnName("group_name");
+            e.Property(p => p.Name).HasColumnName("name");
+            e.Property(p => p.DataSourceId).HasColumnName("data_source_id");
+            e.Property(p => p.Sql).HasColumnName("sql");
+            e.Property(p => p.Parameters).HasColumnName("parameters");
+            e.Property(p => p.Remark).HasColumnName("remark");
+            e.Property(p => p.Status).HasColumnName("status");
+        });
         modelBuilder.Entity<ReportEntity>().ToTable("t_report");
+        modelBuilder.Entity<ReportEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.Name).HasColumnName("name");
+            e.Property(p => p.GroupName).HasColumnName("group_name");
+            e.Property(p => p.SourceType).HasColumnName("source_type");
+            e.Property(p => p.SourceRef).HasColumnName("source_ref");
+            e.Property(p => p.CustomSql).HasColumnName("custom_sql");
+            e.Property(p => p.ParamsConfig).HasColumnName("params_config");
+            e.Property(p => p.LayoutJson).HasColumnName("layout_json");
+            e.Property(p => p.Status).HasColumnName("status");
+        });
 
         // 列名映射（snake_case）— AlertRule
         modelBuilder.Entity<AlertRuleEntity>(e => {
