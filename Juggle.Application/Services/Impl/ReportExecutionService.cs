@@ -41,13 +41,16 @@ public class ReportExecutionService
     /// <summary>SQL 安全校验：禁止写操作关键字</summary>
     public static void ValidateSql(string sql)
     {
-        var upper = sql.ToUpper().Trim();
-        var dangerous = new[] { "DROP ", "DELETE ", "UPDATE ", "INSERT ", "ALTER ", "CREATE ", "TRUNCATE ", "EXEC ", "EXECUTE " };
+        var upper = " " + sql.ToUpper().Trim() + " ";
+        var dangerous = new[] { " DROP ", " DELETE ", " INSERT ", " ALTER ", " CREATE ", " TRUNCATE ", " EXEC ", " EXECUTE " };
         foreach (var kw in dangerous)
         {
-            if (upper.StartsWith(kw) || upper.Contains(";" + kw) || upper.Contains(" " + kw))
+            if (upper.Contains(kw))
                 throw new Exception($"SQL 包含不允许的操作: {kw.Trim()}");
         }
+        // UPDATE 仅拦截不以 SELECT...FOR UPDATE 开头的
+        if (upper.Contains(" UPDATE ") && !upper.TrimStart().StartsWith("SELECT"))
+            throw new Exception("SQL 包含不允许的操作: UPDATE");
     }
 
     /// <summary>渲染报表为HTML</summary>

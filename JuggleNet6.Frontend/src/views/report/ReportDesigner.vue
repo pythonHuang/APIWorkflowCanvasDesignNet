@@ -20,21 +20,27 @@
           <el-button size="small" type="primary" icon="Plus" circle @click="openDsDialog" />
         </div>
         <div v-if="datasets.length===0" style="color:#aaa;font-size:12px">点击 + 添加数据集</div>
-        <div v-for="(ds, di) in datasets" :key="ds.id" style="margin-bottom:4px;border:1px solid #e8e8e8;border-radius:4px;overflow:hidden">
-          <div style="display:flex;align-items:center;gap:4px;padding:2px 4px;background:#fafafa;font-size:12px">
-            <span style="font-weight:600;cursor:pointer;flex:1" @click="ds.expanded=!ds.expanded">{{ ds.expanded?'▼':'▶' }} {{ ds.name }}</span>
-            <el-tag size="small" type="info">{{ sourceLabel(ds.sourceType) }}</el-tag>
-            <el-button size="small" link @click="openDsEdit(di)" title="编辑"><el-icon><Edit /></el-icon></el-button>
-            <el-button v-if="ds.fields.length>0" size="small" link @click="previewDsData(di)" title="预览数据"><el-icon><View /></el-icon></el-button>
-            <el-button size="small" link @click="loadDsFields(di)" title="刷新字段"><el-icon><Refresh /></el-icon></el-button>
-            <el-button size="small" link type="danger" @click="datasets.splice(di,1)" title="删除" style="padding:0">×</el-button>
+        <div v-for="(ds, di) in datasets" :key="ds.id" style="margin-bottom:4px;border:1px solid #e8e8e8;border-radius:4px;overflow:hidden;background:#fff">
+          <div style="display:flex;align-items:center;gap:2px;padding:2px 4px;background:#f5f5f5;font-size:12px">
+            <span style="font-weight:600;cursor:pointer;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" @click="ds.expanded=!ds.expanded">{{ ds.expanded?'▼':'▶' }} {{ ds.name }}</span>
+            <el-tag size="small" type="info" style="flex-shrink:0;margin-right:2px">{{ sourceLabel(ds.sourceType) }}</el-tag>
+            <span style="display:flex;gap:0;flex-shrink:0">
+              <el-button size="small" link @click="openDsEdit(di)" title="编辑"><el-icon :size="14"><Edit /></el-icon></el-button>
+              <el-button v-if="ds.fields.length>0" size="small" link @click="previewDsData(di)" title="预览"><el-icon :size="14"><View /></el-icon></el-button>
+              <el-button size="small" link @click="loadDsFields(di)" title="刷新"><el-icon :size="14"><Refresh /></el-icon></el-button>
+              <el-button size="small" link type="danger" @click="datasets.splice(di,1)" title="删除" style="padding:0 2px"><el-icon :size="12"><Close /></el-icon></el-button>
+            </span>
           </div>
-          <div v-if="ds.expanded" style="padding:2px 4px;max-height:180px;overflow-y:auto">
-            <div v-if="ds.loading" style="color:#aaa;font-size:11px">加载中...</div>
-            <div v-for="f in ds.fields" :key="f" class="field-item"
-              draggable="true" @dragstart="onDragField($event,f,ds.name)"
-              @click="insertField(ds.name, f)">{{ f }}</div>
-            <div v-if="ds.fields.length===0 && !ds.loading" style="color:#aaa;font-size:11px">点击 ↻ 刷新加载字段</div>
+          <div v-if="ds.expanded" style="padding:2px 4px;max-height:180px;overflow-y:auto;background:#fafafa">
+            <div v-if="ds.loading" style="color:#aaa;font-size:11px;text-align:center;padding:8px">加载中...</div>
+            <div v-else>
+              <div v-for="f in ds.fields" :key="f" class="field-item"
+                draggable="true" @dragstart="onDragField($event,f,ds.name)"
+                @click="insertField(ds.name, f)">{{ f }}</div>
+              <div v-if="ds.fields.length===0" style="color:#aaa;font-size:11px;text-align:center;padding:4px">
+                暂无字段，点击 ↻ 刷新
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -226,7 +232,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Edit, View, Refresh, Loading } from '@element-plus/icons-vue'
+import { Edit, View, Refresh, Loading, Close } from '@element-plus/icons-vue'
 import request from '../../utils/request'
 
 const route = useRoute()

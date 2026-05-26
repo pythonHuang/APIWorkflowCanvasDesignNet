@@ -71,9 +71,19 @@ public class DataViewController : ControllerBase
     {
         try
         {
-            var dv = await _db.Set<DataViewEntity>().FindAsync(req.Id);
-            if (dv == null) return ApiResult.Fail("数据视图不存在");
-            var dt = await _reportExec.ExecuteQuery(dv.DataSourceId, dv.Sql!, req.Params);
+            long dsId; string sql;
+            if (req.DataSourceId > 0 && !string.IsNullOrEmpty(req.Sql))
+            {
+                // 自定义SQL模式（报表设计器用）
+                dsId = req.DataSourceId; sql = req.Sql!;
+            }
+            else
+            {
+                var dv = await _db.Set<DataViewEntity>().FindAsync(req.Id);
+                if (dv == null) return ApiResult.Fail("数据视图不存在");
+                dsId = dv.DataSourceId; sql = dv.Sql!;
+            }
+            var dt = await _reportExec.ExecuteQuery(dsId, sql, req.Params);
             var rows = new List<Dictionary<string, object?>>();
             foreach (System.Data.DataRow row in dt.Rows)
             {
@@ -91,5 +101,7 @@ public class DataViewController : ControllerBase
 public class DataViewPreviewRequest
 {
     public long Id { get; set; }
+    public long DataSourceId { get; set; }
+    public string? Sql { get; set; }
     public Dictionary<string, object?>? Params { get; set; }
 }
