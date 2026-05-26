@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Xml.Linq;
 using Juggle.Domain.Entities;
 using Juggle.Infrastructure.Persistence;
 using Juggle.Application.Models.Response;
@@ -142,6 +143,132 @@ public class ApiOpenController : ControllerBase
         {
             return ApiResult.Fail($"调用失败: {ex.Message}");
         }
+    }
+
+    /// <summary>生成接口 WSDL（无需认证）</summary>
+    [HttpGet("wsdl/{code}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetWsdl(string code)
+    {
+        var api = await _db.Apis.FirstOrDefaultAsync(a => a.MethodCode == code && a.Deleted == 0)
+            ?? await _db.Apis.FirstOrDefaultAsync(a => a.ServiceAlias == code && a.Deleted == 0);
+        if (api == null) return Content("接口不存在", "text/plain");
+        if (api.MethodType != "WEBSERVICE") return Content("该接口不是 WebService 类型", "text/plain");
+
+        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var inputParams = await _db.Parameters.Where(p => p.OwnerId == api.Id && p.ParamType == 1 && p.Deleted == 0).OrderBy(p => p.SortNum).ToListAsync();
+        var outputParams = await _db.Parameters.Where(p => p.OwnerId == api.Id && p.ParamType == 2 && p.Deleted == 0).OrderBy(p => p.SortNum).ToListAsync();
+        var ns = api.SoapNamespace ?? $"http://juggle.local/{code}";
+        var wsdl = BuildApiWsdl(api, inputParams, outputParams, baseUrl, ns);
+        return Content(wsdl, "text/xml; charset=utf-8", Encoding.UTF8);
+    }
+
+    /// <summary>SOAP 调用接口（需要 Token）</summary>
+    [HttpPost("soap/{code}")]
+    public async Task<IActionResult> SoapTrigger(string code,
+        [FromHeader(Name = "SOAPAction")] string? soapAction,
+        [FromHeader(Name = "X-Access-Token")] string? token)
+    {
+        if (!await ValidateToken(token))
+            return new ContentResult { Content = BuildSoapFault("无效的 Access Token"), ContentType = "text/xml; charset=utf-8", StatusCode = 401 };
+        var api = await _db.Apis.FirstOrDefaultAsync(a => a.MethodCode == code && a.Deleted == 0)
+            ?? await _db.Apis.FirstOrDefaultAsync(a => a.ServiceAlias == code && a.Deleted == 0);
+        if (api == null)
+            return new ContentResult { Content = BuildSoapFault("接口不存在"), ContentType = "text/xml; charset=utf-8", StatusCode = 404 };
+        if (api.Status == 0)
+            return new ContentResult { Content = BuildSoapFault("接口已停用"), ContentType = "text/xml; charset=utf-8", StatusCode = 403 };
+
+        Dictionary<string, object?> inputParams;
+        try
+        {
+            Request.Body.Position = 0;
+            using var reader = new StreamReader(Request.Body, Encoding.UTF8, leaveOpen: true);
+            var soapXml = await reader.ReadToEndAsync();
+            inputParams = ParseSoapBody(soapXml);
+        }
+        catch (Exception ex)
+        {
+            return new ContentResult { Content = BuildSoapFault($"SOAP 解析失败: {ex.Message}"), ContentType = "text/xml; charset=utf-8", StatusCode = 400 };
+        }
+
+        var result = await ExecuteApi(api.MethodCode!, "POST", inputParams, new Dictionary<string, string>());
+        if (result.Code != 200)
+            return new ContentResult { Content = BuildSoapFault(result.Message ?? "调用失败"), ContentType = "text/xml; charset=utf-8" };
+
+        var ns = api.SoapNamespace ?? $"http://juggle.local/{code}";
+        var responseXml = BuildSoapResponse(result.Data, ns, code);
+        return new ContentResult { Content = responseXml, ContentType = "text/xml; charset=utf-8" };
+    }
+
+    // ========== WSDL / SOAP 工具方法 ==========
+
+    private static string BuildApiWsdl(ApiEntity api, List<ParameterEntity> inputs, List<ParameterEntity> outputs, string baseUrl, string ns)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+        sb.AppendLine($"<definitions name=\"{api.MethodCode}\" targetNamespace=\"{ns}\" xmlns=\"http://schemas.xmlsoap.org/wsdl/\" xmlns:soap=\"http://schemas.xmlsoap.org/wsdl/soap/\" xmlns:tns=\"{ns}\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">");
+        sb.AppendLine("  <types>");
+        sb.AppendLine($"    <xsd:schema targetNamespace=\"{ns}\" elementFormDefault=\"qualified\">");
+        sb.AppendLine("      <xsd:element name=\"Request\"><xsd:complexType><xsd:sequence>");
+        foreach (var p in inputs)
+            sb.AppendLine($"        <xsd:element name=\"{p.ParamCode}\" type=\"xsd:{MapWsdlType(p.DataType)}\" />");
+        sb.AppendLine("      </xsd:sequence></xsd:complexType></xsd:element>");
+        sb.AppendLine("      <xsd:element name=\"Response\"><xsd:complexType><xsd:sequence>");
+        foreach (var p in outputs)
+            sb.AppendLine($"        <xsd:element name=\"{p.ParamCode}\" type=\"xsd:{MapWsdlType(p.DataType)}\" />");
+        sb.AppendLine("      </xsd:sequence></xsd:complexType></xsd:element>");
+        sb.AppendLine("    </xsd:schema>");
+        sb.AppendLine("  </types>");
+        sb.AppendLine("  <message name=\"RequestMessage\"><part name=\"parameters\" element=\"tns:Request\" /></message>");
+        sb.AppendLine("  <message name=\"ResponseMessage\"><part name=\"parameters\" element=\"tns:Response\" /></message>");
+        sb.AppendLine($"  <portType name=\"{api.MethodCode}Port\"><operation name=\"Call\"><input message=\"tns:RequestMessage\" /><output message=\"tns:ResponseMessage\" /></operation></portType>");
+        sb.AppendLine($"  <binding name=\"{api.MethodCode}Binding\" type=\"tns:{api.MethodCode}Port\">");
+        sb.AppendLine($"    <soap:binding transport=\"http://schemas.xmlsoap.org/soap/http\" />");
+        sb.AppendLine($"    <operation name=\"Call\"><soap:operation soapAction=\"{ns}/Call\" /><input><soap:body use=\"literal\" /></input><output><soap:body use=\"literal\" /></output></operation>");
+        sb.AppendLine("  </binding>");
+        sb.AppendLine($"  <service name=\"{api.MethodCode}\"><port name=\"{api.MethodCode}Port\" binding=\"tns:{api.MethodCode}Binding\"><soap:address location=\"{baseUrl}/open/api/soap/{api.MethodCode}\" /></port></service>");
+        sb.AppendLine("</definitions>");
+        return sb.ToString();
+    }
+
+    private static string MapWsdlType(string? t) => (t?.ToLower()) switch { "integer" or "int" or "long" => "integer", "double" or "float" or "decimal" => "double", "boolean" or "bool" => "boolean", "date" or "datetime" => "date", _ => "string" };
+
+    private static Dictionary<string, object?> ParseSoapBody(string soapXml)
+    {
+        var result = new Dictionary<string, object?>();
+        var xdoc = XDocument.Parse(soapXml);
+        XNamespace soapEnv = "http://schemas.xmlsoap.org/soap/envelope/";
+        XNamespace soapEnv12 = "http://www.w3.org/2003/05/soap-envelope";
+        var body = xdoc.Root?.Element(soapEnv + "Body") ?? xdoc.Root?.Element(soapEnv12 + "Body");
+        if (body == null) return result;
+        var firstChild = body.Elements().FirstOrDefault();
+        if (firstChild == null) return result;
+        foreach (var el in firstChild.Elements()) result[el.Name.LocalName] = el.HasElements ? (object)el.ToString() : el.Value;
+        return result;
+    }
+
+    private static string BuildSoapResponse(object? data, string ns, string code)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+        sb.AppendLine("<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tns=\"" + ns + "\">");
+        sb.AppendLine("  <soap:Body>");
+        sb.AppendLine($"    <tns:CallResponse xmlns:tns=\"{ns}\">");
+        if (data is System.Text.Json.JsonElement je && je.ValueKind == System.Text.Json.JsonValueKind.Object)
+            foreach (var p in je.EnumerateObject())
+                sb.AppendLine($"      <tns:{p.Name}>{p.Value}</tns:{p.Name}>");
+        sb.AppendLine("    </tns:CallResponse>");
+        sb.AppendLine("  </soap:Body>");
+        sb.AppendLine("</soap:Envelope>");
+        return sb.ToString();
+    }
+
+    private static string BuildSoapFault(string message)
+    {
+        return $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<soap:Envelope xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
+  <soap:Body><soap:Fault><faultcode>soap:Client</faultcode><faultstring>{System.Security.SecurityElement.Escape(message)}</faultstring></soap:Fault></soap:Body>
+</soap:Envelope>";
     }
 
     private static Dictionary<string, object?> ToObjectDict(Dictionary<string, string> dict)

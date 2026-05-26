@@ -37,13 +37,15 @@
             <el-switch v-model="row.status" :active-value="1" :inactive-value="0" size="small" @change="doToggle(row)" />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="330" fixed="right">
+        <el-table-column label="操作" width="380" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" link @click="openDetail(row)">详情</el-button>
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
             <el-button size="small" type="success" link @click="openTest(row)">测试</el-button>
             <el-button size="small" type="warning" link @click="copyCurl(row)">cURL</el-button>
-            <el-button size="small" link @click="copyApiAddr(row)" style="color:#1890ff">复制地址</el-button>
+            <el-button size="small" link @click="copyApiAddr(row)" style="color:#1890ff">API地址</el-button>
+            <el-button v-if="row.methodType === 'WEBSERVICE'" size="small" link @click="openWsdl(row)" style="color:#409eff">WSDL</el-button>
+            <el-button v-if="row.methodType === 'WEBSERVICE'" size="small" link @click="copyWsAddr(row)" style="color:#909399">WS地址</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -300,7 +302,20 @@ function copyApiAddr(row: any) {
   const addr = row.serviceAlias
     ? `${base}/open/api/${row.serviceAlias}`
     : `${base}/open/api/${row.methodCode}`
-  navigator.clipboard?.writeText(addr).then(() => ElMessage.success('地址已复制'))
+  navigator.clipboard?.writeText(addr).then(() => ElMessage.success('API地址已复制'))
+    .catch(() => ElMessage.warning('复制失败'))
+}
+
+function openWsdl(row: any) {
+  const code = row.serviceAlias || row.methodCode
+  window.open(`${location.origin}/open/api/wsdl/${code}`, '_blank')
+}
+
+function copyWsAddr(row: any) {
+  const base = location.origin
+  const code = row.serviceAlias || row.methodCode
+  const addr = `${base}/open/api/soap/${code}`
+  navigator.clipboard?.writeText(addr).then(() => ElMessage.success('WS地址已复制'))
     .catch(() => ElMessage.warning('复制失败'))
 }
 
