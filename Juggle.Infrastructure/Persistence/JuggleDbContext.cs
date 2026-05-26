@@ -96,7 +96,9 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Id).HasColumnName("id");
             e.Property(p => p.Deleted).HasColumnName("deleted");
             e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
             e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
             e.Property(p => p.TenantId).HasColumnName("tenant_id");
             e.Property(p => p.Name).HasColumnName("name");
             e.Property(p => p.MetricType).HasColumnName("metric_type");
@@ -113,6 +115,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Id).HasColumnName("id");
             e.Property(p => p.Deleted).HasColumnName("deleted");
             e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
             e.Property(p => p.TenantId).HasColumnName("tenant_id");
             e.Property(p => p.RuleId).HasColumnName("rule_id");
             e.Property(p => p.RuleName).HasColumnName("rule_name");
