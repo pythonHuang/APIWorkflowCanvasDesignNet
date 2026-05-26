@@ -101,7 +101,7 @@
         <div v-if="hasSelection" style="font-size:12px">
             <p>位置: {{ hasSelection ? colLetter(selC) + (selR+1) : '' }} {{ selectedCells.length>1 ? `(+${selectedCells.length-1}格)` : '' }}</p>
           <p>值:</p>
-          <el-input v-model="cellValue" type="textarea" :rows="3" size="small" @change="updateCellValue" placeholder="文本 / ${fieldName} / =SUM(A1:A10)" />
+          <el-input v-model="cellValue" type="textarea" :rows="3" size="small" @input="updateCellValue" placeholder="文本 / ${fieldName} / =SUM(A1:A10)" />
           <p style="margin:8px 0 4px">类型:</p>
           <el-select v-model="rowType" size="small" style="width:100%" @change="updateRowType">
             <el-option value="title" label="标题行" />
@@ -238,6 +238,8 @@ function getCellClasses(r:number,c:number) {
 }
 
 function onCellMouseDown(_e:MouseEvent, r:number, c:number) {
+  // 先保存上一个单元格的编辑内容
+  commitEdit()
   if (ctrlDown.value) {
     if (selectedCells.value.some(([sr,sc])=>sr===r&&sc===c)) selectedCells.value = selectedCells.value.filter(([sr,sc])=>!(sr===r&&sc===c))
     else selectedCells.value.push([r,c])
@@ -255,15 +257,25 @@ function onCellMouseDown(_e:MouseEvent, r:number, c:number) {
   selColor.value = cell?.style?.color||''; selBgColor.value = cell?.style?.bgColor||''
 }
 
+function commitEdit() {
+  if (selR.value<0||selC.value<0) return
+  const key=`${selR.value},${selC.value}`, existing=cells.value[key]||{}
+  if (existing.value !== cellValue.value) {
+    cells.value[key]={...existing, value: cellValue.value}
+  }
+}
+
 function onCellDoubleClick(r:number,c:number) { selR.value=r; selC.value=c; cellValue.value=getCell(r,c)?.value||'' }
 
 function selectRow(r:number, _e:MouseEvent) {
+  commitEdit()
   if (ctrlDown.value) { if (selectedRows.value.has(r)) selectedRows.value.delete(r); else selectedRows.value.add(r) }
   else { selectedRows.value = new Set([r]); selectedCols.value.clear(); selectedCells.value=[]; selR.value=-1; selC.value=-1 }
   for (let c=0;c<maxCols.value;c++) { const cell=getCell(r,c); boldActive.value=cell?.style?.bold||false }
 }
 
 function selectCol(c:number, _e:MouseEvent) {
+  commitEdit()
   if (ctrlDown.value) { if (selectedCols.value.has(c)) selectedCols.value.delete(c); else selectedCols.value.add(c) }
   else { selectedCols.value = new Set([c]); selectedRows.value.clear(); selectedCells.value=[]; selR.value=-1; selC.value=-1 }
 }
