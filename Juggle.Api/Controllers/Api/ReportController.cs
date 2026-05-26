@@ -85,8 +85,8 @@ public class ReportController : ControllerBase
     {
         var rpt = await _db.Set<ReportEntity>().FindAsync(req.Id);
         if (rpt == null) return NotFound();
-        var html = await _reportExec.RenderToHtml(rpt.LayoutJson!, req.Params);
-        return File(System.Text.Encoding.UTF8.GetBytes(html), "text/html", $"{rpt.Name}.html");
+        var data = _reportExec.ExportPdf(rpt.LayoutJson!, req.Params);
+        return File(data, "text/html", $"{rpt.Name}.html");
     }
 
     [HttpPost("export-excel")]
@@ -94,8 +94,8 @@ public class ReportController : ControllerBase
     {
         var rpt = await _db.Set<ReportEntity>().FindAsync(req.Id);
         if (rpt == null) return NotFound();
-        var html = await _reportExec.RenderToHtml(rpt.LayoutJson!, req.Params);
-        return File(System.Text.Encoding.UTF8.GetBytes(html), "application/vnd.ms-excel", $"{rpt.Name}.xls");
+        var data = _reportExec.ExportExcel(rpt.LayoutJson!, req.Params);
+        return File(data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{rpt.Name}.xlsx");
     }
 }
 
@@ -103,4 +103,6 @@ public class ReportPreviewRequest
 {
     public long Id { get; set; }
     public Dictionary<string, object?>? Params { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 20;
 }

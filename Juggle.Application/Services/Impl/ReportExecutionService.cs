@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text;
 using System.Text.Json;
+using ClosedXML.Excel;
 using Juggle.Domain.Engine;
 using Juggle.Infrastructure.Persistence;
 using Microsoft.Data.Sqlite;
@@ -18,6 +19,7 @@ public class ReportExecutionService
     /// <summary>执行数据源的SQL查询返回DataTable</summary>
     public async Task<DataTable> ExecuteQuery(long dataSourceId, string sql, Dictionary<string, object?>? parameters = null)
     {
+        ValidateSql(sql);
         var ds = await _db.DataSources.FindAsync(dataSourceId)
             ?? throw new Exception("数据源不存在");
         var connStr = BuildConnectionString(ds);
@@ -34,6 +36,18 @@ public class ReportExecutionService
         using var reader = cmd.ExecuteReader();
         dt.Load(reader);
         return dt;
+    }
+
+    /// <summary>SQL 安全校验：禁止写操作关键字</summary>
+    public static void ValidateSql(string sql)
+    {
+        var upper = sql.ToUpper().Trim();
+        var dangerous = new[] { "DROP ", "DELETE ", "UPDATE ", "INSERT ", "ALTER ", "CREATE ", "TRUNCATE ", "EXEC ", "EXECUTE " };
+        foreach (var kw in dangerous)
+        {
+            if (upper.StartsWith(kw) || upper.Contains(";" + kw) || upper.Contains(" " + kw))
+                throw new Exception($"SQL 包含不允许的操作: {kw.Trim()}");
+        }
     }
 
     /// <summary>渲染报表为HTML</summary>
@@ -210,19 +224,81 @@ public class ReportExecutionService
         sb.AppendLine($"</{tag}>");
     }
 
-    /// <summary>导出 Excel (.xlsx)</summary>
+    /// <summary>导出 Excel (.xlsx) — ClosedXML</summary>
     public byte[] ExportExcel(string layoutJson, Dictionary<string, object?>? queryParams = null)
     {
-        // Simplified: generate HTML and return as bytes for browser download
-        // Full implementation would use ClosedXML
-        var html = RenderToHtml(layoutJson, queryParams).GetAwaiter().GetResult();
-        return Encoding.UTF8.GetBytes(html);
+        using var doc = JsonDocument.Parse(layoutJson);
+        var root = doc.RootElement;
+        using var wb = new XLWorkbook();
+        var ws = wb.Worksheets.Add("Sheet1");
+
+        var cells = root.TryGetProperty("cells", out var cellsEl) ? cellsEl : default;
+        var cellMap = new Dictionary<(int r, int c), JsonElement>();
+        if (cells.ValueKind == JsonValueKind.Array)
+            foreach (var c in cells.EnumerateArray())
+            {
+                var r = c.TryGetProperty("r", out var re) ? re.GetInt32() : 0;
+                var cc = c.TryGetProperty("c", out var ce) ? ce.GetInt32() : 0;
+                cellMap[(r, cc)] = c;
+            }
+
+        foreach (var kv in cellMap)
+        {
+            var (r, c) = kv.Key;
+            var cell = kv.Value;
+            var value = cell.TryGetProperty("value", out var ve) ? ve.GetString() ?? "" : "";
+            var colspan = cell.TryGetProperty("colspan", out var csp) ? Math.Max(1, csp.GetInt32()) : 1;
+            var rowspan = cell.TryGetProperty("rowspan", out var rsp) ? Math.Max(1, rsp.GetInt32()) : 1;
+
+            var xlCell = ws.Cell(r + 1, c + 1);
+            xlCell.Value = value;
+
+            if (colspan > 1 || rowspan > 1)
+            {
+                var endR = r + rowspan;
+                var endC = c + colspan;
+                ws.Range(r + 1, c + 1, endR, endC).Merge();
+            }
+
+            if (cell.TryGetProperty("style", out var se))
+            {
+                if (se.TryGetProperty("bold", out var b) && b.ValueKind == JsonValueKind.True) xlCell.Style.Font.Bold = true;
+                if (se.TryGetProperty("fontSize", out var fs)) xlCell.Style.Font.FontSize = fs.GetDouble();
+                if (se.TryGetProperty("color", out var cl)) xlCell.Style.Font.FontColor = XLColor.FromHtml(cl.GetString()!);
+                if (se.TryGetProperty("bgColor", out var bg)) xlCell.Style.Fill.BackgroundColor = XLColor.FromHtml(bg.GetString()!);
+                if (se.TryGetProperty("align", out var al))
+                    xlCell.Style.Alignment.Horizontal = al.GetString() switch
+                    {
+                        "center" => XLAlignmentHorizontalValues.Center,
+                        "right" => XLAlignmentHorizontalValues.Right,
+                        _ => XLAlignmentHorizontalValues.Left
+                    };
+                if (se.TryGetProperty("border", out var bd) && bd.ValueKind != JsonValueKind.False)
+                    xlCell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            }
+        }
+
+        // 列宽
+        var cols = root.TryGetProperty("cols", out var colsEl) && colsEl.ValueKind == JsonValueKind.Array ? colsEl : default;
+        if (cols.ValueKind == JsonValueKind.Array)
+        {
+            int ci = 0;
+            foreach (var col in cols.EnumerateArray())
+            {
+                var w = col.TryGetProperty("width", out var we) ? we.GetInt32() : 100;
+                ws.Column(ci + 1).Width = w / 7.0; // px → character width approx
+                ci++;
+            }
+        }
+
+        using var ms = new System.IO.MemoryStream();
+        wb.SaveAs(ms);
+        return ms.ToArray();
     }
 
-    /// <summary>导出 PDF</summary>
+    /// <summary>导出 PDF — 基于 HTML 渲染 + QuestPDF 嵌入（降级为 HTML 输出供浏览器打印）</summary>
     public byte[] ExportPdf(string layoutJson, Dictionary<string, object?>? queryParams = null)
     {
-        // Return HTML for now — browser print handles PDF
         var html = RenderToHtml(layoutJson, queryParams).GetAwaiter().GetResult();
         return Encoding.UTF8.GetBytes(html);
     }

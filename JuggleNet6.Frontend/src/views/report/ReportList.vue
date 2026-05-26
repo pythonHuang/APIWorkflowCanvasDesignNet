@@ -41,7 +41,11 @@
         </div>
         <el-button size="small" type="primary" @click="doPreview">查询</el-button>
       </div>
-      <div v-if="previewHtml" v-html="previewHtml" style="border:1px solid #eee;padding:16px;overflow:auto;max-height:70vh"></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+        <span style="font-size:12px;color:#888">第 {{ previewPage }} 页 · 每页 {{ previewPageSize }} 行</span>
+        <el-pagination small layout="prev,next" :total="previewTotal" v-model:current-page="previewPage" :page-size="previewPageSize" @change="doPreview" style="margin-left:auto" />
+      </div>
+      <div v-if="previewHtml" v-html="previewHtml" style="border:1px solid #eee;padding:16px;overflow:auto;max-height:65vh"></div>
     </el-dialog>
   </div>
 </template>
@@ -62,6 +66,9 @@ const previewHtml = ref('')
 const previewParams = ref<any[]>([])
 const previewValues = ref<Record<string,any>>({})
 const previewId = ref(0)
+const previewPage = ref(1)
+const previewPageSize = ref(20)
+const previewTotal = ref(0)
 
 onMounted(loadData)
 
@@ -94,8 +101,9 @@ function openPreview(row: any) {
 }
 
 async function doPreview() {
-  const res = await request.post('/report/preview', { id: previewId.value, params: previewValues.value })
+  const res = await request.post('/report/preview', { id: previewId.value, params: previewValues.value, page: previewPage.value, pageSize: previewPageSize.value })
   previewHtml.value = res.data?.html || ''
+  previewTotal.value = res.data?.total || 0
 }
 
 async function doExportPdf(row: any) {
