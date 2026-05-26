@@ -91,6 +91,37 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<AlertRuleEntity>().ToTable("t_alert_rule");
         modelBuilder.Entity<AlertRecordEntity>().ToTable("t_alert_record");
 
+        // 列名映射（snake_case）— AlertRule
+        modelBuilder.Entity<AlertRuleEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.Name).HasColumnName("name");
+            e.Property(p => p.MetricType).HasColumnName("metric_type");
+            e.Property(p => p.Condition).HasColumnName("condition");
+            e.Property(p => p.Threshold).HasColumnName("threshold");
+            e.Property(p => p.Channel).HasColumnName("channel");
+            e.Property(p => p.Recipients).HasColumnName("recipients");
+            e.Property(p => p.Description).HasColumnName("description");
+            e.Property(p => p.Status).HasColumnName("status");
+        });
+
+        // 列名映射（snake_case）— AlertRecord
+        modelBuilder.Entity<AlertRecordEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.RuleId).HasColumnName("rule_id");
+            e.Property(p => p.RuleName).HasColumnName("rule_name");
+            e.Property(p => p.MetricType).HasColumnName("metric_type");
+            e.Property(p => p.Message).HasColumnName("message");
+            e.Property(p => p.Detail).HasColumnName("detail");
+            e.Property(p => p.Status).HasColumnName("status");
+        });
+
         // 列名映射（snake_case）
         modelBuilder.Entity<UserEntity>(e => {
             e.Property(p => p.Id).HasColumnName("id");
