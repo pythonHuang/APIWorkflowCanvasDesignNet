@@ -180,7 +180,9 @@ public class MonitorController : ControllerBase
                 dn.status = "warning";
         }
 
-        // ===== 连线：API→API + API→DB =====
+        // ===== 连线：遍历所有节点, 递归追踪到下一个业务节点 =====
+        var skipTypes = new HashSet<string> { "CONDITION", "MERGE", "ASSIGN", "CODE", "DELAY", "LOOP", "PARALLEL", "NOTIFY", "START", "END", "TRANSFORM", "SUB_FLOW" };
+
         foreach (var flowVer in flows)
         {
             if (string.IsNullOrEmpty(flowVer.FlowContent)) continue;
@@ -188,55 +190,38 @@ public class MonitorController : ControllerBase
             {
                 var fNodes = JsonSerializer.Deserialize<List<JsonElement>>(flowVer.FlowContent);
                 if (fNodes == null) continue;
-                var businessNodes = fNodes.Where(n =>
-                    n.TryGetProperty("elementType", out var et) &&
-                    (et.GetString() == "METHOD" || et.GetString() == "MYSQL" || et.GetString() == "DB")).ToList();
+                var nodeMap = fNodes.ToDictionary(
+                    n => n.TryGetProperty("key", out var k) ? k.GetString() ?? "" : "",
+                    n => n);
 
-                for (int i = 0; i < businessNodes.Count; i++)
+                foreach (var kv in nodeMap)
                 {
-                    var src = businessNodes[i];
+                    var src = kv.Value;
                     var srcType = src.TryGetProperty("elementType", out var set) ? set.GetString() ?? "" : "";
+                    // 只从业务节点(METHOD/DB)出发
+                    if (srcType != "METHOD" && srcType != "MYSQL" && srcType != "DB") continue;
+
+                    var srcHost = GetNodeHost(src, srcType, apis);
+                    var srcLabel = GetNodeLabel(src, srcType, apis);
+                    if (string.IsNullOrEmpty(srcHost)) continue;
+
+                    // 递归追踪所有后继，找下一个业务节点
                     var outgoings = new List<string>();
                     if (src.TryGetProperty("outgoings", out var og) && og.ValueKind == JsonValueKind.Array)
-                        foreach (var o in og.EnumerateArray()) outgoings.Add(o.GetString() ?? "");
+                        outgoings = og.EnumerateArray().Select(o => o.GetString() ?? "").ToList();
 
+                    var visited = new HashSet<string>();
                     foreach (var outKey in outgoings)
                     {
-                        var tgt = businessNodes.FirstOrDefault(n =>
-                            n.TryGetProperty("key", out var nk) && nk.GetString() == outKey);
-                        if (tgt.ValueKind == JsonValueKind.Undefined) continue;
-                        var tgtType = tgt.TryGetProperty("elementType", out var tet) ? tet.GetString() ?? "" : "";
+                        visited.Clear();
+                        var nextBusiness = FindNextBusinessNode(nodeMap, outKey, visited, skipTypes);
+                        if (nextBusiness == null) continue;
 
-                        string? srcHost = null, tgtHost = null;
-                        string srcLabel = "", tgtLabel = "";
+                        var tgtType = nextBusiness.Value.TryGetProperty("elementType", out var tet) ? tet.GetString() ?? "" : "";
+                        var tgtHost = GetNodeHost(nextBusiness.Value, tgtType, apis);
+                        var tgtLabel = GetNodeLabel(nextBusiness.Value, tgtType, apis);
 
-                        // Source
-                        if (srcType == "METHOD")
-                        {
-                            srcHost = GetMethodHost(src, apis);
-                            srcLabel = GetMethodApiName(src, apis);
-                        }
-                        else // DB
-                        {
-                            var dsName = GetDbDataSourceName(src);
-                            srcHost = $"db_{dsName}";
-                            srcLabel = dsName;
-                        }
-
-                        // Target
-                        if (tgtType == "METHOD")
-                        {
-                            tgtHost = GetMethodHost(tgt, apis);
-                            tgtLabel = GetMethodApiName(tgt, apis);
-                        }
-                        else
-                        {
-                            var dsName = GetDbDataSourceName(tgt);
-                            tgtHost = $"db_{dsName}";
-                            tgtLabel = dsName;
-                        }
-
-                        if (srcHost == tgtHost || string.IsNullOrEmpty(srcHost) || string.IsNullOrEmpty(tgtHost)) continue;
+                        if (string.IsNullOrEmpty(tgtHost) || srcHost == tgtHost) continue;
 
                         edges.Add(new
                         {
@@ -266,6 +251,47 @@ public class MonitorController : ControllerBase
             cfg.TryGetProperty("dataSourceName", out var dsn))
             return dsn.GetString() ?? "";
         return "";
+    }
+
+    private static string GetNodeHost(JsonElement node, string nodeType, List<Domain.Entities.ApiEntity> apis)
+    {
+        if (nodeType == "METHOD")
+            return GetMethodHost(node, apis);
+        if (nodeType == "MYSQL" || nodeType == "DB")
+            return $"db_{GetDbDataSourceName(node)}";
+        return "";
+    }
+
+    private static string GetNodeLabel(JsonElement node, string nodeType, List<Domain.Entities.ApiEntity> apis)
+    {
+        if (nodeType == "METHOD")
+            return GetMethodApiName(node, apis);
+        if (nodeType == "MYSQL" || nodeType == "DB")
+            return GetDbDataSourceName(node);
+        return "";
+    }
+
+    /// <summary>递归追踪outgoings,跳过中间节点,找下一个业务节点(METHOD/DB)</summary>
+    private static JsonElement? FindNextBusinessNode(Dictionary<string, JsonElement> nodeMap, string currentKey, HashSet<string> visited, HashSet<string> skipTypes)
+    {
+        if (string.IsNullOrEmpty(currentKey) || !visited.Add(currentKey)) return null;
+        if (!nodeMap.TryGetValue(currentKey, out var node)) return null;
+
+        var type = node.TryGetProperty("elementType", out var et) ? et.GetString() ?? "" : "";
+        if (type == "METHOD" || type == "MYSQL" || type == "DB" || type == "END")
+            return node;
+
+        // 中间节点(CONDITION/MERGE等) → 继续追踪
+        var outgoings = new List<string>();
+        if (node.TryGetProperty("outgoings", out var og) && og.ValueKind == JsonValueKind.Array)
+            outgoings = og.EnumerateArray().Select(o => o.GetString() ?? "").ToList();
+
+        foreach (var outKey in outgoings)
+        {
+            var found = FindNextBusinessNode(nodeMap, outKey, visited, skipTypes);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     private static (int calls, int success, int fail) FindApiLogs(
