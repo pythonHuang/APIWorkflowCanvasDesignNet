@@ -188,10 +188,35 @@ public class MonitorController : ControllerBase
             if (string.IsNullOrEmpty(flowVer.FlowContent)) continue;
             try
             {
-                var fNodes = JsonSerializer.Deserialize<List<JsonElement>>(flowVer.FlowContent);
+                // 尝试多种格式：数组（新版）或对象 {nodes, edges}（旧版）
+                List<JsonElement>? fNodes = null;
+                List<(string source, string target)>? flowEdges = null;
+
+                using var doc = JsonDocument.Parse(flowVer.FlowContent);
+                var root = doc.RootElement;
+                if (root.ValueKind == JsonValueKind.Array)
+                {
+                    fNodes = JsonSerializer.Deserialize<List<JsonElement>>(flowVer.FlowContent);
+                }
+                else if (root.ValueKind == JsonValueKind.Object)
+                {
+                    if (root.TryGetProperty("nodes", out var nodesEl))
+                        fNodes = JsonSerializer.Deserialize<List<JsonElement>>(nodesEl.GetRawText());
+                    if (root.TryGetProperty("edges", out var edgesEl) && edgesEl.ValueKind == JsonValueKind.Array)
+                    {
+                        flowEdges = new List<(string, string)>();
+                        foreach (var e in edgesEl.EnumerateArray())
+                        {
+                            var s = e.TryGetProperty("source", out var se) ? se.GetString() ?? "" : "";
+                            var t = e.TryGetProperty("target", out var te) ? te.GetString() ?? "" : "";
+                            if (!string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(t))
+                                flowEdges.Add((s, t));
+                        }
+                    }
+                }
+
                 if (fNodes == null || fNodes.Count == 0) continue;
 
-                // 构建安全节点查找（处理重复key）
                 var nodeMap = new Dictionary<string, JsonElement>();
                 foreach (var n in fNodes)
                 {
@@ -200,40 +225,57 @@ public class MonitorController : ControllerBase
                         nodeMap[key] = n;
                 }
 
-                foreach (var n in fNodes)
+                // 构建连接列表：优先用 flowEdges，否则用 node.outgoings
+                var connections = new List<(string srcKey, string tgtKey)>();
+                if (flowEdges != null && flowEdges.Count > 0)
                 {
-                    var srcType = n.TryGetProperty("elementType", out var set) ? set.GetString() ?? "" : "";
-                    if (srcType != "METHOD" && srcType != "MYSQL" && srcType != "DB") continue;
+                    connections = flowEdges;
+                }
+                else
+                {
+                    foreach (var n in fNodes)
+                    {
+                        var key = n.TryGetProperty("key", out var k) ? k.GetString() ?? "" : "";
+                        if (n.TryGetProperty("outgoings", out var og) && og.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var o in og.EnumerateArray())
+                            {
+                                var tgt = o.GetString() ?? "";
+                                if (!string.IsNullOrEmpty(tgt))
+                                    connections.Add((key, tgt));
+                            }
+                        }
+                    }
+                }
 
-                    var srcHost = GetNodeHost(n, srcType, apis);
-                    var srcLabel = GetNodeLabel(n, srcType, apis);
+                // 遍历连接生成边
+                foreach (var (srcKey, tgtKey) in connections)
+                {
+                    if (!nodeMap.TryGetValue(srcKey, out var srcNode)) continue;
+
+                    var srcType = srcNode.TryGetProperty("elementType", out var set) ? set.GetString() ?? "" : "";
+                    if (srcType != "METHOD" && srcType != "MYSQL" && srcType != "DB") continue;
+                    var srcHost = GetNodeHost(srcNode, srcType, apis);
+                    var srcLabel = GetNodeLabel(srcNode, srcType, apis);
                     if (string.IsNullOrEmpty(srcHost)) continue;
 
-                    var outgoings = new List<string>();
-                    if (n.TryGetProperty("outgoings", out var og) && og.ValueKind == JsonValueKind.Array)
-                        outgoings = og.EnumerateArray().Select(o => o.GetString() ?? "").Where(s => !string.IsNullOrEmpty(s)).ToList();
+                    // 递归追踪目标
+                    var visited = new HashSet<string> { srcKey };
+                    var nextBusiness = FindNextBusinessNode(nodeMap, tgtKey, visited, skipTypes);
+                    if (nextBusiness == null) continue;
 
-                    var visited = new HashSet<string>();
-                    foreach (var outKey in outgoings)
+                    var tgtType = nextBusiness.Value.TryGetProperty("elementType", out var tet) ? tet.GetString() ?? "" : "";
+                    var tgtHost = GetNodeHost(nextBusiness.Value, tgtType, apis);
+                    var tgtLabel = GetNodeLabel(nextBusiness.Value, tgtType, apis);
+                    if (string.IsNullOrEmpty(tgtHost) || srcHost == tgtHost) continue;
+
+                    edges.Add(new
                     {
-                        visited.Clear();
-                        var nextBusiness = FindNextBusinessNode(nodeMap, outKey, visited, skipTypes);
-                        if (nextBusiness == null) continue;
-
-                        var tgtType = nextBusiness.Value.TryGetProperty("elementType", out var tet) ? tet.GetString() ?? "" : "";
-                        var tgtHost = GetNodeHost(nextBusiness.Value, tgtType, apis);
-                        var tgtLabel = GetNodeLabel(nextBusiness.Value, tgtType, apis);
-
-                        if (string.IsNullOrEmpty(tgtHost) || srcHost == tgtHost) continue;
-
-                        edges.Add(new
-                        {
-                            source = srcHost, target = tgtHost,
-                            label = $"{srcLabel}→{tgtLabel}",
-                            flowKey = flowVer.FlowKey,
-                            status = "online"
-                        });
-                    }
+                        source = srcHost, target = tgtHost,
+                        label = $"{srcLabel}→{tgtLabel}",
+                        flowKey = flowVer.FlowKey,
+                        status = "online"
+                    });
                 }
             }
             catch { }
