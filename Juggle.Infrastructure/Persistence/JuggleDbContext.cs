@@ -52,6 +52,8 @@ public class JuggleDbContext : DbContext
     public DbSet<SystemConfigEntity> SystemConfigs { get; set; } = null!;
     public DbSet<FlowTestCaseEntity> FlowTestCases { get; set; } = null!;
     public DbSet<RoleEntity> Roles { get; set; } = null!;
+    public DbSet<AlertRuleEntity> AlertRules { get; set; } = null!;
+    public DbSet<AlertRecordEntity> AlertRecords { get; set; } = null!;
     public DbSet<RoleMenuEntity> RoleMenus { get; set; } = null!;
     public DbSet<TenantEntity> Tenants { get; set; } = null!;
     public DbSet<AuditLogEntity> AuditLogs { get; set; } = null!;

@@ -7,10 +7,16 @@
       </div>
       <el-menu :default-active="activeMenu" router background-color="#001529"
         text-color="#aaa" active-text-color="#fff" style="border:none">
-        <el-menu-item index="/flow/dashboard" v-if="hasMenu('/flow/dashboard')">
-          <el-icon><Histogram /></el-icon>
-          <span>监控仪表盘</span>
-        </el-menu-item>
+        <el-sub-menu index="monitor" v-if="hasMenu('/flow/dashboard')">
+          <template #title>
+            <el-icon><Histogram /></el-icon>
+            <span>监控</span>
+          </template>
+          <el-menu-item index="/flow/dashboard">仪表盘</el-menu-item>
+          <el-menu-item index="/monitor/topology">API拓扑图</el-menu-item>
+          <el-menu-item index="/monitor/alert-rule">告警规则</el-menu-item>
+          <el-menu-item index="/monitor/alert-record">告警记录</el-menu-item>
+        </el-sub-menu>
         <el-sub-menu index="flow" v-if="hasMenu('/flow/define')">
           <template #title>
             <el-icon><Connection /></el-icon>
