@@ -35,7 +35,10 @@ const routes = [
       { path: 'system/audit-log',  component: () => import('../views/system/AuditLog.vue') },
       { path: 'flow/log',          component: () => import('../views/flow/FlowLog.vue') },
       { path: 'flow/async-result', component: () => import('../views/flow/AsyncFlowResult.vue') },
-      { path: 'flow/testcase',     component: () => import('../views/flow/FlowTestCase.vue') }
+      { path: 'flow/testcase',     component: () => import('../views/flow/FlowTestCase.vue') },
+      { path: 'report/dataview',  component: () => import('../views/report/DataViewList.vue') },
+      { path: 'report/design',    component: () => import('../views/report/ReportList.vue') },
+      { path: 'report/designer/:id', component: () => import('../views/report/ReportDesigner.vue') }
     ]
   },
   {

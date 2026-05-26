@@ -90,6 +90,8 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<LoginLogEntity>().ToTable("t_login_log");
         modelBuilder.Entity<AlertRuleEntity>().ToTable("t_alert_rule");
         modelBuilder.Entity<AlertRecordEntity>().ToTable("t_alert_record");
+        modelBuilder.Entity<DataViewEntity>().ToTable("t_data_view");
+        modelBuilder.Entity<ReportEntity>().ToTable("t_report");
 
         // 列名映射（snake_case）— AlertRule
         modelBuilder.Entity<AlertRuleEntity>(e => {

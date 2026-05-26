@@ -163,6 +163,7 @@ builder.Services.AddHostedService<Juggle.Api.Services.ScheduleTaskService>();
 builder.Services.AddScoped<FlowExecutionService>();  // 流程执行核心（数据源、静态变量、日志）
 builder.Services.AddScoped<DataSourceService>();     // 数据源连接字符串构建 + 连接测试
 builder.Services.AddScoped<JwtService>();            // JWT Token 签发
+builder.Services.AddScoped<ReportExecutionService>(); // 报表数据执行 + 渲染
 builder.Services.AddScoped<ITenantAccessor, TenantAccessor>();  // 多租户上下文
 
 // Swagger
@@ -240,6 +241,9 @@ using (var scope = app.Services.CreateScope())
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_alert_record ADD COLUMN updated_at TEXT;"); } catch { }
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_alert_record ADD COLUMN updated_by INTEGER;"); } catch { }
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_alert_record ADD COLUMN tenant_id INTEGER;"); } catch { }
+        // 报表模块表
+        try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_data_view(id INTEGER PRIMARY KEY AUTOINCREMENT, group_name TEXT, name TEXT, data_source_id INTEGER, sql TEXT, parameters TEXT, remark TEXT, status INTEGER DEFAULT 1, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
+        try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_report(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, group_name TEXT, source_type TEXT, source_ref TEXT, custom_sql TEXT, params_config TEXT, layout_json TEXT, status INTEGER DEFAULT 1, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
         // 补建参数位置字段
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_parameter ADD COLUMN param_position TEXT DEFAULT NULL;"); } catch { }
     }

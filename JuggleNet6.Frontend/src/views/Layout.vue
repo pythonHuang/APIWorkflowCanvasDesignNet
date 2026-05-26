@@ -39,6 +39,14 @@
           <el-icon><DataBoard /></el-icon>
           <span>对象管理</span>
         </el-menu-item>
+        <el-sub-menu index="report" v-if="hasMenu('/report/dataview')">
+          <template #title>
+            <el-icon><Document /></el-icon>
+            <span>报表</span>
+          </template>
+          <el-menu-item index="/report/dataview">数据视图</el-menu-item>
+          <el-menu-item index="/report/design">报表管理</el-menu-item>
+        </el-sub-menu>
         <el-sub-menu index="system" v-if="hasMenu('/system/token')">
           <template #title>
             <el-icon><Setting /></el-icon>
@@ -93,7 +101,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram } from '@element-plus/icons-vue'
+import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram, Document } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
