@@ -9,5 +9,4 @@ public class AlertRecordEntity : BaseEntity
     public string? Message { get; set; }
     public string? Detail { get; set; }
     public string? Status { get; set; } = "triggered";  // triggered / resolved
-    public string? CreatedAt { get; set; }
 }
