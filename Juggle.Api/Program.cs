@@ -237,6 +237,7 @@ using (var scope = app.Services.CreateScope())
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_alert_rule ADD COLUMN tenant_id INTEGER;"); } catch { }
         try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_alert_record(id INTEGER PRIMARY KEY AUTOINCREMENT, rule_id INTEGER, rule_name TEXT, metric_type TEXT, message TEXT, detail TEXT, status TEXT DEFAULT 'triggered', created_at TEXT, created_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_alert_record ADD COLUMN created_by INTEGER;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_alert_record ADD COLUMN updated_at TEXT;"); } catch { }
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_alert_record ADD COLUMN tenant_id INTEGER;"); } catch { }
         // 补建参数位置字段
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_parameter ADD COLUMN param_position TEXT DEFAULT NULL;"); } catch { }
