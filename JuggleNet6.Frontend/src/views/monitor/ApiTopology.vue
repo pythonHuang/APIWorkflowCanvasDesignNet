@@ -7,6 +7,11 @@
         <span class="status-dot" style="background:#faad14;margin-left:8px"></span> 告警
         <span class="status-dot" style="background:#ff4d4f;margin-left:8px"></span> 离线
       </span>
+      <el-select v-model="filterFlow" placeholder="全部流程" clearable size="small" style="width:200px" @change="applyFilter">
+        <el-option label="全部流程" value="" />
+        <el-option v-for="f in flowOptions" :key="f.key" :label="f.label" :value="f.key" />
+      </el-select>
+      <span v-if="cacheTime" style="font-size:11px;color:#aaa">缓存: {{ cacheTime }}</span>
       <el-button size="small" @click="loadData" :loading="loading">刷新</el-button>
     </div>
     <div style="display:flex;height:calc(100% - 50px);gap:12px">
@@ -15,7 +20,7 @@
           <Background :variant="'dots'" :gap="20" :size="1" :color="'#ddd'" />
           <template #node-custom="{ data }">
             <div :class="['topo-node', 'topo-' + data.status, data.nodeType === 'db' ? 'topo-db' : '']" @click="selectHost(data)">
-              <div class="topo-node-title">🗄️ {{ data.label }}</div>
+              <div class="topo-node-title">{{ data.nodeType === 'db' ? '🗄️ ' : '' }}{{ data.label }}</div>
               <div class="topo-node-count" v-if="data.nodeType === 'db'">
                 {{ data.dbType }} | 调用 {{ data.totalCalls }} 次
               </div>
@@ -37,9 +42,8 @@
             {{ selectedStats?.status === 'offline' ? '离线' : selectedStats?.status === 'warning' ? '告警' : '正常' }}
           </el-tag>
         </div>
-        <!-- API节点：显示接口列表 -->
         <template v-if="selectedNodeType === 'api'">
-          <div v-for="api in selectedApis" :key="api.id" style="padding:8px;margin-bottom:4px;border:1px solid #eee;border-radius:4px">
+          <div v-for="api in filteredApis" :key="api.id" style="padding:8px;margin-bottom:4px;border:1px solid #eee;border-radius:4px">
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
               <el-tag :type="api.status === 1 ? 'success' : 'danger'" size="small">{{ api.status === 1 ? '启用' : '停用' }}</el-tag>
               <el-tag size="small">{{ api.requestType }}</el-tag>
@@ -52,9 +56,8 @@
               失败 <b style="color:#ff4d4f">{{ api.failCount || 0 }}</b>
             </div>
           </div>
-          <el-empty v-if="selectedApis.length === 0" description="该节点无接口" />
+          <el-empty v-if="filteredApis.length === 0" description="该节点无接口" />
         </template>
-        <!-- 数据库节点：显示DB调用统计 -->
         <template v-if="selectedNodeType === 'db'">
           <div style="padding:8px;background:#fafafa;border-radius:4px">
             <p><b>数据库名：</b>{{ selectedStats?.dbName }}</p>
@@ -75,16 +78,40 @@ import { Background } from '@vue-flow/background'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
+const CACHE_KEY = 'topo_cache'
 const loading = ref(false)
+const cacheTime = ref('')
+const filterFlow = ref('')
+const flowOptions = ref<{key:string;label:string}[]>([])
 const selectedHost = ref('')
 const selectedStats = ref<any>(null)
 const selectedApis = ref<any[]>([])
+const filteredApis = ref<any[]>([])
 const selectedNodeType = ref('')
 const vfNodes = ref<any[]>([])
 const vfEdges = ref<any[]>([])
-const allNodes = ref<any[]>([])
+const allRawNodes = ref<any[]>([])
+const allRawEdges = ref<any[]>([])
 
-onMounted(loadData)
+onMounted(() => {
+  const cached = loadCache()
+  if (cached) { renderData(cached.nodes, cached.edges); cacheTime.value = cached.time }
+  loadData()
+})
+
+function loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const data = JSON.parse(raw)
+    if (Date.now() - data.ts > 3600000) { localStorage.removeItem(CACHE_KEY); return null }
+    return { nodes: data.nodes, edges: data.edges, time: new Date(data.ts).toLocaleTimeString() }
+  } catch { return null }
+}
+
+function saveCache(nodes: any[], edges: any[]) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ nodes, edges, ts: Date.now() })) } catch {}
+}
 
 function statusColor(s: string) {
   return s === 'offline' ? '#ff4d4f' : s === 'warning' ? '#faad14' : '#52c41a'
@@ -95,35 +122,98 @@ async function loadData() {
   try {
     const res: any = await request.get('/monitor/topology')
     if (res.data?.nodes) {
-      allNodes.value = res.data.nodes
-      vfNodes.value = res.data.nodes.map((n: any, i: number) => ({
-        id: n.id,
-        type: 'custom',
-        position: { x: (i % 4) * 240, y: Math.floor(i / 4) * 140 },
-        data: { label: n.label, apiCount: n.apiCount, status: n.status, hostId: n.id, apis: n.apis || [], totalCalls: n.totalCalls || 0, totalSuccess: n.totalSuccess || 0, totalFail: n.totalFail || 0, nodeType: n.nodeType || 'api', dbName: n.dbName, dbType: n.dbType, dbHost: n.dbHost }
-      }))
-      vfEdges.value = (res.data.edges || []).map((e: any, i: number) => {
-        const color = statusColor(e.status || 'online')
-        return {
-          id: `e${i}`,
-          source: e.source,
-          target: e.target,
-          label: e.label,
-          labelBgStyle: { fill: '#fff' },
-          labelStyle: { fontSize: '10px', fill: '#666' },
-          style: { stroke: color, strokeWidth: 2 },
-          markerEnd: { type: 'arrowclosed' as any, width: 14, height: 14, color },
-          animated: true
-        }
-      })
+      allRawNodes.value = res.data.nodes
+      allRawEdges.value = res.data.edges || []
+      saveCache(res.data.nodes, res.data.edges)
+      cacheTime.value = new Date().toLocaleTimeString()
+
+      // 提取流程选项
+      const flowKeys = new Set((res.data.edges || []).map((e: any) => e.flowKey).filter(Boolean))
+      flowOptions.value = Array.from(flowKeys).map((k: any) => ({ key: k, label: k }))
+
+      renderData(res.data.nodes, res.data.edges)
     }
   } finally { loading.value = false }
+}
+
+function renderData(nodes: any[], edges: any[]) {
+  let displayNodes = nodes
+  let displayEdges = edges
+
+  if (filterFlow.value) {
+    // 过滤：只显示与选中流程相关的节点和连线
+    const flowEdges = edges.filter((e: any) => e.flowKey === filterFlow.value)
+    const involvedNodeIds = new Set<string>()
+    flowEdges.forEach((e: any) => { involvedNodeIds.add(e.source); involvedNodeIds.add(e.target) })
+    displayEdges = flowEdges
+    displayNodes = nodes.filter((n: any) => involvedNodeIds.has(n.id))
+  }
+
+  allRawNodes.value = nodes
+  allRawEdges.value = edges
+
+  vfNodes.value = displayNodes.map((n: any, i: number) => ({
+    id: n.id, type: 'custom',
+    position: { x: (i % 4) * 240, y: Math.floor(i / 4) * 140 },
+    data: { label: n.label, apiCount: n.apiCount, status: n.status, hostId: n.id, apis: n.apis || [], totalCalls: n.totalCalls || 0, totalSuccess: n.totalSuccess || 0, totalFail: n.totalFail || 0, nodeType: n.nodeType || 'api', dbName: n.dbName, dbType: n.dbType, dbHost: n.dbHost }
+  }))
+
+  vfEdges.value = displayEdges.map((e: any, i: number) => {
+    const color = statusColor(e.status || 'online')
+    return {
+      id: `e${i}`, source: e.source, target: e.target, label: e.label,
+      labelBgStyle: { fill: '#fff' }, labelStyle: { fontSize: '10px', fill: '#666' },
+      style: { stroke: color, strokeWidth: 2 },
+      markerEnd: { type: 'arrowclosed' as any, width: 14, height: 14, color },
+      animated: true
+    }
+  })
+}
+
+function applyFilter() {
+  if (filterFlow.value) {
+    const flowEdges = allRawEdges.value.filter((e: any) => e.flowKey === filterFlow.value)
+    const involvedNodeIds = new Set<string>()
+    flowEdges.forEach((e: any) => { involvedNodeIds.add(e.source); involvedNodeIds.add(e.target) })
+    const filteredNodes = allRawNodes.value.filter((n: any) => involvedNodeIds.has(n.id))
+    renderDirect(filteredNodes, flowEdges)
+  } else {
+    renderDirect(allRawNodes.value, allRawEdges.value)
+  }
+}
+
+function renderDirect(nodes: any[], edges: any[]) {
+  vfNodes.value = nodes.map((n: any, i: number) => ({
+    id: n.id, type: 'custom',
+    position: { x: (i % 4) * 240, y: Math.floor(i / 4) * 140 },
+    data: { label: n.label, apiCount: n.apiCount, status: n.status, hostId: n.id, apis: n.apis || [], totalCalls: n.totalCalls || 0, totalSuccess: n.totalSuccess || 0, totalFail: n.totalFail || 0, nodeType: n.nodeType || 'api', dbName: n.dbName, dbType: n.dbType, dbHost: n.dbHost }
+  }))
+  vfEdges.value = edges.map((e: any, i: number) => {
+    const color = statusColor(e.status || 'online')
+    return {
+      id: `e${i}`, source: e.source, target: e.target, label: e.label,
+      labelBgStyle: { fill: '#fff' }, labelStyle: { fontSize: '10px', fill: '#666' },
+      style: { stroke: color, strokeWidth: 2 },
+      markerEnd: { type: 'arrowclosed' as any, width: 14, height: 14, color },
+      animated: true
+    }
+  })
 }
 
 function selectHost(data: any) {
   selectedHost.value = data.hostId
   selectedStats.value = data
-  selectedApis.value = data.apis || []
+  const apis = data.apis || []
+  if (filterFlow.value) {
+    // 过滤该流程相关的API
+    const flowNodes = allRawEdges.value.filter((e: any) => e.flowKey === filterFlow.value)
+    const apiNames = new Set<string>()
+    flowNodes.forEach((e: any) => { if (e.label) { e.label.split('→').forEach((s: string) => apiNames.add(s)) } })
+    filteredApis.value = apis.filter((a: any) => apiNames.has(a.methodName))
+  } else {
+    filteredApis.value = apis
+  }
+  selectedApis.value = apis
   selectedNodeType.value = data.nodeType || 'api'
 }
 </script>
