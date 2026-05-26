@@ -60,14 +60,17 @@ async function loadData() {
         id: n.id,
         type: 'custom',
         position: { x: (i % 4) * 220, y: Math.floor(i / 4) * 120 },
-        data: { label: n.label, apiCount: n.apiCount, status: n.status, hostId: n.id }
+        data: { label: n.label, apiCount: n.apiCount, status: n.status, hostId: n.id, apis: n.apis || [] }
       }))
       vfEdges.value = (res.data.edges || []).map((e: any, i: number) => ({
         id: `e${i}`,
         source: e.source,
         target: e.target,
         label: e.label,
+        labelBgStyle: { fill: '#fff' },
+        labelStyle: { fontSize: '10px', fill: '#666' },
         style: { stroke: '#1890ff', strokeWidth: 2 },
+        markerEnd: { type: 'arrowclosed', width: 16, height: 16, color: '#1890ff' },
         animated: true
       }))
     }
