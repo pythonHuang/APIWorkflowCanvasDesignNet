@@ -20,22 +20,21 @@
           <el-button size="small" type="primary" icon="Plus" circle @click="openDsDialog" />
         </div>
         <div v-if="datasets.length===0" style="color:#aaa;font-size:12px">点击 + 添加数据集</div>
-        <div v-for="(ds, di) in datasets" :key="ds.id" style="margin-bottom:4px">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;background:#f0f0f0;border-radius:4px;font-size:12px">
-            <span style="font-weight:600;cursor:pointer" @click="ds.expanded=!ds.expanded">
-              {{ ds.expanded?'▼':'▶' }} {{ ds.name }}
-            </span>
-            <span style="color:#888;font-size:10px">{{ sourceLabel(ds.sourceType) }}</span>
-            <el-button size="small" type="danger" link @click="datasets.splice(di,1)" style="padding:0">×</el-button>
+        <div v-for="(ds, di) in datasets" :key="ds.id" style="margin-bottom:4px;border:1px solid #e8e8e8;border-radius:4px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:4px;padding:2px 4px;background:#fafafa;font-size:12px">
+            <span style="font-weight:600;cursor:pointer;flex:1" @click="ds.expanded=!ds.expanded">{{ ds.expanded?'▼':'▶' }} {{ ds.name }}</span>
+            <el-tag size="small" type="info">{{ sourceLabel(ds.sourceType) }}</el-tag>
+            <el-button size="small" link @click="openDsEdit(di)" title="编辑"><el-icon><Edit /></el-icon></el-button>
+            <el-button v-if="ds.fields.length>0" size="small" link @click="previewDsData(di)" title="预览数据"><el-icon><View /></el-icon></el-button>
+            <el-button size="small" link @click="loadDsFields(di)" title="刷新字段"><el-icon><Refresh /></el-icon></el-button>
+            <el-button size="small" link type="danger" @click="datasets.splice(di,1)" title="删除" style="padding:0">×</el-button>
           </div>
-          <div v-if="ds.expanded" style="padding:2px 0 2px 12px">
+          <div v-if="ds.expanded" style="padding:2px 4px;max-height:180px;overflow-y:auto">
             <div v-if="ds.loading" style="color:#aaa;font-size:11px">加载中...</div>
             <div v-for="f in ds.fields" :key="f" class="field-item"
               draggable="true" @dragstart="onDragField($event,f,ds.name)"
-              @click="insertField(ds.name, f)"
-              style="cursor:pointer">{{ f }}</div>
-            <div v-if="ds.fields.length===0 && !ds.loading" style="color:#aaa;font-size:11px">点击加载字段</div>
-            <el-button v-if="ds.fields.length===0 && !ds.loading" size="small" text @click="loadDsFields(di)">↻ 加载字段</el-button>
+              @click="insertField(ds.name, f)">{{ f }}</div>
+            <div v-if="ds.fields.length===0 && !ds.loading" style="color:#aaa;font-size:11px">点击 ↻ 刷新加载字段</div>
           </div>
         </div>
       </div>
@@ -178,6 +177,39 @@
       <template #footer><el-button @click="dsDialogVisible=false">取消</el-button><el-button type="primary" @click="addDataset">添加</el-button></template>
     </el-dialog>
 
+    <!-- 编辑数据集对话框 -->
+    <el-dialog v-model="dsEditVisible" title="编辑数据集" width="520px">
+      <el-form :model="dsEditForm" label-width="90px" size="small">
+        <el-form-item label="名称"><el-input v-model="dsEditForm.name" /></el-form-item>
+        <el-form-item label="数据来源"><el-input :value="sourceLabel(dsEditForm.sourceType)" disabled /></el-form-item>
+        <template v-if="dsEditForm.sourceType==='dataview'">
+          <el-form-item label="选择视图"><el-select v-model="dsEditForm.sourceRef" style="width:100%"><el-option v-for="dv in dvList" :key="dv.id" :label="dv.name" :value="String(dv.id)" /></el-select></el-form-item>
+        </template>
+        <template v-if="dsEditForm.sourceType==='sql'">
+          <el-form-item label="数据源"><el-select v-model="dsEditForm.dataSourceId" style="width:100%"><el-option v-for="ds_ in dsList" :key="ds_.id" :label="ds_.dataSourceName" :value="ds_.id" /></el-select></el-form-item>
+          <el-form-item label="SQL"><el-input v-model="dsEditForm.customSql" type="textarea" :rows="4" /></el-form-item>
+        </template>
+        <template v-if="dsEditForm.sourceType==='flow'">
+          <el-form-item label="选择流程"><el-select v-model="dsEditForm.sourceRef" style="width:100%"><el-option v-for="f in flowList" :key="f.flowKey" :label="f.flowName||f.flowKey" :value="f.flowKey" /></el-select></el-form-item>
+        </template>
+        <template v-if="dsEditForm.sourceType==='api'">
+          <el-form-item label="选择接口"><el-select v-model="dsEditForm.sourceRef" style="width:100%"><el-option v-for="a in apiList" :key="a.methodCode" :label="a.methodName||a.methodCode" :value="a.methodCode" /></el-select></el-form-item>
+        </template>
+      </el-form>
+      <template #footer><el-button @click="dsEditVisible=false">取消</el-button><el-button type="primary" @click="saveDsEdit">保存并刷新</el-button></template>
+    </el-dialog>
+
+    <!-- 数据预览对话框 -->
+    <el-dialog v-model="dsPreviewVisible" title="数据预览" width="80%" top="5vh">
+      <div v-if="dsPreviewLoading" style="text-align:center;padding:40px"><el-icon class="is-loading" :size="32"><Loading /></el-icon></div>
+      <div v-else>
+        <div style="margin-bottom:8px;color:#888;font-size:12px">共 {{ dsPreviewRows.length }} 条</div>
+        <el-table :data="dsPreviewRows" border size="small" max-height="400" stripe>
+          <el-table-column v-for="col in dsPreviewCols" :key="col" :prop="col" :label="col" show-overflow-tooltip />
+        </el-table>
+      </div>
+    </el-dialog>
+
     <!-- 预览 -->
     <el-dialog v-model="showPreview" title="预览" width="90%" top="5vh">
       <div v-if="previewParams.length>0" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
@@ -194,6 +226,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Edit, View, Refresh, Loading } from '@element-plus/icons-vue'
 import request from '../../utils/request'
 
 const route = useRoute()
@@ -206,8 +239,11 @@ const dvList = ref<any[]>([]), dsList = ref<any[]>([]), flowList = ref<any[]>([]
 // 数据集管理
 interface Dataset { id: string; name: string; sourceType: string; sourceRef: string; customSql: string; dataSourceId: string|number; fields: string[]; expanded: boolean; loading: boolean }
 const datasets = ref<Dataset[]>([])
-const dsDialogVisible = ref(false)
+const dsDialogVisible = ref(false), dsEditVisible = ref(false), dsEditIdx = ref(-1)
 const dsForm = reactive({ name:'', sourceType:'dataview', sourceRef:'', customSql:'', dataSourceId:'' })
+const dsEditForm = reactive({ name:'', sourceType:'', sourceRef:'', customSql:'', dataSourceId:'' })
+const dsPreviewVisible = ref(false), dsPreviewLoading = ref(false)
+const dsPreviewCols = ref<string[]>([]), dsPreviewRows = ref<any[]>([])
 const maxRows = ref(10), maxCols = ref(6)
 const rowHeights = ref<(number|string)[]>([])
 const colWidths = ref<(number|string)[]>([])
@@ -253,6 +289,39 @@ async function loadApiList() {
 
 function sourceLabel(t: string) { const m: Record<string,string>={dataview:'视图',sql:'SQL',flow:'流程',api:'接口'}; return m[t]||t }
 function flowSelChange() {}
+
+function openDsEdit(di: number) {
+  dsEditIdx.value = di
+  const ds = datasets.value[di]
+  Object.assign(dsEditForm, { name: ds.name, sourceType: ds.sourceType, sourceRef: ds.sourceRef, customSql: ds.customSql, dataSourceId: ds.dataSourceId })
+  dsEditVisible.value = true
+}
+
+function saveDsEdit() {
+  if (dsEditIdx.value < 0) return
+  const ds = datasets.value[dsEditIdx.value]
+  ds.name = dsEditForm.name; ds.sourceRef = dsEditForm.sourceRef; ds.customSql = dsEditForm.customSql; ds.dataSourceId = dsEditForm.dataSourceId
+  dsEditVisible.value = false
+  loadDsFields(dsEditIdx.value)
+}
+
+async function previewDsData(di: number) {
+  dsPreviewVisible.value = true; dsPreviewLoading.value = true; dsPreviewCols.value = []; dsPreviewRows.value = []
+  const ds = datasets.value[di]
+  try {
+    switch (ds.sourceType) {
+      case 'dataview':
+        const res = await request.post('/report/dataview/preview', { id: Number(ds.sourceRef), params: {} })
+        dsPreviewCols.value = res.data?.columns||[]; dsPreviewRows.value = res.data?.rows||[]; break
+      case 'sql':
+        if (ds.dataSourceId && ds.customSql) {
+          const r2 = await request.post('/report/dataview/preview', { id: 0, sql: ds.customSql, dataSourceId: Number(ds.dataSourceId), params: {} })
+          dsPreviewCols.value = r2.data?.columns||[]; dsPreviewRows.value = r2.data?.rows||[]
+        }
+        break
+    }
+  } catch {} finally { dsPreviewLoading.value = false }
+}
 
 function openDsDialog() {
   Object.assign(dsForm, { name:'', sourceType:'dataview', sourceRef:'', customSql:'', dataSourceId:'' })
