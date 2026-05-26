@@ -132,6 +132,7 @@ public class MonitorController : ControllerBase
         }
 
         // ===== 检查日志失败更新状态 =====
+        var dbHealthMap = new Dictionary<string, string>(); // dbId → status
         foreach (var log in recentLogs.Where(l => l.Status == "FAILED"))
         {
             var flowVer = flows.FirstOrDefault(v => v.FlowKey == log.FlowKey);
@@ -155,15 +156,8 @@ public class MonitorController : ControllerBase
                         if (n.TryGetProperty("dbConfig", out var dbCfg))
                         {
                             var dsName = dbCfg.TryGetProperty("dataSourceName", out var dsn) ? dsn.GetString() ?? "" : "";
-                            var dbId = $"db_{dsName}";
                             if (!string.IsNullOrEmpty(dsName))
-                            {
-                                var dbNode = allNodes.FirstOrDefault(nd => ((dynamic)nd).id == dbId);
-                                if (dbNode != null && ((dynamic)dbNode).status == "online")
-                                {
-                                    ((dynamic)dbNode).status = "warning";
-                                }
-                            }
+                                dbHealthMap[$"db_{dsName}"] = "warning";
                         }
                     }
                 }
@@ -171,14 +165,26 @@ public class MonitorController : ControllerBase
             catch { }
         }
 
-        // Sync healthMap back to API nodes
-        foreach (var n in allNodes.Where(n => ((dynamic)n).nodeType == "api"))
+        // 将 healthMap/dbHealthMap 合并回 allNodes（重建节点避免匿名类型不可写）
+        allNodes = allNodes.Select(n =>
         {
             dynamic dn = n;
-            string nodeId = dn.id;
-            if (healthMap.TryGetValue(nodeId, out var hs) && hs == "warning")
-                dn.status = "warning";
-        }
+            string id = dn.id;
+            string nType = dn.nodeType;
+            string finalStatus = dn.status;
+            if (nType == "api" && healthMap.TryGetValue(id, out var hs) && hs == "warning")
+                finalStatus = "warning";
+            else if (nType == "db" && dbHealthMap.ContainsKey(id))
+                finalStatus = "warning";
+            return new
+            {
+                id, label = dn.label, nodeType = nType,
+                apiCount = dn.apiCount, apis = dn.apis,
+                status = finalStatus, totalCalls = dn.totalCalls,
+                totalSuccess = dn.totalSuccess, totalFail = dn.totalFail,
+                dbName = dn.dbName, dbType = dn.dbType, dbHost = dn.dbHost
+            } as object;
+        }).ToList();
 
         // ===== 连线：遍历所有节点, 递归追踪到下一个业务节点 =====
         var skipTypes = new HashSet<string> { "CONDITION", "MERGE", "ASSIGN", "CODE", "DELAY", "LOOP", "PARALLEL", "NOTIFY", "START", "END", "TRANSFORM", "SUB_FLOW" };
