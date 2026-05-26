@@ -576,7 +576,7 @@ function colLetter(n:number):string { return String.fromCharCode(65+n) }
 .designer-container{height:100vh;display:flex;flex-direction:column;background:#f5f5f5}
 .toolbar{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:#001529;color:#fff;flex-shrink:0}
 .designer-body{flex:1;display:flex;overflow:hidden}
-.left-panel{width:170px;border-right:1px solid #ddd;padding:8px;overflow-y:auto;background:#fff;flex-shrink:0}
+.left-panel{width:220px;border-right:1px solid #ddd;padding:6px;overflow-y:auto;background:#fff;flex-shrink:0}
 .center-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .style-toolbar{display:flex;gap:4px;padding:4px 8px;background:#fff;border-bottom:1px solid #ddd;flex-wrap:wrap;align-items:center;flex-shrink:0}
 .right-panel{width:210px;border-left:1px solid #ddd;padding:8px;overflow-y:auto;background:#fff;flex-shrink:0}
