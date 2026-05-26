@@ -71,4 +71,9 @@ public class ApiEntity : BaseEntity
     /// SOAPAction 请求头值
     /// </summary>
     public string? SoapAction { get; set; }
+
+    /// <summary>
+    /// 服务别名（用于友好访问: /open/api/{alias}）
+    /// </summary>
+    public string? ServiceAlias { get; set; }
 }

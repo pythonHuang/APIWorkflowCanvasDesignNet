@@ -19,4 +19,6 @@ public class ApiAddRequest
     public string? SoapNamespace { get; set; }
     /// <summary>SOAPAction 头</summary>
     public string? SoapAction { get; set; }
+    /// <summary>服务别名（/open/api/{alias}）</summary>
+    public string? ServiceAlias { get; set; }
 }

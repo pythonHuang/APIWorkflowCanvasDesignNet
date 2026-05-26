@@ -46,6 +46,7 @@ public class ApiController : ControllerBase
             SoapMethod = req.SoapMethod,
             SoapNamespace = req.SoapNamespace,
             SoapAction = req.SoapAction,
+            ServiceAlias = req.ServiceAlias,
             CreatedAt = DateTime.Now.ToString("o")
         };
         _db.Apis.Add(entity);
@@ -80,6 +81,7 @@ public class ApiController : ControllerBase
         entity.SoapMethod = req.SoapMethod;
         entity.SoapNamespace = req.SoapNamespace;
         entity.SoapAction = req.SoapAction;
+        entity.ServiceAlias = req.ServiceAlias;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
         return ApiResult.Success();
@@ -299,6 +301,7 @@ public class ApiController : ControllerBase
             {
                 api.MethodName, api.MethodDesc, api.Url, api.RequestType, api.ContentType,
                 api.MockJson, api.MethodType, api.SoapVersion, api.SoapMethod, api.SoapNamespace, api.SoapAction,
+                api.ServiceAlias,
                 InputParams = inputParams.Select(p => new
                 {
                     p.ParamCode, p.ParamName, p.DataType, p.ObjectCode, p.Required,
@@ -344,6 +347,7 @@ public class ApiController : ControllerBase
                 SoapMethod = item.SoapMethod,
                 SoapNamespace = item.SoapNamespace,
                 SoapAction = item.SoapAction,
+                ServiceAlias = item.ServiceAlias,
                 CreatedAt = DateTime.Now.ToString("o")
             };
             _db.Apis.Add(entity);
@@ -431,6 +435,7 @@ public class ApiImportItem
     public string? SoapMethod { get; set; }
     public string? SoapNamespace { get; set; }
     public string? SoapAction { get; set; }
+    public string? ServiceAlias { get; set; }
     public List<ApiImportParam>? InputParams { get; set; }
     public List<ApiImportParam>? OutputParams { get; set; }
     public List<ApiImportParam>? HeaderParams { get; set; }

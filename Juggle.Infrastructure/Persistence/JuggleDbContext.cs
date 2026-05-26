@@ -138,6 +138,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.SoapMethod).HasColumnName("soap_method");
             e.Property(p => p.SoapNamespace).HasColumnName("soap_namespace");
             e.Property(p => p.SoapAction).HasColumnName("soap_action");
+            e.Property(p => p.ServiceAlias).HasColumnName("service_alias");
         });
 
         modelBuilder.Entity<ParameterEntity>(e => {

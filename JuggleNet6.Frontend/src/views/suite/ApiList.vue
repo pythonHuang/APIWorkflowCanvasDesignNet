@@ -90,6 +90,9 @@
             <el-option value="FORM" label="FORM" />
           </el-select>
         </el-form-item>
+        <el-form-item label="访问别名">
+          <el-input v-model="form.serviceAlias" placeholder="可选，/open/api/{alias}" />
+        </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.methodDesc" type="textarea" :rows="2" />
         </el-form-item>
@@ -231,7 +234,7 @@ const isEdit = ref(false)
 const formRef = ref()
 const form = reactive({
   id: 0, suiteCode, methodName: '', methodType: 'HTTP', requestType: 'GET', url: '', contentType: 'JSON', methodDesc: '',
-  soapVersion: '11', soapMethod: '', soapNamespace: '', soapAction: ''
+  soapVersion: '11', soapMethod: '', soapNamespace: '', soapAction: '', serviceAlias: ''
 })
 const rules = {
   methodName: [{ required: true, message: '请输入接口名称', trigger: 'blur' }],
@@ -250,7 +253,7 @@ async function loadData() {
 
 function openAdd() {
   isEdit.value = false
-  Object.assign(form, { id: 0, methodName: '', methodType: 'HTTP', requestType: 'GET', url: '', contentType: 'JSON', methodDesc: '', soapVersion: '11', soapMethod: '', soapNamespace: '', soapAction: '' })
+  Object.assign(form, { id: 0, methodName: '', methodType: 'HTTP', requestType: 'GET', url: '', contentType: 'JSON', methodDesc: '', soapVersion: '11', soapMethod: '', soapNamespace: '', soapAction: '', serviceAlias: '' })
   dialogVisible.value = true
 }
 
@@ -259,7 +262,7 @@ function openEdit(row: any) {
   Object.assign(form, {
     id: row.id, methodName: row.methodName, methodType: row.methodType || 'HTTP',
     requestType: row.requestType, url: row.url, contentType: row.contentType, methodDesc: row.methodDesc,
-    soapVersion: row.soapVersion || '11', soapMethod: row.soapMethod || '', soapNamespace: row.soapNamespace || '', soapAction: row.soapAction || ''
+    soapVersion: row.soapVersion || '11', soapMethod: row.soapMethod || '', soapNamespace: row.soapNamespace || '', soapAction: row.soapAction || '', serviceAlias: row.serviceAlias || ''
   })
   dialogVisible.value = true
 }

@@ -63,7 +63,9 @@ public class ApiOpenController : ControllerBase
 
     private async Task<ApiResult> ExecuteApi(string code, string method, Dictionary<string, object?> inputParams, Dictionary<string, string> headers)
     {
-        var api = await _db.Apis.FirstOrDefaultAsync(a => a.MethodCode == code && a.Deleted == 0);
+        // 先用 methodCode 查找，再用 serviceAlias 查找
+        var api = await _db.Apis.FirstOrDefaultAsync(a => a.MethodCode == code && a.Deleted == 0)
+            ?? await _db.Apis.FirstOrDefaultAsync(a => a.ServiceAlias == code && a.Deleted == 0);
         if (api == null) return ApiResult.Fail("接口不存在");
 
         // 加载参数定义
