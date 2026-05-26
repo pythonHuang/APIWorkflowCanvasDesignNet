@@ -281,7 +281,7 @@ async function loadDsList() {
   try { const res = await request.get('/system/datasource/list'); dsList.value = res.data||[] } catch {}
 }
 async function loadFlowList() {
-  try { const res = await request.get('/flow/definition/list'); flowList.value = res.data||[] } catch {}
+  try { const res = await request.post('/flow/definition/page', { pageNum:1, pageSize:200 }); flowList.value = res.data?.records||[] } catch {}
 }
 async function loadApiList() {
   try { const res = await request.post('/suite/api/list', { suiteCode: '' }); apiList.value = res.data||[] } catch {}
