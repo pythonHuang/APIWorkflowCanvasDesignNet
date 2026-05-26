@@ -88,6 +88,8 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<TenantEntity>().ToTable("t_tenant");
         modelBuilder.Entity<AuditLogEntity>().ToTable("t_audit_log");
         modelBuilder.Entity<LoginLogEntity>().ToTable("t_login_log");
+        modelBuilder.Entity<AlertRuleEntity>().ToTable("t_alert_rule");
+        modelBuilder.Entity<AlertRecordEntity>().ToTable("t_alert_record");
 
         // 列名映射（snake_case）
         modelBuilder.Entity<UserEntity>(e => {
