@@ -189,26 +189,29 @@ public class MonitorController : ControllerBase
             try
             {
                 var fNodes = JsonSerializer.Deserialize<List<JsonElement>>(flowVer.FlowContent);
-                if (fNodes == null) continue;
-                var nodeMap = fNodes.ToDictionary(
-                    n => n.TryGetProperty("key", out var k) ? k.GetString() ?? "" : "",
-                    n => n);
+                if (fNodes == null || fNodes.Count == 0) continue;
 
-                foreach (var kv in nodeMap)
+                // 构建安全节点查找（处理重复key）
+                var nodeMap = new Dictionary<string, JsonElement>();
+                foreach (var n in fNodes)
                 {
-                    var src = kv.Value;
-                    var srcType = src.TryGetProperty("elementType", out var set) ? set.GetString() ?? "" : "";
-                    // 只从业务节点(METHOD/DB)出发
+                    var key = n.TryGetProperty("key", out var k) ? k.GetString() ?? "" : "";
+                    if (!string.IsNullOrEmpty(key) && !nodeMap.ContainsKey(key))
+                        nodeMap[key] = n;
+                }
+
+                foreach (var n in fNodes)
+                {
+                    var srcType = n.TryGetProperty("elementType", out var set) ? set.GetString() ?? "" : "";
                     if (srcType != "METHOD" && srcType != "MYSQL" && srcType != "DB") continue;
 
-                    var srcHost = GetNodeHost(src, srcType, apis);
-                    var srcLabel = GetNodeLabel(src, srcType, apis);
+                    var srcHost = GetNodeHost(n, srcType, apis);
+                    var srcLabel = GetNodeLabel(n, srcType, apis);
                     if (string.IsNullOrEmpty(srcHost)) continue;
 
-                    // 递归追踪所有后继，找下一个业务节点
                     var outgoings = new List<string>();
-                    if (src.TryGetProperty("outgoings", out var og) && og.ValueKind == JsonValueKind.Array)
-                        outgoings = og.EnumerateArray().Select(o => o.GetString() ?? "").ToList();
+                    if (n.TryGetProperty("outgoings", out var og) && og.ValueKind == JsonValueKind.Array)
+                        outgoings = og.EnumerateArray().Select(o => o.GetString() ?? "").Where(s => !string.IsNullOrEmpty(s)).ToList();
 
                     var visited = new HashSet<string>();
                     foreach (var outKey in outgoings)
