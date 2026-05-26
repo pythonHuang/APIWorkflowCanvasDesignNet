@@ -67,6 +67,7 @@ public class ApiOpenController : ControllerBase
         var api = await _db.Apis.FirstOrDefaultAsync(a => a.MethodCode == code && a.Deleted == 0)
             ?? await _db.Apis.FirstOrDefaultAsync(a => a.ServiceAlias == code && a.Deleted == 0);
         if (api == null) return ApiResult.Fail("接口不存在");
+        if (api.Status == 0) return ApiResult.Fail("接口已停用");
 
         // 加载参数定义
         var paramDefs = await _db.Parameters

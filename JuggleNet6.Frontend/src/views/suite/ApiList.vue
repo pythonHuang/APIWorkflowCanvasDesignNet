@@ -32,12 +32,18 @@
           </template>
         </el-table-column>
         <el-table-column prop="url" label="URL" show-overflow-tooltip />
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="状态" width="65" align="center">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="openDetail(row)">详情/参数</el-button>
+            <el-switch v-model="row.status" :active-value="1" :inactive-value="0" size="small" @change="doToggle(row)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="330" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" type="primary" link @click="openDetail(row)">详情</el-button>
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
             <el-button size="small" type="success" link @click="openTest(row)">测试</el-button>
             <el-button size="small" type="warning" link @click="copyCurl(row)">cURL</el-button>
+            <el-button size="small" link @click="copyApiAddr(row)" style="color:#1890ff">复制地址</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -282,6 +288,20 @@ async function handleSubmit() {
   }
   dialogVisible.value = false
   loadData()
+}
+
+async function doToggle(row: any) {
+  await request.put(`/suite/api/toggle/${row.id}`)
+  ElMessage.success(row.status === 1 ? '已启用' : '已停用')
+}
+
+function copyApiAddr(row: any) {
+  const base = location.origin
+  const addr = row.serviceAlias
+    ? `${base}/open/api/${row.serviceAlias}`
+    : `${base}/open/api/${row.methodCode}`
+  navigator.clipboard?.writeText(addr).then(() => ElMessage.success('地址已复制'))
+    .catch(() => ElMessage.warning('复制失败'))
 }
 
 async function doDelete(row: any) {

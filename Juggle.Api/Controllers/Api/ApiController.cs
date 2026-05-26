@@ -98,6 +98,18 @@ public class ApiController : ControllerBase
         return ApiResult.Success(new { api = entity, inputParams, outputParams, headerParams });
     }
 
+    /// <summary>停用/启用接口</summary>
+    [HttpPut("toggle/{id}")]
+    public async Task<ApiResult> Toggle(long id)
+    {
+        var entity = await _db.Apis.FindAsync(id);
+        if (entity == null) return ApiResult.Fail("接口不存在");
+        entity.Status = entity.Status == 1 ? 0 : 1;
+        entity.UpdatedAt = DateTime.Now.ToString("o");
+        await _db.SaveChangesAsync();
+        return ApiResult.Success(entity.Status);
+    }
+
     [HttpPost("list")]
     public async Task<ApiResult> List([FromBody] dynamic req)
     {

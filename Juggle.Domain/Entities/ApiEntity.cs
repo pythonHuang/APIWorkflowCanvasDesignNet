@@ -76,4 +76,7 @@ public class ApiEntity : BaseEntity
     /// 服务别名（用于友好访问: /open/api/{alias}）
     /// </summary>
     public string? ServiceAlias { get; set; }
+
+    /// <summary>状态: 1=启用, 0=停用</summary>
+    public int Status { get; set; } = 1;
 }
