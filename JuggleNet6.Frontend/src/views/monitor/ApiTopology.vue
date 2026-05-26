@@ -14,16 +14,22 @@
         <VueFlow v-model:nodes="vfNodes" v-model:edges="vfEdges" :default-viewport="{ x: 0, y: 0, zoom: 1 }" :min-zoom="0.2" :max-zoom="2" fit-view-on-init>
           <Background :variant="'dots'" :gap="20" :size="1" :color="'#ddd'" />
           <template #node-custom="{ data }">
-            <div :class="['topo-node', 'topo-' + data.status]" @click="selectHost(data)">
-              <div class="topo-node-title">{{ data.label }}</div>
-              <div class="topo-node-count">{{ data.apiCount }} 个接口 | 调用 {{ data.totalCalls }} 次</div>
+            <div :class="['topo-node', 'topo-' + data.status, data.nodeType === 'db' ? 'topo-db' : '']" @click="selectHost(data)">
+              <div class="topo-node-title">🗄️ {{ data.label }}</div>
+              <div class="topo-node-count" v-if="data.nodeType === 'db'">
+                {{ data.dbType }} | 调用 {{ data.totalCalls }} 次
+              </div>
+              <div class="topo-node-count" v-else>
+                {{ data.apiCount }} 个接口 | 调用 {{ data.totalCalls }} 次
+              </div>
             </div>
           </template>
         </VueFlow>
       </div>
-      <div v-if="selectedHost" style="width:360px;border:1px solid #e0e0e0;border-radius:8px;padding:12px;overflow-y:auto">
+      <div v-if="selectedHost" style="width:380px;border:1px solid #e0e0e0;border-radius:8px;padding:12px;overflow-y:auto">
         <h4 style="margin:0 0 4px">{{ selectedHost }}</h4>
         <div style="font-size:12px;color:#888;margin-bottom:8px">
+          <el-tag size="small" :type="selectedNodeType === 'db' ? 'warning' : 'info'" style="margin-right:8px">{{ selectedNodeType === 'db' ? '数据库' : 'API节点' }}</el-tag>
           总调用 {{ selectedStats?.totalCalls || 0 }} 次 |
           成功 {{ selectedStats?.totalSuccess || 0 }} |
           失败 {{ selectedStats?.totalFail || 0 }}
@@ -31,20 +37,31 @@
             {{ selectedStats?.status === 'offline' ? '离线' : selectedStats?.status === 'warning' ? '告警' : '正常' }}
           </el-tag>
         </div>
-        <div v-for="api in selectedApis" :key="api.id" style="padding:8px;margin-bottom:4px;border:1px solid #eee;border-radius:4px">
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <el-tag :type="api.status === 1 ? 'success' : 'danger'" size="small">{{ api.status === 1 ? '启用' : '停用' }}</el-tag>
-            <el-tag size="small">{{ api.requestType }}</el-tag>
-            <span style="font-weight:500">{{ api.methodName }}</span>
+        <!-- API节点：显示接口列表 -->
+        <template v-if="selectedNodeType === 'api'">
+          <div v-for="api in selectedApis" :key="api.id" style="padding:8px;margin-bottom:4px;border:1px solid #eee;border-radius:4px">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <el-tag :type="api.status === 1 ? 'success' : 'danger'" size="small">{{ api.status === 1 ? '启用' : '停用' }}</el-tag>
+              <el-tag size="small">{{ api.requestType }}</el-tag>
+              <span style="font-weight:500">{{ api.methodName }}</span>
+            </div>
+            <div style="font-size:12px;color:#888;margin-top:2px">{{ api.url }}</div>
+            <div style="font-size:11px;margin-top:2px">
+              调用 <b>{{ api.callCount || 0 }}</b> 次 |
+              成功 <b style="color:#52c41a">{{ api.successCount || 0 }}</b> |
+              失败 <b style="color:#ff4d4f">{{ api.failCount || 0 }}</b>
+            </div>
           </div>
-          <div style="font-size:12px;color:#888;margin-top:2px">{{ api.url }}</div>
-          <div style="font-size:11px;margin-top:2px">
-            调用 <b>{{ api.callCount || 0 }}</b> 次 |
-            成功 <b style="color:#52c41a">{{ api.successCount || 0 }}</b> |
-            失败 <b style="color:#ff4d4f">{{ api.failCount || 0 }}</b>
+          <el-empty v-if="selectedApis.length === 0" description="该节点无接口" />
+        </template>
+        <!-- 数据库节点：显示DB调用统计 -->
+        <template v-if="selectedNodeType === 'db'">
+          <div style="padding:8px;background:#fafafa;border-radius:4px">
+            <p><b>数据库名：</b>{{ selectedStats?.dbName }}</p>
+            <p><b>类型：</b>{{ selectedStats?.dbType }}</p>
+            <p><b>地址：</b>{{ selectedStats?.dbHost }}</p>
           </div>
-        </div>
-        <el-empty v-if="selectedApis.length === 0" description="该节点无接口" />
+        </template>
       </div>
     </div>
   </div>
@@ -62,6 +79,7 @@ const loading = ref(false)
 const selectedHost = ref('')
 const selectedStats = ref<any>(null)
 const selectedApis = ref<any[]>([])
+const selectedNodeType = ref('')
 const vfNodes = ref<any[]>([])
 const vfEdges = ref<any[]>([])
 const allNodes = ref<any[]>([])
@@ -82,7 +100,7 @@ async function loadData() {
         id: n.id,
         type: 'custom',
         position: { x: (i % 4) * 240, y: Math.floor(i / 4) * 140 },
-        data: { label: n.label, apiCount: n.apiCount, status: n.status, hostId: n.id, apis: n.apis || [], totalCalls: n.totalCalls || 0, totalSuccess: n.totalSuccess || 0, totalFail: n.totalFail || 0 }
+        data: { label: n.label, apiCount: n.apiCount, status: n.status, hostId: n.id, apis: n.apis || [], totalCalls: n.totalCalls || 0, totalSuccess: n.totalSuccess || 0, totalFail: n.totalFail || 0, nodeType: n.nodeType || 'api', dbName: n.dbName, dbType: n.dbType, dbHost: n.dbHost }
       }))
       vfEdges.value = (res.data.edges || []).map((e: any, i: number) => {
         const color = statusColor(e.status || 'online')
@@ -106,6 +124,7 @@ function selectHost(data: any) {
   selectedHost.value = data.hostId
   selectedStats.value = data
   selectedApis.value = data.apis || []
+  selectedNodeType.value = data.nodeType || 'api'
 }
 </script>
 
