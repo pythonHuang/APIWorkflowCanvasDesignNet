@@ -468,15 +468,25 @@ function commitEdit() {
   }
 }
 
-function onCellInput(e:Event, r:number, c:number) {
-  const text = (e.target as HTMLElement).innerText || ''
-  const key=`${r},${c}`, existing=cells.value[key]||{}
-  cells.value[key]={...existing, value: text}
-  if (selR.value===r && selC.value===c) cellValue.value = text
+function onCellInput(_e:Event, _r:number, _c:number) {
+  // 不立即更新cells数据，避免Vue重渲染导致光标跳动
+  // 失焦时通过onCellBlur自动保存
 }
-function onCellBlur(_r:number, _c:number) { commitEdit() }
+function onCellBlur(_r:number, _c:number) {
+  // 从DOM读取实际文本，保存到cells
+  if (selR.value<0||selC.value<0) return
+  const td = document.querySelector(`td[data-r="${selR.value}"][data-c="${selC.value}"]`)
+  if (!td) return
+  const text = td.textContent || ''
+  const key=`${selR.value},${selC.value}`, existing=cells.value[key]||{}
+  if (existing.value !== text) {
+    cells.value[key]={...existing, value: text}
+    cellValue.value = text
+  }
+}
 function onCellDelete(r:number, c:number) {
-  const key=`${r},${c}`; cells.value[key] = { value: '' }
+  const key=`${r},${c}`, existing=cells.value[key]||{}
+  cells.value[key]={...existing, value: ''}
   if (selR.value===r && selC.value===c) cellValue.value = ''
 }
 
