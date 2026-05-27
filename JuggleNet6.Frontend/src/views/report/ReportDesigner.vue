@@ -70,7 +70,8 @@
           <span style="font-size:11px;color:#888;margin-left:4px">Ctrl多选</span>
         </div>
         <div class="grid-wrapper" @scroll="onGridScroll">
-          <table class="rpt-grid">
+          <div class="rpt-page" :style="{ width: pageWidth + 'px', minHeight: pageHeight + 'px' }">
+            <table class="rpt-grid">
             <colgroup>
               <col class="row-header-col" />
               <col v-for="c in maxCols" :key="c" :style="{ width: (colWidths[c-1]||100)+'px' }" />
@@ -114,6 +115,10 @@
               </tr>
             </tbody>
           </table>
+          <div class="page-break" v-if="showPageBreak" :style="{ top: pageHeight + 'px' }">
+            <span class="page-break-label">—— 分页线 ——</span>
+          </div>
+          </div>
         </div>
       </div>
       <div class="right-panel">
@@ -275,6 +280,15 @@ const previewValues = ref<Record<string,any>>({})
 
 const canMerge = computed(() => selectedCells.value.length >= 2)
 const hasSelection = computed(() => selR.value >= 0 && selC.value >= 0)
+
+const pageSizes: Record<string, [number, number]> = { A4: [794, 1123], A3: [1123, 1587], Letter: [816, 1056], Legal: [816, 1344] }
+const pageWidth = computed(() => pageOrientation.value === 'landscape' ? (pageSizes[pageSize.value]||pageSizes.A4)[1] : (pageSizes[pageSize.value]||pageSizes.A4)[0])
+const pageHeight = computed(() => pageOrientation.value === 'landscape' ? (pageSizes[pageSize.value]||pageSizes.A4)[0] : (pageSizes[pageSize.value]||pageSizes.A4)[1])
+const showPageBreak = computed(() => {
+  let totalH = 0
+  for (let r=0; r<maxRows.value; r++) totalH += typeof rowHeights.value[r]==='string' ? 25 : (Number(rowHeights.value[r])||25)
+  return totalH > pageHeight.value
+})
 
 onMounted(() => {
   document.addEventListener('keydown', (e) => { if (e.key==='Control') ctrlDown.value = true })
@@ -606,8 +620,11 @@ function colLetter(n:number):string { return String.fromCharCode(65+n) }
 .right-panel{width:210px;border-left:1px solid #ddd;padding:8px;overflow-y:auto;background:#fff;flex-shrink:0}
 .field-item{padding:4px 8px;margin-bottom:2px;background:#e6f7ff;border-radius:4px;cursor:grab;font-size:12px}
 .field-item:hover{background:#bae7ff}
-.grid-wrapper{flex:1;overflow:auto;padding:8px;background:#e8e8e8}
-.rpt-grid{border-collapse:collapse;background:#fff;font-size:12px;table-layout:fixed}
+.grid-wrapper{flex:1;overflow:auto;padding:16px;background:#818181;display:flex;justify-content:center}
+.rpt-page{background:#fff;box-shadow:0 2px 12px rgba(0,0,0,0.3);position:relative;padding-bottom:0}
+.page-break{position:absolute;left:0;right:0;border-top:2px dashed #ff4d4f;text-align:center;pointer-events:none}
+.page-break-label{font-size:10px;color:#ff4d4f;background:#818181;padding:0 8px;position:relative;top:-8px}
+.rpt-grid{border-collapse:collapse;background:#fff;font-size:12px;table-layout:fixed;width:100%}
 .row-header-col{width:36px}
 .corner-cell{width:36px;height:22px;background:#f0f0f0;border-right:1px solid #d9d9d9;border-bottom:1px solid #d9d9d9;position:sticky;top:0;left:0;z-index:3}
 .col-header{background:#f0f0f0;border-right:1px solid #d9d9d9;border-bottom:1px solid #d9d9d9;text-align:center;font-size:10px;color:#666;height:22px;position:sticky;top:0;z-index:2;cursor:pointer;user-select:none;position:relative}
