@@ -73,6 +73,8 @@
           <el-button size="small" @click="insertCol(-1)">←列</el-button>
           <el-button size="small" @click="insertCol(1)">→列</el-button>
           <el-button size="small" @click="deleteCol">删列</el-button>
+          <el-button size="small" :disabled="!canUndo" @click="undo" title="Ctrl+Z">↩</el-button>
+          <el-button size="small" :disabled="!canRedo" @click="redo" title="Ctrl+Y">↪</el-button>
           <span style="font-size:11px;color:#888;margin-left:4px">Ctrl多选</span>
         </div>
         <div class="grid-wrapper" @scroll="onGridScroll">
@@ -287,6 +289,43 @@ const previewValues = ref<Record<string,any>>({})
 const canMerge = computed(() => selectedCells.value.length >= 2)
 const hasSelection = computed(() => selR.value >= 0 && selC.value >= 0)
 
+// 撤销/重做
+const MAX_HISTORY = 50
+const undoStack = ref<string[]>([])
+const redoStack = ref<string[]>([])
+const canUndo = computed(() => undoStack.value.length > 0)
+const canRedo = computed(() => redoStack.value.length > 0)
+
+function pushHistory() {
+  const snap = JSON.stringify({ cells: cells.value, rows: rowHeights.value, cols: colWidths.value, maxR: maxRows.value, maxC: maxCols.value })
+  undoStack.value.push(snap)
+  if (undoStack.value.length > MAX_HISTORY) undoStack.value.shift()
+  redoStack.value = []
+}
+
+function undo() {
+  if (!canUndo.value) return
+  redoStack.value.push(JSON.stringify({ cells: cells.value, rows: rowHeights.value, cols: colWidths.value, maxR: maxRows.value, maxC: maxCols.value }))
+  restoreState(undoStack.value.pop()!)
+}
+
+function redo() {
+  if (!canRedo.value) return
+  undoStack.value.push(JSON.stringify({ cells: cells.value, rows: rowHeights.value, cols: colWidths.value, maxR: maxRows.value, maxC: maxCols.value }))
+  restoreState(redoStack.value.pop()!)
+}
+
+function restoreState(snap: string) {
+  try {
+    const s = JSON.parse(snap)
+    cells.value = s.cells || {}
+    rowHeights.value = s.rows || []
+    colWidths.value = s.cols || []
+    maxRows.value = s.maxR || 10
+    maxCols.value = s.maxC || 6
+  } catch {}
+}
+
 const pageSizes: Record<string, [number, number]> = { A4: [794, 1123], A3: [1123, 1587], Letter: [816, 1056], Legal: [816, 1344] }
 const pageWidth = computed(() => pageOrientation.value === 'landscape' ? (pageSizes[pageSize.value]||pageSizes.A4)[1] : (pageSizes[pageSize.value]||pageSizes.A4)[0])
 const pageHeight = computed(() => pageOrientation.value === 'landscape' ? (pageSizes[pageSize.value]||pageSizes.A4)[0] : (pageSizes[pageSize.value]||pageSizes.A4)[1])
@@ -297,7 +336,11 @@ const showPageBreak = computed(() => {
 })
 
 onMounted(() => {
-  document.addEventListener('keydown', (e) => { if (e.key==='Control') ctrlDown.value = true })
+  document.addEventListener('keydown', (e) => {
+    if (e.key==='Control') ctrlDown.value = true
+    if (e.ctrlKey && e.key==='z') { e.preventDefault(); undo() }
+    if (e.ctrlKey && e.key==='y') { e.preventDefault(); redo() }
+  })
   document.addEventListener('keyup', (e) => { if (e.key==='Control') ctrlDown.value = false })
   loadDvList(); loadDsList(); loadFlowList(); loadApiList()
   if (rptId>0) loadReport()
@@ -484,6 +527,7 @@ function commitEdit() {
   if (selR.value<0||selC.value<0) return
   const key=`${selR.value},${selC.value}`, existing=cells.value[key]||{}
   if (existing.value !== cellValue.value) {
+    pushHistory()
     cells.value[key]={...existing, value: cellValue.value}
   }
 }
@@ -500,11 +544,13 @@ function onCellBlur(_r:number, _c:number) {
   const text = td.textContent || ''
   const key=`${selR.value},${selC.value}`, existing=cells.value[key]||{}
   if (existing.value !== text) {
+    pushHistory()
     cells.value[key]={...existing, value: text}
     cellValue.value = text
   }
 }
 function onCellDelete(r:number, c:number) {
+  pushHistory()
   const key=`${r},${c}`, existing=cells.value[key]||{}
   cells.value[key]={...existing, value: ''}
   if (selR.value===r && selC.value===c) cellValue.value = ''
@@ -542,6 +588,7 @@ function updateCellValue() {
 function updateRowType() { if (selR.value>=0) rowHeights.value[selR.value]=rowType.value==='title'?35:rowType.value==='header'?28:rowType.value==='data'?'data':25 }
 
 function applyStyle(prop:string, val?:any) {
+  pushHistory()
   forEachSelected((r,c) => {
     const key=`${r},${c}`, existing=cells.value[key]||{value:''}
     const style = existing.style||{}
@@ -553,10 +600,11 @@ function applyStyle(prop:string, val?:any) {
   })
 }
 
-function toggleBorder() { forEachSelected((r,c)=>{const key=`${r},${c}`,ex=cells.value[key]||{value:''},s=ex.style||{}; s.border=s.border===false?true:false; cells.value[key]={...ex,style:s}}) }
+function toggleBorder() { pushHistory(); forEachSelected((r,c)=>{const key=`${r},${c}`,ex=cells.value[key]||{value:''},s=ex.style||{}; s.border=s.border===false?true:false; cells.value[key]={...ex,style:s}}) }
 
 function mergeSelected() {
   if (selectedCells.value.length<2) return
+  pushHistory()
   const rs = selectedCells.value.map(([r])=>r), cs = selectedCells.value.map(([,c])=>c)
   const r1=Math.min(...rs), r2=Math.max(...rs), c1=Math.min(...cs), c2=Math.max(...cs)
   const base = cells.value[`${r1},${c1}`]||{value:''}
@@ -565,6 +613,7 @@ function mergeSelected() {
 
 function splitSelected() {
   if (selR.value<0||selC.value<0) return
+  pushHistory()
   const key=`${selR.value},${selC.value}`, c=cells.value[key]
   if (c) { delete c.colspan; delete c.rowspan; cells.value[key]={...c} }
 }
@@ -587,6 +636,7 @@ function autoFitCol(c:number) { colWidths.value[c]=200 }
 function autoFitRow(r:number) { rowHeights.value[r]=30 }
 
 function insertRow(dir: number) {
+  pushHistory()
   if (selR.value<0) selR.value = maxRows.value - 1
   const r = dir<0 ? selR.value : selR.value + 1
   const newCells: Record<string,any> = {}
@@ -603,6 +653,7 @@ function insertRow(dir: number) {
 
 function deleteRow() {
   if (selR.value<0 || maxRows.value<=1) return
+  pushHistory()
   const r = selR.value
   const newCells: Record<string,any> = {}
   for (const [key, cell] of Object.entries(cells.value)) {
@@ -618,6 +669,7 @@ function deleteRow() {
 }
 
 function insertCol(dir: number) {
+  pushHistory()
   if (selC.value<0) selC.value = maxCols.value - 1
   const c = dir<0 ? selC.value : selC.value + 1
   const newCells: Record<string,any> = {}
@@ -634,6 +686,7 @@ function insertCol(dir: number) {
 
 function deleteCol() {
   if (selC.value<0 || maxCols.value<=1) return
+  pushHistory()
   const c = selC.value
   const newCells: Record<string,any> = {}
   for (const [key, cell] of Object.entries(cells.value)) {
