@@ -67,6 +67,12 @@
           <el-button size="small" @click="toggleBorder">边框</el-button>
           <el-button size="small" @click="mergeSelected" :disabled="!canMerge">合并</el-button>
           <el-button size="small" @click="splitSelected">拆分</el-button>
+          <el-button size="small" @click="insertRow(-1)">↑行</el-button>
+          <el-button size="small" @click="insertRow(1)">↓行</el-button>
+          <el-button size="small" @click="deleteRow">删行</el-button>
+          <el-button size="small" @click="insertCol(-1)">←列</el-button>
+          <el-button size="small" @click="insertCol(1)">→列</el-button>
+          <el-button size="small" @click="deleteCol">删列</el-button>
           <span style="font-size:11px;color:#888;margin-left:4px">Ctrl多选</span>
         </div>
         <div class="grid-wrapper" @scroll="onGridScroll">
@@ -579,6 +585,67 @@ function startRowResize(e:MouseEvent, ri:number) {
 
 function autoFitCol(c:number) { colWidths.value[c]=200 }
 function autoFitRow(r:number) { rowHeights.value[r]=30 }
+
+function insertRow(dir: number) {
+  if (selR.value<0) selR.value = maxRows.value - 1
+  const r = dir<0 ? selR.value : selR.value + 1
+  const newCells: Record<string,any> = {}
+  for (const [key, cell] of Object.entries(cells.value)) {
+    const [cr, cc] = key.split(',').map(Number)
+    if (cr >= r) newCells[`${cr+1},${cc}`] = cell
+    else newCells[key] = cell
+  }
+  cells.value = newCells
+  rowHeights.value.splice(r, 0, 25)
+  maxRows.value++
+  if (dir > 0) selR.value++
+}
+
+function deleteRow() {
+  if (selR.value<0 || maxRows.value<=1) return
+  const r = selR.value
+  const newCells: Record<string,any> = {}
+  for (const [key, cell] of Object.entries(cells.value)) {
+    const [cr, cc] = key.split(',').map(Number)
+    if (cr > r) newCells[`${cr-1},${cc}`] = cell
+    else if (cr < r) newCells[key] = cell
+    // cr === r: drop
+  }
+  cells.value = newCells
+  rowHeights.value.splice(r, 1)
+  maxRows.value--
+  selR.value = Math.min(selR.value, maxRows.value - 1)
+}
+
+function insertCol(dir: number) {
+  if (selC.value<0) selC.value = maxCols.value - 1
+  const c = dir<0 ? selC.value : selC.value + 1
+  const newCells: Record<string,any> = {}
+  for (const [key, cell] of Object.entries(cells.value)) {
+    const [cr, cc] = key.split(',').map(Number)
+    if (cc >= c) newCells[`${cr},${cc+1}`] = cell
+    else newCells[key] = cell
+  }
+  cells.value = newCells
+  colWidths.value.splice(c, 0, 100)
+  maxCols.value++
+  if (dir > 0) selC.value++
+}
+
+function deleteCol() {
+  if (selC.value<0 || maxCols.value<=1) return
+  const c = selC.value
+  const newCells: Record<string,any> = {}
+  for (const [key, cell] of Object.entries(cells.value)) {
+    const [cr, cc] = key.split(',').map(Number)
+    if (cc > c) newCells[`${cr},${cc-1}`] = cell
+    else if (cc < c) newCells[key] = cell
+  }
+  cells.value = newCells
+  colWidths.value.splice(c, 1)
+  maxCols.value--
+  selC.value = Math.min(selC.value, maxCols.value - 1)
+}
 
 function onCellDrop(e:DragEvent, r:number, c:number) { const field = e.dataTransfer?.getData('field'); if (field) { const key=`${r},${c}`,ex=cells.value[key]||{}; cells.value[key]={...ex,value:field} } }
 
