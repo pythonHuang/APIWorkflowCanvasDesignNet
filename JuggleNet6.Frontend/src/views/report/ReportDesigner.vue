@@ -102,8 +102,12 @@
                   :colspan="cellSpan(r-1,c-1).colspan"
                   :rowspan="cellSpan(r-1,c-1).rowspan"
                   :style="getCellStyle(r-1,c-1)"
+                  contenteditable="true"
                   @mousedown="onCellMouseDown($event, r-1, c-1)"
-                  @dblclick="onCellDoubleClick(r-1,c-1)"
+                  @input="onCellInput($event, r-1, c-1)"
+                  @blur="onCellBlur(r-1, c-1)"
+                  @keydown.delete="onCellDelete(r-1, c-1)"
+                  @keydown.backspace="onCellDelete(r-1, c-1)"
                   @dragover.prevent
                   @drop="onCellDrop($event, r-1, c-1)"
                 >{{ getCellText(r-1,c-1) }}</td>
@@ -464,7 +468,17 @@ function commitEdit() {
   }
 }
 
-function onCellDoubleClick(r:number,c:number) { selR.value=r; selC.value=c; cellValue.value=getCell(r,c)?.value||'' }
+function onCellInput(e:Event, r:number, c:number) {
+  const text = (e.target as HTMLElement).innerText || ''
+  const key=`${r},${c}`, existing=cells.value[key]||{}
+  cells.value[key]={...existing, value: text}
+  if (selR.value===r && selC.value===c) cellValue.value = text
+}
+function onCellBlur(_r:number, _c:number) { commitEdit() }
+function onCellDelete(r:number, c:number) {
+  const key=`${r},${c}`; cells.value[key] = { value: '' }
+  if (selR.value===r && selC.value===c) cellValue.value = ''
+}
 
 function selectRow(r:number, _e:MouseEvent) {
   commitEdit()
