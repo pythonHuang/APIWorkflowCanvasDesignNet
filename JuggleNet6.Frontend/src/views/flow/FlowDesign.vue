@@ -507,10 +507,11 @@
 
           <!-- ASSIGN 节点属性 -->
           <template v-if="selectedNode.elementType === 'ASSIGN'">
-            <div class="prop-tip">赋值节点：将常量或变量赋值给目标变量。</div>
+            <div class="prop-tip">赋值节点：将常量或变量赋值给目标变量。来源支持 <b>表达式</b>：算术 + - * / %、字符串拼接/切片/replace、toString 格式化，详见 <a @click="assignHelpVisible = true" style="color:#1890ff;cursor:pointer;text-decoration:underline">语法帮助</a>。</div>
             <div class="prop-section-title">
               赋值规则
-              <el-button size="small" icon="Plus" link @click="addAssignRule" style="margin-left:auto">添加</el-button>
+              <el-button size="small" icon="QuestionFilled" link title="表达式语法帮助" @click="assignHelpVisible = true" style="margin-left:auto" />
+              <el-button size="small" icon="Plus" link @click="addAssignRule">添加</el-button>
             </div>
             <div v-for="(rule, i) in selectedNode.assignRules" :key="i" class="assign-rule">
               <div class="assign-row">
@@ -521,9 +522,13 @@
                   <el-option value="INPUT" label="入参" />
                   <el-option value="SUB_PROPERTY" label="子对象" />
                   <el-option value="ARRAY_OPERATION" label="数组操作" />
+                  <el-option value="EXPRESSION" label="表达式" />
                 </el-select>
                 <template v-if="rule.sourceType === 'CONSTANT'">
                   <el-input v-model="rule.source" placeholder="常量值" size="small" style="flex:1" />
+                </template>
+                <template v-else-if="rule.sourceType === 'EXPRESSION'">
+                  <el-input v-model="rule.source" placeholder="如: (env_price - env_cost) * env_qty 或 input_phone[..3] + '****'" size="small" style="flex:1" />
                 </template>
                 <template v-else-if="rule.sourceType === 'VARIABLE'">
                   <el-select v-model="rule.source" placeholder="选择变量" size="small" style="flex:1">
@@ -737,7 +742,7 @@
 
           <!-- CONDITION 节点属性 -->
           <template v-if="selectedNode.elementType === 'CONDITION'">
-            <div class="prop-tip">条件节点：每个分支连接到不同的目标节点（通过画布连线），在此设置判断表达式。支持 && || 括号、子属性和数组取值，详见 <a @click="conditionHelpVisible = true" style="color:#1890ff;cursor:pointer;text-decoration:underline">语法帮助</a>。</div>
+            <div class="prop-tip">条件节点：每个分支连接到不同的目标节点（通过画布连线），在此设置判断表达式。支持 && || 括号、+ - * / % 算术运算、子属性/数组取值、字符串拼接切片与 toString 格式化，详见 <a @click="conditionHelpVisible = true" style="color:#1890ff;cursor:pointer;text-decoration:underline">语法帮助</a>。</div>
             <div class="prop-section-title">
               条件分支
               <el-button size="small" icon="QuestionFilled" link title="条件语法帮助" @click="conditionHelpVisible = true" style="margin-left:auto" />
@@ -1166,8 +1171,64 @@ env_order.amount &gt;= 100</pre>
 input_list[0].name == '张三'            <span class="ch-note">// 第 1 个元素</span>
 env_orders[2].status == 'paid'          <span class="ch-note">// 第 3 个元素</span>
 input_list.length &gt; 2 &amp;&amp; input_list[2].price &lt; env_limit</pre>
+        <div class="ch-section">六、算术运算：+ - * / % （可先运算再比较）</div>
+        <pre>env_a + env_b &gt; 10
+(env_price - env_cost) * env_qty &gt;= 100
+env_total % 2 == 0                     <span class="ch-note">// 取余</span>
+env_amount / 3 &gt; 1
+env_a * 2 &lt; env_b + 5</pre>
+        <div class="ch-note">+ 两边都是数字时做加法，否则做字符串拼接；* 会把数字字符串转为数字计算。</div>
+        <div class="ch-section">七、字符串操作：拼接 / 切片 / 替换</div>
+        <pre>env_name + '_done' == 'abc_done'       <span class="ch-note">// + 拼接</span>
+input_phone[..3] == '138'               <span class="ch-note">// 前 3 位（[..5] 取前 5 位）</span>
+env_code[2..5] == 'abc'                 <span class="ch-note">// 第 2~5 位（不含第 5 位）</span>
+env_code[2..] == 'cde'                  <span class="ch-note">// 从第 2 位到最后</span>
+env_name.replace('a','b') == 'xby'      <span class="ch-note">// 替换</span>
+env_code[0] == 'A'                      <span class="ch-note">// 取单个字符</span></pre>
+        <div class="ch-section">八、toString 格式化：数字 / 日期</div>
+        <pre>env_amount.toString('#.0##') == '12.35'              <span class="ch-note">// 数字格式 #.0##</span>
+env_amount.toString('0.00') == '12.35'                <span class="ch-note">// 保留 2 位小数</span>
+env_time.toString('yyyy-MM-dd HH:mm:ss') == '2024-01-01 10:00:00'   <span class="ch-note">// 日期格式</span>
+env_time.toString('yyyy-MM-dd') == '2024-01-01'</pre>
         <div class="ch-note" style="margin-top:8px">
-          变量命名：input_ 流程入参、output_ 流程出参、env_ 中间变量、_loop_item 循环项。表达式不写比较符时按真值判断（如 env_flag 等价于 env_flag == true）。
+          变量命名：input_ 流程入参、output_ 流程出参、env_ 中间变量、_loop_item 循环项。表达式不写比较符时按真值判断（如 env_flag 等价于 env_flag == true）。字符串请用引号包裹（如 'paid'），未加引号的词若不存在同名变量也会按字符串处理。
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 赋值节点：表达式语法帮助弹窗 -->
+    <el-dialog v-model="assignHelpVisible" title="❓ 赋值节点表达式语法帮助" width="660px" append-to-body>
+      <div class="condition-help">
+        <div class="ch-section">一、算术运算：+ - * / % （支持括号）</div>
+        <pre>(env_price - env_cost) * env_qty          <span class="ch-note">// 利润 × 数量</span>
+env_total * 1.1                            <span class="ch-note">// 加 10%</span>
+env_total % 3                              <span class="ch-note">// 取余</span>
+100 * 2 + 5                                <span class="ch-note">// 纯字面量运算</span>
+env_a + env_b * 2                          <span class="ch-note">// 先乘除后加减</span></pre>
+        <div class="ch-note">+ 两边都是数字时做加法，否则做字符串拼接；* 会把数字字符串转为数字计算。</div>
+        <div class="ch-section">二、字符串操作：拼接 / 切片 / 替换</div>
+        <pre>env_name + '_done'                         <span class="ch-note">// 拼接</span>
+'订单号: ' + input_id                       <span class="ch-note">// 拼接常量与变量</span>
+input_phone[..3]                           <span class="ch-note">// 前 3 位</span>
+env_code[2..5]                             <span class="ch-note">// 第 2~5 位（不含第 5 位）</span>
+env_code[2..]                              <span class="ch-note">// 从第 2 位到最后</span>
+env_name.replace('a','b')                  <span class="ch-note">// 替换</span>
+input_name[0]                              <span class="ch-note">// 取单个字符</span></pre>
+        <div class="ch-section">三、toString 格式化：数字 / 日期</div>
+        <pre>env_amount.toString('#.0##')               <span class="ch-note">// 数字格式 #.0##</span>
+env_amount.toString('0.00')                 <span class="ch-note">// 保留 2 位小数</span>
+env_time.toString('yyyy-MM-dd HH:mm:ss')    <span class="ch-note">// 日期格式</span>
+env_time.toString('yyyy-MM-dd')             <span class="ch-note">// 只取日期部分</span></pre>
+        <div class="ch-section">四、变量取值：子属性 / 数组</div>
+        <pre>input_user.name                            <span class="ch-note">// 子属性</span>
+input_list.length                          <span class="ch-note">// 数组长度</span>
+input_list[0].name                         <span class="ch-note">// 数组第 1 个元素</span>
+input_list[..3]                            <span class="ch-note">// 数组前 3 个（切片）</span></pre>
+        <div class="ch-section">五、比较与逻辑（结果为 true/false）</div>
+        <pre>env_score >= 60 &amp;&amp; env_score &lt; 90
+(env_a + env_b) > env_c || env_flag</pre>
+        <div class="ch-note" style="margin-top:8px">
+          变量命名：input_ 流程入参、output_ 流程出参、env_ 中间变量、_loop_item 循环项。字符串请用引号包裹（如 'paid'）；未加引号的词若不存在同名变量也会按字符串处理。表达式结果赋值给"→ 赋值给"选择的目标变量。
         </div>
       </div>
     </el-dialog>
@@ -1413,6 +1474,8 @@ const nodeDebugDetailStr = ref('')
 
 // 条件表达式语法帮助弹窗
 const conditionHelpVisible = ref(false)
+// 赋值节点表达式语法帮助弹窗
+const assignHelpVisible = ref(false)
 
 // ====== 数据库节点辅助（表/视图/存储过程 + 测试SQL） ======
 const dbHelpVisible = ref(false)

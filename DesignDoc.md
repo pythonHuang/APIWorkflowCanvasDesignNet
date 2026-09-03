@@ -615,19 +615,27 @@ public class HttpApiCaller
 
 ### 3.5 条件表达式求值
 
-由 `Juggle.Domain/Engine/ConditionExpressionEvaluator.cs` 递归下降解析，支持的语法：
+由 `Juggle.Domain/Engine/ExpressionEvaluator.cs` 递归下降解析（条件节点与赋值节点 EXPRESSION 共用），支持的语法：
 
 | 类型 | 语法 | 示例 |
 |--------|---------|------|
 | 比较运算 | == != > < >= <= | `env_score >= 60`、`input_name == '张三'` |
 | 逻辑运算 | &&（且） \|\|（或） !（非） 括号 | `env_score >= 60 && env_score < 90`、`(env_a > 1 \|\| env_b > 2) && env_c == 'yes'` |
+| 算术运算 | + - * / %（先运算再比较） | `(env_price - env_cost) * env_qty >= 100`、`env_total % 2 == 0` |
 | 变量对变量 | 左右两边都可以是变量 | `env_total >= input_min` |
 | 子属性 | 变量.属性 | `input_user.name == '张三'` |
-| 数组长度 | 变量.length | `input_list.length > 0` |
+| 数组/字符串长度 | 变量.length | `input_list.length > 0`、`env_name.length == 6` |
 | 数组元素 | 变量[索引]（从 0 开始），可继续取子属性 | `input_list[0].name == '张三'` |
+| 字符串拼接 | +（两边都是数字时做加法，否则拼接） | `env_name + '_done' == 'abc_done'` |
+| 字符串切片 | [..5] 前5位 / [2..5] 第2~5位 / [2..] 到最后 | `input_phone[..3] == '138'`、`env_code[2..5] == 'abc'` |
+| 字符串替换 | replace('旧','新') | `env_name.replace('a','b') == 'xbcdef'` |
+| 数字格式化 | toString("#.0##") / toString("0.00") | `env_amount.toString('0.00') == '12.35'` |
+| 日期格式化 | toString("yyyy-MM-dd HH:mm:ss") | `env_time.toString('yyyy-MM-dd') == '2024-01-02'` |
 | 裸变量 | 无比较符时按真值判断 | `env_flag` 等价于 `env_flag == true` |
 
-字面量支持：数字、单/双引号字符串、`true`/`false`/`null`。解析失败或变量缺失时表达式返回 false（走默认分支）。
+规则：字面量支持数字、单/双引号字符串、`true`/`false`/`null`；`*` 会把数字字符串转为数字计算；未加引号且不存在的标识符按字符串字面量处理（兼容 `env_status == paid` 旧写法）；除零返回 null；解析失败返回 false（条件节点走默认分支）。
+
+赋值节点（ASSIGN）来源类型新增 `EXPRESSION`：规则 source 填表达式，求值结果写入目标变量（支持以上全部语法，无比较符时返回计算结果值）。
 
 ### 3.6 数据库节点 SQL 设计辅助
 

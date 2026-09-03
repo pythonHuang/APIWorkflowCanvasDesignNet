@@ -161,7 +161,7 @@ public class AssignRule
     [JsonPropertyName("source")]
     public string Source { get; set; } = "";
 
-    /// <summary>VARIABLE / CONSTANT / STATIC（全局静态变量）/ INPUT / SUB_PROPERTY</summary>
+    /// <summary>VARIABLE / CONSTANT / STATIC（全局静态变量）/ INPUT / SUB_PROPERTY / ARRAY_OPERATION / EXPRESSION</summary>
     [JsonPropertyName("sourceType")]
     public string SourceType { get; set; } = "VARIABLE";
 

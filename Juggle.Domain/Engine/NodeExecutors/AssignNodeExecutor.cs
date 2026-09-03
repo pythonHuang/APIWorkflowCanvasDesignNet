@@ -11,6 +11,7 @@ namespace Juggle.Domain.Engine.NodeExecutors;
 ///   INPUT           — 流程入参
 ///   SUB_PROPERTY    — 对象的子属性
 ///   ARRAY_OPERATION — 数组操作（分页/取第n个/插入/转JSON）
+///   EXPRESSION      — 表达式（算术 + - * / %、字符串拼接/切片/replace、toString 格式化，见 ExpressionEvaluator）
 /// targetType 支持：
 ///   VARIABLE        — 流程变量
 ///   STATIC          — 写入全局静态变量（执行后持久化）
@@ -43,6 +44,10 @@ public class AssignNodeExecutor : INodeExecutor
                         break;
                     case "ARRAY_OPERATION":
                         value = ApplyArrayOperation(context.GetVariable(rule.Source), rule.ArrayOpType, rule.ArrayOpPageNum, rule.ArrayOpPageSize, rule.ArrayOpIndex);
+                        break;
+                    case "EXPRESSION":
+                        // 表达式来源：算术 / 字符串操作 / 格式化等（见 ExpressionEvaluator）
+                        value = ExpressionEvaluator.EvaluateValue(rule.Source, context);
                         break;
                     default:
                         // VARIABLE / INPUT
