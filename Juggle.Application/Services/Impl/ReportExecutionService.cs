@@ -18,6 +18,13 @@ public class ReportExecutionService
 
     /// <summary>执行数据源的SQL查询返回DataTable</summary>
     public async Task<DataTable> ExecuteQuery(long dataSourceId, string sql, Dictionary<string, object?>? parameters = null)
+        => (await ExecuteQueryInternal(dataSourceId, sql, parameters, 0)).Table;
+
+    /// <summary>执行查询并限制返回行数（SQL 测试用），通过 Total 返回总行数</summary>
+    public async Task<(DataTable Table, int Total)> ExecuteQueryLimitedAsync(long dataSourceId, string sql, Dictionary<string, object?>? parameters, int maxRows)
+        => await ExecuteQueryInternal(dataSourceId, sql, parameters, maxRows);
+
+    private async Task<(DataTable Table, int Total)> ExecuteQueryInternal(long dataSourceId, string sql, Dictionary<string, object?>? parameters, int maxRows)
     {
         ValidateSql(sql);
         var ds = await _db.DataSources.FindAsync(dataSourceId)
@@ -34,8 +41,25 @@ public class ReportExecutionService
 
         var dt = new DataTable();
         using var reader = cmd.ExecuteReader();
-        dt.Load(reader);
-        return dt;
+        if (maxRows <= 0)
+        {
+            dt.Load(reader);
+            return (dt, dt.Rows.Count);
+        }
+
+        // 受限读取：统计总行数，只保留前 maxRows 行
+        for (int i = 0; i < reader.FieldCount; i++)
+            dt.Columns.Add(reader.GetName(i), reader.GetFieldType(i) ?? typeof(object));
+        var values = new object[reader.FieldCount];
+        var total = 0;
+        while (reader.Read())
+        {
+            total++;
+            if (dt.Rows.Count >= maxRows) continue;
+            reader.GetValues(values);
+            dt.Rows.Add(values.Select(v => v == DBNull.Value ? (object?)null : v).ToArray());
+        }
+        return (dt, total);
     }
 
     /// <summary>SQL 安全校验：禁止写操作关键字</summary>

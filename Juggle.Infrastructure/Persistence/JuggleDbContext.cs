@@ -104,6 +104,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.DataSourceId).HasColumnName("data_source_id");
             e.Property(p => p.Sql).HasColumnName("sql");
             e.Property(p => p.Parameters).HasColumnName("parameters");
+            e.Property(p => p.ColumnMapping).HasColumnName("column_mapping");
             e.Property(p => p.Remark).HasColumnName("remark");
             e.Property(p => p.Status).HasColumnName("status");
         });

@@ -30,8 +30,8 @@
       <el-pagination v-model:current-page="page" :page-size="20" layout="prev,next" :total="total" @change="loadData" style="margin-top:12px;justify-content:flex-end" />
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="isEdit?'编辑视图':'添加视图'" width="650px">
-      <el-form :model="form" label-width="80px">
+    <el-dialog v-model="dialogVisible" :title="isEdit?'编辑视图':'添加视图'" width="820px">
+      <el-form :model="form" label-width="100px">
         <el-form-item label="分组"><el-input v-model="form.groupName" placeholder="如: 销售报表" /></el-form-item>
         <el-form-item label="名称"><el-input v-model="form.name" placeholder="如: 月度销售汇总" /></el-form-item>
         <el-form-item label="数据源">
@@ -40,7 +40,13 @@
           </el-select>
         </el-form-item>
         <el-form-item label="SQL">
-          <el-input v-model="form.sql" type="textarea" :rows="5" placeholder="SELECT * FROM t WHERE name LIKE @keyword" />
+          <div style="width:100%">
+            <div style="display:flex;gap:6px;margin-bottom:6px">
+              <el-button size="small" icon="Collection" @click="openDbBrowser">表/视图/存储过程</el-button>
+              <el-button size="small" icon="VideoPlay" type="primary" plain @click="openTest">测试 SQL</el-button>
+            </div>
+            <el-input v-model="form.sql" type="textarea" :rows="5" placeholder="SELECT * FROM t WHERE name LIKE @keyword" class="code-editor" />
+          </div>
         </el-form-item>
         <el-form-item label="参数">
           <div v-for="(p, i) in paramList" :key="i" style="display:flex;gap:8px;margin-bottom:4px">
@@ -51,6 +57,16 @@
             <el-button size="small" type="danger" link @click="paramList.splice(i,1)">删</el-button>
           </div>
           <el-button size="small" @click="paramList.push({name:'',type:'string',label:'',default:''})">+添加参数</el-button>
+        </el-form-item>
+        <el-form-item label="字段中文对照">
+          <div style="width:100%">
+            <div style="display:flex;gap:6px;margin-bottom:6px">
+              <el-button size="small" icon="MagicStick" @click="generateMapping" :loading="mappingLoading">自动生成</el-button>
+              <span style="font-size:12px;color:#909399;line-height:24px">格式：字段=中文注释，一行一条</span>
+            </div>
+            <el-input v-model="form.columnMapping" type="textarea" :rows="5"
+              placeholder="自动生成：单表取字段中文注释（无注释则 字段=字段），其它 SQL 按实际查询列生成 字段=字段" class="code-editor" />
+          </div>
         </el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="2" /></el-form-item>
       </el-form>
@@ -73,6 +89,16 @@
       </el-table>
       <div style="margin-top:8px;color:#888;font-size:12px">共 {{ previewRows.length }} 条</div>
     </el-dialog>
+
+    <!-- 数据库对象浏览（辅助生成 SQL） -->
+    <DbObjectBrowser v-model:visible="dbBrowserVisible"
+      :data-source-name="selectedDs()?.dataSourceName || ''"
+      :data-source-type="selectedDs()?.dataSourceType || 'mysql'"
+      @generated="sql => form.sql = sql" />
+
+    <!-- 测试 SQL -->
+    <SqlTestDialog v-model:visible="testVisible"
+      :data-source-id="form.dataSourceId" :sql="form.sql" :params="paramList" />
   </div>
 </template>
 
@@ -80,6 +106,9 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
+import DbObjectBrowser from '../../components/DbObjectBrowser.vue'
+import SqlTestDialog from '../../components/SqlTestDialog.vue'
+import { generateColumnMapping } from '../../utils/dbAssist'
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
@@ -89,7 +118,7 @@ const keyword = ref('')
 const groupFilter = ref('')
 const dialogVisible = ref(false)
 const isEdit = ref(false)
-const form = ref<any>({ groupName:'', name:'', dataSourceId:'', sql:'', parameters:'', remark:'', status:1 })
+const form = ref<any>({ groupName:'', name:'', dataSourceId:'', sql:'', parameters:'', columnMapping:'', remark:'', status:1 })
 const dsList = ref<any[]>([])
 const paramList = ref<any[]>([])
 const previewVisible = ref(false)
@@ -98,8 +127,15 @@ const previewColumns = ref<string[]>([])
 const previewParams = ref<any[]>([])
 const previewValues = ref<Record<string,any>>({})
 const previewId = ref(0)
+const dbBrowserVisible = ref(false)
+const testVisible = ref(false)
+const mappingLoading = ref(false)
 
 const groups = computed(() => [...new Set(tableData.value.map(r=>r.groupName).filter(Boolean))])
+
+function selectedDs(): any {
+  return dsList.value.find((d: any) => d.id === form.value.dataSourceId)
+}
 
 onMounted(async () => {
   const [dsRes]: any[] = await Promise.all([request.get('/system/datasource/list')])
@@ -118,7 +154,7 @@ async function loadData() {
 
 function openAdd() {
   isEdit.value = false
-  form.value = { groupName:'', name:'', dataSourceId:'', sql:'', parameters:'', remark:'', status:1 }
+  form.value = { groupName:'', name:'', dataSourceId:'', sql:'', parameters:'', columnMapping:'', remark:'', status:1 }
   paramList.value = []
   dialogVisible.value = true
 }
@@ -153,9 +189,36 @@ async function doPreview() {
   previewColumns.value = res.data?.columns || []
   previewRows.value = res.data?.rows || []
 }
+
+function openDbBrowser() {
+  if (!selectedDs()) { ElMessage.warning('请先选择数据源'); return }
+  dbBrowserVisible.value = true
+}
+function openTest() {
+  if (!form.value.dataSourceId) { ElMessage.warning('请先选择数据源'); return }
+  if (!form.value.sql?.trim()) { ElMessage.warning('请先编写 SQL'); return }
+  testVisible.value = true
+}
+
+async function generateMapping() {
+  const ds = selectedDs()
+  if (!ds) { ElMessage.warning('请先选择数据源'); return }
+  if (!form.value.sql?.trim()) { ElMessage.warning('请先编写 SQL'); return }
+  mappingLoading.value = true
+  try {
+    const params: Record<string, any> = {}
+    for (const p of paramList.value) params[p.name] = p.default || ''
+    const lines = await generateColumnMapping({
+      dataSourceId: ds.id, dataSourceName: ds.dataSourceName, sql: form.value.sql, params
+    })
+    form.value.columnMapping = lines.join('\n')
+    ElMessage.success(`已生成 ${lines.length} 条字段对照`)
+  } catch { ElMessage.error('生成失败，请检查 SQL 与数据源') } finally { mappingLoading.value = false }
+}
 </script>
 
 <style scoped>
 .page-container { padding:16px;height:100%;display:flex;flex-direction:column;box-sizing:border-box }
 .page-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-shrink:0 }
+.code-editor :deep(textarea) { font-family: Consolas, Monaco, 'Courier New', monospace; font-size: 12px; }
 </style>

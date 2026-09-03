@@ -164,7 +164,7 @@
     </el-dialog>
 
     <!-- 添加数据集对话框 -->
-    <el-dialog v-model="dsDialogVisible" title="添加数据集" width="520px">
+    <el-dialog v-model="dsDialogVisible" title="添加数据集" width="740px">
       <el-form :model="dsForm" label-width="90px" size="small">
         <el-form-item label="数据集名称"><el-input v-model="dsForm.name" placeholder="如: 主数据、子表1" /></el-form-item>
         <el-form-item label="数据来源">
@@ -184,7 +184,25 @@
           <el-form-item label="数据源">
             <el-select v-model="dsForm.dataSourceId" style="width:100%" filterable><el-option v-for="ds_ in dsList" :key="ds_.id" :label="`${ds_.dataSourceName} (${ds_.dataSourceType})`" :value="ds_.id" /></el-select>
           </el-form-item>
-          <el-form-item label="SQL"><el-input v-model="dsForm.customSql" type="textarea" :rows="3" placeholder="SELECT * FROM t WHERE id=@id" /></el-form-item>
+          <el-form-item label="SQL">
+            <div style="width:100%">
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <el-button size="small" icon="Collection" @click="openDsDbBrowser('add')">表/视图/存储过程</el-button>
+                <el-button size="small" icon="VideoPlay" type="primary" plain @click="openDsTest('add')">测试 SQL</el-button>
+              </div>
+              <el-input v-model="dsForm.customSql" type="textarea" :rows="3" placeholder="SELECT * FROM t WHERE id=@id" class="code-editor" />
+            </div>
+          </el-form-item>
+          <el-form-item label="字段中文对照">
+            <div style="width:100%">
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <el-button size="small" icon="MagicStick" @click="generateDsMapping('add')" :loading="mappingLoading">自动生成</el-button>
+                <span style="font-size:12px;color:#909399;line-height:24px">格式：字段=中文注释，一行一条</span>
+              </div>
+              <el-input v-model="dsForm.columnMapping" type="textarea" :rows="3"
+                placeholder="自动生成：单表取字段中文注释（无注释则 字段=字段），其它 SQL 按实际查询列生成 字段=字段" class="code-editor" />
+            </div>
+          </el-form-item>
         </template>
         <template v-else-if="dsForm.sourceType==='flow'">
           <el-form-item label="选择流程">
@@ -201,7 +219,7 @@
     </el-dialog>
 
     <!-- 编辑数据集对话框 -->
-    <el-dialog v-model="dsEditVisible" title="编辑数据集" width="520px">
+    <el-dialog v-model="dsEditVisible" title="编辑数据集" width="740px">
       <el-form :model="dsEditForm" label-width="90px" size="small">
         <el-form-item label="名称"><el-input v-model="dsEditForm.name" /></el-form-item>
         <el-form-item label="数据来源"><el-input :value="sourceLabel(dsEditForm.sourceType)" disabled /></el-form-item>
@@ -210,7 +228,25 @@
         </template>
         <template v-if="dsEditForm.sourceType==='sql'">
           <el-form-item label="数据源"><el-select v-model="dsEditForm.dataSourceId" style="width:100%"><el-option v-for="ds_ in dsList" :key="ds_.id" :label="ds_.dataSourceName" :value="ds_.id" /></el-select></el-form-item>
-          <el-form-item label="SQL"><el-input v-model="dsEditForm.customSql" type="textarea" :rows="4" /></el-form-item>
+          <el-form-item label="SQL">
+            <div style="width:100%">
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <el-button size="small" icon="Collection" @click="openDsDbBrowser('edit')">表/视图/存储过程</el-button>
+                <el-button size="small" icon="VideoPlay" type="primary" plain @click="openDsTest('edit')">测试 SQL</el-button>
+              </div>
+              <el-input v-model="dsEditForm.customSql" type="textarea" :rows="4" class="code-editor" />
+            </div>
+          </el-form-item>
+          <el-form-item label="字段中文对照">
+            <div style="width:100%">
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <el-button size="small" icon="MagicStick" @click="generateDsMapping('edit')" :loading="mappingLoading">自动生成</el-button>
+                <span style="font-size:12px;color:#909399;line-height:24px">格式：字段=中文注释，一行一条</span>
+              </div>
+              <el-input v-model="dsEditForm.columnMapping" type="textarea" :rows="3"
+                placeholder="自动生成：单表取字段中文注释（无注释则 字段=字段），其它 SQL 按实际查询列生成 字段=字段" class="code-editor" />
+            </div>
+          </el-form-item>
         </template>
         <template v-if="dsEditForm.sourceType==='flow'">
           <el-form-item label="选择流程"><el-select v-model="dsEditForm.sourceRef" style="width:100%"><el-option v-for="f in flowList" :key="f.flowKey" :label="f.flowName||f.flowKey" :value="f.flowKey" /></el-select></el-form-item>
@@ -242,6 +278,16 @@
       </div>
       <div v-if="previewHtml" v-html="previewHtml" style="border:1px solid #eee;padding:16px;overflow:auto;max-height:65vh"></div>
     </el-dialog>
+
+    <!-- 自定义SQL数据集：数据库对象浏览 -->
+    <DbObjectBrowser v-model:visible="dsDbBrowserVisible"
+      :data-source-name="activeSqlDs()?.dataSourceName || ''"
+      :data-source-type="activeSqlDs()?.dataSourceType || 'mysql'"
+      @generated="onDsSqlGenerated" />
+
+    <!-- 自定义SQL数据集：测试 SQL -->
+    <SqlTestDialog v-model:visible="dsTestVisible"
+      :data-source-id="activeSqlForm.dataSourceId" :sql="activeSqlForm.customSql" :params="[]" />
   </div>
 </template>
 
@@ -251,6 +297,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Edit, View, Refresh, Loading, Close } from '@element-plus/icons-vue'
 import request from '../../utils/request'
+import DbObjectBrowser from '../../components/DbObjectBrowser.vue'
+import SqlTestDialog from '../../components/SqlTestDialog.vue'
+import { generateColumnMapping } from '../../utils/dbAssist'
 
 const route = useRoute()
 const router = useRouter()
@@ -260,11 +309,16 @@ const form = reactive({ id:0, name:'', groupName:'', sourceType:'dataview', sour
 const dvList = ref<any[]>([]), dsList = ref<any[]>([]), flowList = ref<any[]>([]), apiList = ref<any[]>([])
 
 // 数据集管理
-interface Dataset { id: string; name: string; sourceType: string; sourceRef: string; customSql: string; dataSourceId: string|number; fields: string[]; expanded: boolean; loading: boolean }
+interface Dataset { id: string; name: string; sourceType: string; sourceRef: string; customSql: string; dataSourceId: string|number; columnMapping?: string; fields: string[]; expanded: boolean; loading: boolean }
 const datasets = ref<Dataset[]>([])
 const dsDialogVisible = ref(false), dsEditVisible = ref(false), dsEditIdx = ref(-1)
-const dsForm = reactive({ name:'', sourceType:'dataview', sourceRef:'', customSql:'', dataSourceId:'' })
-const dsEditForm = reactive({ name:'', sourceType:'', sourceRef:'', customSql:'', dataSourceId:'' })
+const dsForm = reactive({ name:'', sourceType:'dataview', sourceRef:'', customSql:'', dataSourceId:'', columnMapping:'' })
+const dsEditForm = reactive({ name:'', sourceType:'', sourceRef:'', customSql:'', dataSourceId:'', columnMapping:'' })
+// 自定义SQL数据集辅助：数据库对象浏览 / 测试 SQL
+const dsDbBrowserVisible = ref(false)
+const dsTestVisible = ref(false)
+const dsSqlMode = ref<'add' | 'edit'>('add')
+const mappingLoading = ref(false)
 const dsPreviewVisible = ref(false), dsPreviewLoading = ref(false)
 const dsPreviewCols = ref<string[]>([]), dsPreviewRows = ref<any[]>([])
 const maxRows = ref(10), maxCols = ref(6)
@@ -366,16 +420,57 @@ function flowSelChange() {}
 function openDsEdit(di: number) {
   dsEditIdx.value = di
   const ds = datasets.value[di]
-  Object.assign(dsEditForm, { name: ds.name, sourceType: ds.sourceType, sourceRef: ds.sourceRef, customSql: ds.customSql, dataSourceId: ds.dataSourceId })
+  Object.assign(dsEditForm, { name: ds.name, sourceType: ds.sourceType, sourceRef: ds.sourceRef, customSql: ds.customSql, dataSourceId: ds.dataSourceId, columnMapping: ds.columnMapping || '' })
   dsEditVisible.value = true
 }
 
 function saveDsEdit() {
   if (dsEditIdx.value < 0) return
   const ds = datasets.value[dsEditIdx.value]
-  ds.name = dsEditForm.name; ds.sourceRef = dsEditForm.sourceRef; ds.customSql = dsEditForm.customSql; ds.dataSourceId = dsEditForm.dataSourceId
+  ds.name = dsEditForm.name; ds.sourceRef = dsEditForm.sourceRef; ds.customSql = dsEditForm.customSql
+  ds.dataSourceId = dsEditForm.dataSourceId; ds.columnMapping = dsEditForm.columnMapping
   dsEditVisible.value = false
   loadDsFields(dsEditIdx.value)
+}
+
+// ===== 自定义SQL数据集辅助（表/视图/存储过程 + 测试 + 字段中文对照） =====
+
+/** 当前操作的 SQL 表单（添加 or 编辑） */
+const activeSqlForm = computed(() => dsSqlMode.value === 'add' ? dsForm : dsEditForm)
+
+function activeSqlDs(): any {
+  const id = activeSqlForm.value.dataSourceId
+  return dsList.value.find((d: any) => d.id === id)
+}
+
+function openDsDbBrowser(mode: 'add' | 'edit') {
+  if (!activeSqlDs()) { ElMessage.warning('请先选择数据源'); return }
+  dsSqlMode.value = mode
+  dsDbBrowserVisible.value = true
+}
+function openDsTest(mode: 'add' | 'edit') {
+  if (!activeSqlForm.value.dataSourceId) { ElMessage.warning('请先选择数据源'); return }
+  if (!activeSqlForm.value.customSql?.trim()) { ElMessage.warning('请先编写 SQL'); return }
+  dsSqlMode.value = mode
+  dsTestVisible.value = true
+}
+function onDsSqlGenerated(sql: string) {
+  activeSqlForm.value.customSql = sql
+}
+
+async function generateDsMapping(mode: 'add' | 'edit') {
+  const f = mode === 'add' ? dsForm : dsEditForm
+  const ds = activeSqlDs()
+  if (!ds) { ElMessage.warning('请先选择数据源'); return }
+  if (!f.customSql?.trim()) { ElMessage.warning('请先编写 SQL'); return }
+  mappingLoading.value = true
+  try {
+    const lines = await generateColumnMapping({
+      dataSourceId: ds.id, dataSourceName: ds.dataSourceName, sql: f.customSql
+    })
+    f.columnMapping = lines.join('\n')
+    ElMessage.success(`已生成 ${lines.length} 条字段对照`)
+  } catch { ElMessage.error('生成失败，请检查 SQL 与数据源') } finally { mappingLoading.value = false }
 }
 
 async function previewDsData(di: number) {
@@ -397,13 +492,13 @@ async function previewDsData(di: number) {
 }
 
 function openDsDialog() {
-  Object.assign(dsForm, { name:'', sourceType:'dataview', sourceRef:'', customSql:'', dataSourceId:'' })
+  Object.assign(dsForm, { name:'', sourceType:'dataview', sourceRef:'', customSql:'', dataSourceId:'', columnMapping:'' })
   dsDialogVisible.value = true
 }
 
 function addDataset() {
   if (!dsForm.name) { dsForm.name = dsForm.sourceType + '_' + (datasets.value.length+1) }
-  const ds: Dataset = { id: Date.now().toString(), name: dsForm.name, sourceType: dsForm.sourceType, sourceRef: dsForm.sourceRef, customSql: dsForm.customSql, dataSourceId: dsForm.dataSourceId, fields: [], expanded: true, loading: false }
+  const ds: Dataset = { id: Date.now().toString(), name: dsForm.name, sourceType: dsForm.sourceType, sourceRef: dsForm.sourceRef, customSql: dsForm.customSql, dataSourceId: dsForm.dataSourceId, columnMapping: dsForm.columnMapping, fields: [], expanded: true, loading: false }
   datasets.value.push(ds)
   dsDialogVisible.value = false
   loadDsFields(datasets.value.length - 1)
@@ -732,6 +827,7 @@ function colLetter(n:number):string { return String.fromCharCode(65+n) }
 
 <style scoped>
 .designer-container{height:100vh;display:flex;flex-direction:column;background:#f5f5f5}
+.code-editor :deep(textarea) { font-family: Consolas, Monaco, 'Courier New', monospace; font-size: 12px; }
 .toolbar{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:#001529;color:#fff;flex-shrink:0}
 .designer-body{flex:1;display:flex;overflow:hidden}
 .left-panel{width:220px;border-right:1px solid #ddd;padding:6px;overflow-y:auto;background:#fff;flex-shrink:0}

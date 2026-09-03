@@ -244,6 +244,8 @@ using (var scope = app.Services.CreateScope())
         // 报表模块表
         try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_data_view(id INTEGER PRIMARY KEY AUTOINCREMENT, group_name TEXT, name TEXT, data_source_id INTEGER, sql TEXT, parameters TEXT, remark TEXT, status INTEGER DEFAULT 1, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
         try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_report(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, group_name TEXT, source_type TEXT, source_ref TEXT, custom_sql TEXT, params_config TEXT, layout_json TEXT, status INTEGER DEFAULT 1, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
+        // 数据视图字段中文对照
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_data_view ADD COLUMN column_mapping TEXT DEFAULT NULL;"); } catch { }
         // 补建参数位置字段
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_parameter ADD COLUMN param_position TEXT DEFAULT NULL;"); } catch { }
     }
