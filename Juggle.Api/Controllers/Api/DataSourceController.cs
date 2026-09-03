@@ -121,4 +121,49 @@ public class DataSourceController : ControllerBase
             Total = total, PageNum = req.PageNum, PageSize = req.PageSize, Records = records
         });
     }
+
+    /// <summary>获取数据源的表/视图/存储过程列表（辅助 SQL 设计）</summary>
+    [HttpPost("metadata")]
+    public async Task<ApiResult> Metadata([FromBody] DataSourceMetadataRequest req)
+    {
+        try
+        {
+            var result = await _dsService.GetDbObjectsAsync(req.DataSourceName);
+            return ApiResult.Success(result);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>获取表/视图的字段列表（辅助生成 SQL）</summary>
+    [HttpPost("columns")]
+    public async Task<ApiResult> Columns([FromBody] DataSourceColumnsRequest req)
+    {
+        try
+        {
+            var result = await _dsService.GetColumnsAsync(req.DataSourceName, req.TableName);
+            return ApiResult.Success(result);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>单独测试 SQL：QUERY 返回前 100 行预览，UPDATE 事务执行后回滚</summary>
+    [HttpPost("test-sql")]
+    public async Task<ApiResult> TestSql([FromBody] DataSourceTestSqlRequest req)
+    {
+        try
+        {
+            var result = await _dsService.TestSqlAsync(req.DataSourceName, req.Sql, req.OperationType, req.Params);
+            return ApiResult.Success(result);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult.Fail(ex.Message);
+        }
+    }
 }

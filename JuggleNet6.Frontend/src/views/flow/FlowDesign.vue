@@ -669,7 +669,7 @@
 
           <!-- MYSQL/DB 节点属性 -->
           <template v-if="selectedNode.elementType === 'MYSQL'">
-            <div class="prop-tip">数据库节点：执行 SQL，支持 <code>${varName}</code> 模板变量。</div>
+            <div class="prop-tip">数据库节点：执行 SQL，支持 <code>${varName}</code> 模板变量。可浏览数据源表结构辅助生成 SQL、单独测试 SQL，详见 <a @click="dbHelpVisible = true" style="color:#1890ff;cursor:pointer;text-decoration:underline">语法帮助</a>。</div>
             <div class="prop-item">
               <label>数据源</label>
               <el-select v-model="selectedNode.mysqlConfig.dataSourceName" placeholder="选择数据源" size="small" style="width:100%">
@@ -693,6 +693,11 @@
                 height="160px"
                 style="border-radius:4px;overflow:hidden"
               />
+              <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+                <el-button size="small" icon="Collection" @click="openDbObjectDialog">表/视图/存储过程</el-button>
+                <el-button size="small" icon="VideoPlay" type="primary" plain @click="openDbTestDialog">测试 SQL</el-button>
+                <el-button size="small" icon="QuestionFilled" link title="SQL 编写帮助" @click="dbHelpVisible = true" style="margin-left:auto" />
+              </div>
             </div>
             <div class="prop-item" v-if="selectedNode.mysqlConfig.operationType === 'QUERY'">
               <label>查询结果写入</label>
@@ -1166,6 +1171,92 @@ input_list.length &gt; 2 &amp;&amp; input_list[2].price &lt; env_limit</pre>
         </div>
       </div>
     </el-dialog>
+
+    <!-- 数据库节点：SQL 编写帮助弹窗 -->
+    <el-dialog v-model="dbHelpVisible" title="❓ 数据库节点 SQL 编写帮助" width="660px" append-to-body>
+      <div class="condition-help">
+        <div class="ch-section">一、模板变量 ${varName}</div>
+        <pre>SELECT * FROM orders WHERE id = ${input_id}
+UPDATE users SET status = 'paid' WHERE id = ${input_id}</pre>
+        <div class="ch-note">SQL 中的 ${varName} 会在执行前替换为对应变量值。变量命名：input_ 入参、output_ 出参、env_ 中间变量、_loop_item 循环项。</div>
+        <div class="ch-section">二、查询（QUERY）示例</div>
+        <pre>SELECT id, name, amount, created_at
+FROM orders
+WHERE status = 'paid' AND amount &gt;= ${input_min}
+ORDER BY created_at DESC
+LIMIT 100</pre>
+        <div class="ch-note">查询结果（行数组）写入"查询结果写入"选择的变量，之后可用 env_xxx[0].name、env_xxx.length 等方式读取。</div>
+        <div class="ch-section">三、更改（UPDATE）示例</div>
+        <pre>UPDATE orders SET status = 'shipped' WHERE id = ${input_id}
+INSERT INTO logs(msg, created_at) VALUES ('${input_msg}', NOW())</pre>
+        <div class="ch-note">影响行数写入"影响行数写入"选择的变量。</div>
+        <div class="ch-section">四、辅助工具</div>
+        <div class="ch-note">
+          <b>表/视图/存储过程</b>：列出所选数据源中的对象，点击可查看字段，一键生成 SELECT / CALL 语句（自动带 100 行限制）。<br>
+          <b>测试 SQL</b>：不运行流程、单独执行 SQL 验证正确性。查询返回前 100 行预览；更改操作在事务中执行并自动回滚，不影响真实数据。${varName} 可通过测试参数（JSON）提供值。
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 数据库节点：表/视图/存储过程浏览 -->
+    <el-dialog v-model="dbObjectDialogVisible" title="🗄 数据库对象（辅助生成 SQL）" width="760px" append-to-body>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1;min-width:0">
+          <el-radio-group v-model="dbObjectTab" size="small" @change="onDbObjectTabChange">
+            <el-radio-button value="tables">表 ({{ dbTables.length }})</el-radio-button>
+            <el-radio-button value="views">视图 ({{ dbViews.length }})</el-radio-button>
+            <el-radio-button value="procedures">存储过程 ({{ dbProcedures.length }})</el-radio-button>
+          </el-radio-group>
+          <el-input v-model="dbObjectSearch" placeholder="搜索名称" size="small" clearable style="margin:8px 0" />
+          <div class="db-object-list" v-loading="dbObjectLoading">
+            <div v-for="obj in filteredDbObjects" :key="obj.name" class="db-object-item"
+              :class="{ active: dbSelectedObject === obj.name }" @click="selectDbObject(obj.name)">
+              <span class="db-object-name">{{ obj.name }}</span>
+              <el-button size="small" link type="primary" @click.stop="generateSqlFromObject(obj)">生成SQL</el-button>
+            </div>
+            <el-empty v-if="!dbObjectLoading && filteredDbObjects.length === 0" description="暂无对象" :image-size="40" />
+          </div>
+        </div>
+        <div style="width:290px;flex-shrink:0">
+          <div class="prop-section-title" style="margin-top:0">
+            字段列表
+            <span v-if="dbSelectedObject" style="font-size:11px;color:#909399;font-weight:normal;margin-left:6px">{{ dbSelectedObject }}</span>
+          </div>
+          <div class="db-column-list" v-loading="dbColumnLoading">
+            <div v-for="c in dbColumns" :key="c.name" class="db-column-item">
+              <span>{{ c.name }}</span><span style="color:#909399;font-size:11px">{{ c.dataType }}</span>
+            </div>
+            <el-empty v-if="!dbColumnLoading && dbColumns.length === 0"
+              :description="dbObjectTab === 'procedures' ? '存储过程无字段列表，可直接生成 CALL 语句' : '点击左侧表/视图查看字段'"
+              :image-size="40" />
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 数据库节点：测试 SQL -->
+    <el-dialog v-model="dbTestDialogVisible" title="🧪 测试 SQL" width="720px" append-to-body>
+      <div class="prop-item">
+        <label>测试参数（SQL 中 ${varName} 的变量值，JSON 格式）</label>
+        <el-input v-model="dbTestParams" type="textarea" :rows="3" placeholder='{"input_id": 1, "input_name": "张三"}' />
+      </div>
+      <el-button size="small" type="primary" icon="VideoPlay" :loading="dbTestLoading" @click="runDbTest">执行测试</el-button>
+      <div v-if="dbTestError" class="db-test-error">
+        ❌ {{ dbTestError }}
+      </div>
+      <div v-if="dbTestResult" class="db-test-result">
+        <div v-if="dbTestResult.operationType === 'QUERY'" style="margin-bottom:6px">
+          ✅ 查询成功，共 {{ dbTestResult.rowCount }} 行{{ dbTestResult.truncated ? '（仅显示前 100 行）' : '' }}
+        </div>
+        <div v-else style="margin-bottom:6px">✅ 执行成功，影响 {{ dbTestResult.affectedRows }} 行（事务已回滚，未实际修改数据）</div>
+        <el-table v-if="dbTestResult.operationType === 'QUERY' && dbTestResult.rows.length" :data="dbTestResult.rows" size="small" border max-height="280">
+          <el-table-column v-for="c in dbTestResult.columns" :key="c" :prop="c" :label="c" min-width="110" show-overflow-tooltip />
+        </el-table>
+        <div v-if="dbTestResult.operationType === 'QUERY' && dbTestResult.rows.length === 0" style="color:#909399;font-size:12px">
+          （无返回行）
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -1322,6 +1413,141 @@ const nodeDebugDetailStr = ref('')
 
 // 条件表达式语法帮助弹窗
 const conditionHelpVisible = ref(false)
+
+// ====== 数据库节点辅助（表/视图/存储过程 + 测试SQL） ======
+const dbHelpVisible = ref(false)
+const dbObjectDialogVisible = ref(false)
+const dbObjectLoading = ref(false)
+const dbObjectTab = ref('tables')
+const dbObjectSearch = ref('')
+const dbTables = ref<any[]>([])
+const dbViews = ref<any[]>([])
+const dbProcedures = ref<any[]>([])
+const dbSelectedObject = ref('')
+const dbColumns = ref<any[]>([])
+const dbColumnLoading = ref(false)
+const dbTestDialogVisible = ref(false)
+const dbTestParams = ref('{}')
+const dbTestLoading = ref(false)
+const dbTestResult = ref<any>(null)
+const dbTestError = ref('')
+
+const filteredDbObjects = computed(() => {
+  const list = dbObjectTab.value === 'tables' ? dbTables.value : dbObjectTab.value === 'views' ? dbViews.value : dbProcedures.value
+  const kw = dbObjectSearch.value.trim().toLowerCase()
+  return kw ? list.filter((o: any) => (o.name || '').toLowerCase().includes(kw)) : list
+})
+
+/** 当前节点所选数据源的类型（用于生成方言相关的 SQL） */
+function selectedDsType(): string {
+  const name = selectedNode.value?.mysqlConfig?.dataSourceName
+  return (dataSources.value.find((d: any) => d.dataSourceName === name)?.dataSourceType || 'mysql').toLowerCase()
+}
+
+async function openDbObjectDialog() {
+  const name = selectedNode.value?.mysqlConfig?.dataSourceName
+  if (!name) { ElMessage.warning('请先选择数据源'); return }
+  dbObjectDialogVisible.value = true
+  dbObjectLoading.value = true
+  dbTables.value = []; dbViews.value = []; dbProcedures.value = []
+  dbColumns.value = []; dbSelectedObject.value = ''; dbObjectSearch.value = ''
+  try {
+    const res: any = await request.post('/system/datasource/metadata', { dataSourceName: name })
+    dbTables.value = res.data?.tables || []
+    dbViews.value = res.data?.views || []
+    dbProcedures.value = res.data?.procedures || []
+  } catch { /* 拦截器已提示 */ } finally { dbObjectLoading.value = false }
+}
+
+function onDbObjectTabChange() {
+  dbSelectedObject.value = ''
+  dbColumns.value = []
+}
+
+async function selectDbObject(name: string) {
+  dbSelectedObject.value = name
+  if (dbObjectTab.value === 'procedures') return
+  await loadDbColumns(name)
+}
+
+async function loadDbColumns(name: string) {
+  dbColumnLoading.value = true
+  dbColumns.value = []
+  try {
+    const res: any = await request.post('/system/datasource/columns', {
+      dataSourceName: selectedNode.value.mysqlConfig.dataSourceName, tableName: name
+    })
+    dbColumns.value = res.data || []
+  } catch { dbColumns.value = [] } finally { dbColumnLoading.value = false }
+}
+
+async function generateSqlFromObject(obj: any) {
+  const node = selectedNode.value
+  if (!node?.mysqlConfig) return
+  dbSelectedObject.value = obj.name
+  // 表/视图先取字段（保证生成含字段列表的 SELECT），存储过程直接生成调用语句
+  if (dbObjectTab.value !== 'procedures') await loadDbColumns(obj.name)
+  const dsType = selectedDsType()
+  let sql = ''
+  if (dbObjectTab.value === 'procedures') {
+    sql = dsType === 'sqlserver' || dsType === 'mssql' ? `EXEC ${obj.name}`
+      : dsType === 'oracle' || dsType === 'dm' ? `BEGIN ${obj.name}(); END;`
+      : `CALL ${obj.name}()`
+  } else {
+    const cols = dbColumns.value.length ? dbColumns.value.map((c: any) => c.name).join(', ') : '*'
+    const from = `FROM ${obj.name}`
+    if (dsType === 'sqlserver' || dsType === 'mssql') sql = `SELECT TOP 100 ${cols}\n${from}`
+    else if (dsType === 'oracle' || dsType === 'dm') sql = `SELECT ${cols}\n${from}\nWHERE ROWNUM <= 100`
+    else sql = `SELECT ${cols}\n${from}\nLIMIT 100`
+  }
+  node.mysqlConfig.sql = sql
+  dbObjectDialogVisible.value = false
+  ElMessage.success('已生成 SQL')
+}
+
+function openDbTestDialog() {
+  const node = selectedNode.value
+  if (!node?.mysqlConfig?.dataSourceName) { ElMessage.warning('请先选择数据源'); return }
+  dbTestDialogVisible.value = true
+  dbTestResult.value = null
+  dbTestError.value = ''
+  // 自动提取 SQL 中的 ${varName} 生成参数模板
+  const sql = node.mysqlConfig.sql || ''
+  const names: string[] = []
+  for (const m of sql.matchAll(/\$\{([^}]+)\}/g)) {
+    const v = m[1].trim()
+    if (v && !names.includes(v)) names.push(v)
+  }
+  const params: Record<string, string> = {}
+  names.forEach(n => { params[n] = '' })
+  dbTestParams.value = names.length ? JSON.stringify(params, null, 2) : '{}'
+}
+
+async function runDbTest() {
+  const node = selectedNode.value
+  const sql = node?.mysqlConfig?.sql
+  if (!sql?.trim()) { ElMessage.warning('请先编写 SQL'); return }
+  let params: Record<string, any> = {}
+  try { params = JSON.parse(dbTestParams.value || '{}') } catch {
+    dbTestError.value = '测试参数不是合法的 JSON'
+    dbTestResult.value = null
+    return
+  }
+  dbTestLoading.value = true
+  dbTestError.value = ''
+  dbTestResult.value = null
+  try {
+    const res: any = await request.post('/system/datasource/test-sql', {
+      dataSourceName: node.mysqlConfig.dataSourceName,
+      sql,
+      operationType: node.mysqlConfig.operationType || 'QUERY',
+      params
+    })
+    dbTestResult.value = res.data
+  } catch (e: any) {
+    dbTestError.value = e?.message || '测试失败'
+  } finally { dbTestLoading.value = false }
+}
 
 const debugResultStr = computed(() => debugResult.value ? JSON.stringify(debugResult.value, null, 2) : '')
 const debugOutputStr = computed(() => {
@@ -2578,6 +2804,17 @@ async function runDebug() {
 .condition-help .ch-section:first-child { margin-top: 0; }
 .condition-help pre { background: #f6f8fa; border: 1px solid #e4e7ed; border-radius: 6px; padding: 8px 10px; font-size: 12px; line-height: 1.9; margin: 0; overflow-x: auto; font-family: Consolas, Monaco, 'Courier New', monospace; white-space: pre; }
 .condition-help .ch-note { color: #909399; font-size: 12px; }
+.db-object-list { max-height: 380px; overflow-y: auto; border: 1px solid #e4e7ed; border-radius: 6px; }
+.db-object-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #f0f2f5; }
+.db-object-item:last-child { border-bottom: none; }
+.db-object-item:hover { background: #f5f7fa; }
+.db-object-item.active { background: #ecf5ff; }
+.db-object-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-column-list { max-height: 380px; overflow-y: auto; border: 1px solid #e4e7ed; border-radius: 6px; }
+.db-column-item { display: flex; align-items: center; justify-content: space-between; padding: 5px 10px; font-size: 12px; border-bottom: 1px solid #f0f2f5; }
+.db-column-item:last-child { border-bottom: none; }
+.db-test-error { margin-top: 10px; padding: 8px 12px; background: #fef0f0; border: 1px solid #fbc4c4; border-radius: 6px; color: #f56c6c; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+.db-test-result { margin-top: 10px; font-size: 13px; color: #67c23a; }
 
 .code-editor :deep(textarea) { font-family: 'Consolas', 'Monaco', monospace !important; font-size: 12px !important; line-height: 1.6; background: #1e1e1e !important; color: #d4d4d4 !important; }
 

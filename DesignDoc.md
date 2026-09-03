@@ -629,6 +629,18 @@ public class HttpApiCaller
 
 字面量支持：数字、单/双引号字符串、`true`/`false`/`null`。解析失败或变量缺失时表达式返回 false（走默认分支）。
 
+### 3.6 数据库节点 SQL 设计辅助
+
+流程设计器中数据库节点提供 SQL 辅助能力（后端 `DataSourceService` + `api/system/datasource` 端点）：
+
+| 接口 | 说明 |
+|--------|------|
+| `POST api/system/datasource/metadata` | 获取数据源的表/视图/存储过程列表（按 6 种数据库类型适配元数据 SQL） |
+| `POST api/system/datasource/columns` | 获取表/视图字段列表（统一用 `SELECT * FROM t WHERE 1=0` 取元数据，跨库通用） |
+| `POST api/system/datasource/test-sql` | 单独测试 SQL：QUERY 返回前 100 行预览；UPDATE 在事务中执行并回滚，不污染数据。模板变量 `${varName}` 由测试参数（JSON）提供值，未提供的替换为空字符串 |
+
+前端设计器：点击"表/视图/存储过程"浏览对象、查看字段、一键生成 SELECT（按数据源类型自动带 `LIMIT 100` / `SELECT TOP 100` / `ROWNUM <= 100`）或 CALL/EXEC 调用语句；点击"测试 SQL"弹出测试参数（自动提取 SQL 中的 `${varName}`）并展示结果或数据库错误信息。
+
 ---
 
 ## 四、前端详细设计
