@@ -615,22 +615,19 @@ public class HttpApiCaller
 
 ### 3.5 条件表达式求值
 
-支持的表达式类型：
+由 `Juggle.Domain/Engine/ConditionExpressionEvaluator.cs` 递归下降解析，支持的语法：
 
-| 操作符 | 数据类型 | 示例 |
+| 类型 | 语法 | 示例 |
 |--------|---------|------|
-| equal | 所有 | env_name=="张三" |
-| notEqual | 所有 | env_name!="张三" |
-| greaterThan | 数字/日期 | env_age>18 |
-| greaterThanOrEqual | 数字/日期 | env_age>=18 |
-| lessThan | 数字/日期 | env_age<18 |
-| lessThanOrEqual | 数字/日期 | env_age<=18 |
-| isEmpty | 字符串/集合 | string.empty(env_name) |
-| isNotEmpty | 字符串/集合 | !string.empty(env_name) |
-| contains | 字符串 | string.contains(s1,s2) |
-| notContains | 字符串 | !string.contains(s1,s2) |
+| 比较运算 | == != > < >= <= | `env_score >= 60`、`input_name == '张三'` |
+| 逻辑运算 | &&（且） \|\|（或） !（非） 括号 | `env_score >= 60 && env_score < 90`、`(env_a > 1 \|\| env_b > 2) && env_c == 'yes'` |
+| 变量对变量 | 左右两边都可以是变量 | `env_total >= input_min` |
+| 子属性 | 变量.属性 | `input_user.name == '张三'` |
+| 数组长度 | 变量.length | `input_list.length > 0` |
+| 数组元素 | 变量[索引]（从 0 开始），可继续取子属性 | `input_list[0].name == '张三'` |
+| 裸变量 | 无比较符时按真值判断 | `env_flag` 等价于 `env_flag == true` |
 
-C# 实现方案：使用 `System.Linq.Dynamic.Core` 库或手动解析 `conditionExpressions` 数组。
+字面量支持：数字、单/双引号字符串、`true`/`false`/`null`。解析失败或变量缺失时表达式返回 false（走默认分支）。
 
 ---
 

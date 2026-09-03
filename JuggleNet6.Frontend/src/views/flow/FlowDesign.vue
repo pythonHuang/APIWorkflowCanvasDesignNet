@@ -732,10 +732,11 @@
 
           <!-- CONDITION 节点属性 -->
           <template v-if="selectedNode.elementType === 'CONDITION'">
-            <div class="prop-tip">条件节点：每个分支连接到不同的目标节点（通过画布连线），在此设置判断表达式。</div>
+            <div class="prop-tip">条件节点：每个分支连接到不同的目标节点（通过画布连线），在此设置判断表达式。支持 && || 括号、子属性和数组取值，详见 <a @click="conditionHelpVisible = true" style="color:#1890ff;cursor:pointer;text-decoration:underline">语法帮助</a>。</div>
             <div class="prop-section-title">
               条件分支
-              <el-button size="small" icon="Plus" link @click="addCondition" style="margin-left:auto">添加</el-button>
+              <el-button size="small" icon="QuestionFilled" link title="条件语法帮助" @click="conditionHelpVisible = true" style="margin-left:auto" />
+              <el-button size="small" icon="Plus" link @click="addCondition">添加</el-button>
             </div>
             <div v-for="(cond, i) in selectedNode.conditions" :key="i" class="condition-item">
               <div style="display:flex;gap:4px;align-items:center;margin-bottom:4px">
@@ -748,7 +749,7 @@
               </div>
               <el-input v-if="cond.conditionType === 'CUSTOM'"
                 v-model="cond.expression"
-                placeholder="如: score >= 60 或 status == 'active'"
+                placeholder="如: env_score >= 60 && (env_score < 90 || env_flag)"
                 size="small" style="margin-bottom:4px" />
               <div style="display:flex;align-items:center;gap:4px">
                 <span style="font-size:12px;color:#666;white-space:nowrap;flex-shrink:0">跳转→</span>
@@ -1136,6 +1137,35 @@
         </el-tab-pane>
       </el-tabs>
     </el-dialog>
+
+    <!-- 条件表达式语法帮助弹窗 -->
+    <el-dialog v-model="conditionHelpVisible" title="❓ 条件表达式语法帮助" width="660px" append-to-body>
+      <div class="condition-help">
+        <div class="ch-section">一、基本比较</div>
+        <pre>env_score &gt;= 60
+input_name == '张三'        <span class="ch-note">// 字符串用单引号或双引号包裹</span>
+env_status != 'deleted'</pre>
+        <div class="ch-section">二、逻辑运算：&amp;&amp;（且） ||（或） !（非） 括号</div>
+        <pre>env_score &gt;= 60 &amp;&amp; env_score &lt; 90
+env_status == 'paid' || env_status == 'done'
+!(env_deleted)              <span class="ch-note">// 取反，等价于 env_deleted == false</span>
+(env_a &gt; 1 || env_b &gt; 2) &amp;&amp; env_c == 'yes'</pre>
+        <div class="ch-section">三、左右两边都可以是变量</div>
+        <pre>env_total &gt;= input_min
+input_a == env_b</pre>
+        <div class="ch-section">四、子属性访问</div>
+        <pre>input_user.name == '张三'
+env_order.amount &gt;= 100</pre>
+        <div class="ch-section">五、数组：长度 / 指定元素 / 元素子属性（索引从 0 开始）</div>
+        <pre>input_list.length &gt; 0                  <span class="ch-note">// 数组长度</span>
+input_list[0].name == '张三'            <span class="ch-note">// 第 1 个元素</span>
+env_orders[2].status == 'paid'          <span class="ch-note">// 第 3 个元素</span>
+input_list.length &gt; 2 &amp;&amp; input_list[2].price &lt; env_limit</pre>
+        <div class="ch-note" style="margin-top:8px">
+          变量命名：input_ 流程入参、output_ 流程出参、env_ 中间变量、_loop_item 循环项。表达式不写比较符时按真值判断（如 env_flag 等价于 env_flag == true）。
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -1289,6 +1319,9 @@ const nodeDebugDetailKey = ref('')
 const nodeDebugInputStr = ref('')
 const nodeDebugOutputStr = ref('')
 const nodeDebugDetailStr = ref('')
+
+// 条件表达式语法帮助弹窗
+const conditionHelpVisible = ref(false)
 
 const debugResultStr = computed(() => debugResult.value ? JSON.stringify(debugResult.value, null, 2) : '')
 const debugOutputStr = computed(() => {
@@ -2540,6 +2573,11 @@ async function runDebug() {
 .assign-row { display: flex; align-items: center; gap: 4px; }
 
 .condition-item { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+.condition-help { max-height: 60vh; overflow-y: auto; }
+.condition-help .ch-section { font-weight: 600; margin: 12px 0 4px; color: #303133; }
+.condition-help .ch-section:first-child { margin-top: 0; }
+.condition-help pre { background: #f6f8fa; border: 1px solid #e4e7ed; border-radius: 6px; padding: 8px 10px; font-size: 12px; line-height: 1.9; margin: 0; overflow-x: auto; font-family: Consolas, Monaco, 'Courier New', monospace; white-space: pre; }
+.condition-help .ch-note { color: #909399; font-size: 12px; }
 
 .code-editor :deep(textarea) { font-family: 'Consolas', 'Monaco', monospace !important; font-size: 12px !important; line-height: 1.6; background: #1e1e1e !important; color: #d4d4d4 !important; }
 
