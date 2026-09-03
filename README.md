@@ -103,9 +103,12 @@ docker-compose up -d
 
 ### 监控 & 测试
 - ✅ 监控仪表盘
+- ✅ **API 拓扑图**（健康检查/访问统计/DB 调用连线）
+- ✅ **告警规则 + 告警记录**
 - ✅ 执行日志（含节点级日志）
 - ✅ 流程测试用例（断言 + 批量执行）
 - ✅ Monaco Editor 代码编辑（JS / SQL 高亮 + 自动补全）
+- ✅ **报表模块**（数据视图 + 报表设计器 + 公式引擎）
 
 ### 系统管理
 - ✅ 用户管理 / 角色管理 / 菜单权限（RBAC）
@@ -133,7 +136,18 @@ docker-compose up -d
 
 ## 📋 更新日志
 
-### v1.7（最新）
+### v1.8（最新）
+
+- 📊 **报表模块** — 新增数据视图 + 报表设计器 + 公式引擎（SUM/AVG/COUNT/IF 等）；数据集管理支持 4 种数据源与字段树点击填入；A4 分页预览、撤销/重做、单元格直接编辑、行列插入删除
+- 📈 **监控模块** — API 拓扑图（健康检查/访问统计/状态红黄绿/DB 节点与连线/流程过滤）+ 告警规则 + 告警记录
+- 🧮 **表达式引擎** — 条件/赋值节点支持算术运算 + - * / %、字符串拼接/切片（[..5]/[2..5]）/replace、toString("#.0##") 数字与日期格式化；赋值节点新增 EXPRESSION 表达式来源
+- 🔀 **条件节点扩展** — 支持 && || 括号、双变量比较、子属性、数组 length/元素取值，设计器内置语法帮助弹窗
+- 🗄️ **数据库节点 SQL 辅助** — 表/视图/存储过程浏览一键生成 SQL（自动带 100 行限制）、单独测试 SQL（查询预览/更改事务回滚不污染数据）、帮助弹窗
+- 🔗 **接口直连访问** — 套件接口支持 `/open/api/{code}` 直接调用（Token 授权）+ 访问别名 `/open/api/{alias}` + 停用/启用开关 + 一键复制地址
+- 🧩 **WSDL 解析增强** — 支持 generatedXSD 地址、xsd:include/import schemaLocation 递归加载、粘贴 XSD 内容（解决内网 schemaLocation 无法访问）
+- 📚 **安装部署文档** — 新增 Docker/Linux/Windows/Nginx/数据库/升级部署指南
+
+### v1.7
 
 - 🧩 **WSDL 自动生成** — 流程版本/别名均支持自动生成 WSDL 描述文件，无需认证即可访问；生成端点同步支持 SOAP 1.1 调用
 - 📥 **接口批量生成** — 支持 5 种方式批量创建接口：CURL 命令、Swagger URL、Swagger JSON、WSDL URL、WSDL 内容；WSDL 解析器自动识别 SOAP 1.1/1.2/HTTP GET/HTTP POST 绑定
@@ -290,9 +304,12 @@ docker-compose up -d
 
 ### Monitoring & Testing
 - ✅ Monitoring dashboard
+- ✅ **API topology map** (health check / visit stats / DB call edges)
+- ✅ **Alert rules + alert records**
 - ✅ Execution logs (with node-level logs)
 - ✅ Workflow test cases (assertions + batch execution)
 - ✅ Monaco Editor code editing (JS / SQL highlighting + autocomplete)
+- ✅ **Report module** (data views + report designer + formula engine)
 
 ### System Management
 - ✅ User management / Role management / Menu permissions (RBAC)
@@ -308,7 +325,18 @@ docker-compose up -d
 
 ## 📋 Changelog
 
-### v1.7（Latest）
+### v1.8（Latest）
+
+- 📊 **Report module** — Data views + Report designer + Formula engine (SUM/AVG/COUNT/IF etc.); datasets with 4 source types and field-tree click-to-fill; A4 paged preview, undo/redo, inline cell editing, row/column insert & delete
+- 📈 **Monitoring module** — API topology map (health check / visit stats / red-yellow-green status / DB nodes & edges / flow filter) + alert rules + alert records
+- 🧮 **Expression engine** — CONDITION/ASSIGN nodes support arithmetic + - * / %, string concat / slice ([..5]/[2..5]) / replace, toString("#.0##") number & date formatting; ASSIGN node adds EXPRESSION source type
+- 🔀 **Condition node extension** — && || parentheses, variable-vs-variable comparison, sub-properties, array length/element access; built-in syntax help dialog in the designer
+- 🗄️ **DB node SQL assist** — Browse tables/views/procedures and one-click generate SQL (auto 100-row limit); standalone SQL test (query preview / transactional rollback for updates); help dialog
+- 🔗 **Direct API access** — Suite APIs callable via `/open/api/{code}` (Token auth) + access alias `/open/api/{alias}` + enable/disable switch + one-click copy URL
+- 🧩 **WSDL parser enhancements** — generatedXSD location, recursive xsd:include/import schemaLocation loading, paste XSD content (for unreachable internal schemaLocation)
+- 📚 **Deployment docs** — Docker / Linux / Windows / Nginx / database / upgrade guides
+
+### v1.7
 
 - 🧩 **WSDL auto-generation** — Flow versions & aliases auto-generate WSDL files, publicly accessible without auth; sync SOAP 1.1 call support
 - 📥 **Batch API generation** — 5 sources: CURL / Swagger URL / Swagger JSON / WSDL URL / WSDL content; WSDL parser auto-detects SOAP 1.1/1.2/HTTP GET/HTTP POST bindings

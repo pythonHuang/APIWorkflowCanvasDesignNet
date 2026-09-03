@@ -105,3 +105,19 @@ docker run -d \
   -e DB_PATH=/data/juggle.db \
   juggle-net8:latest
 ```
+
+---
+
+## 更新日志
+
+### v1.8（最新）
+
+- 📊 **报表模块** — 数据视图 + 报表设计器 + 公式引擎（SUM/AVG/COUNT/IF 等）
+- 📈 **监控模块** — API 拓扑图（健康检查/访问统计/状态颜色）+ 告警规则/记录
+- 🧮 **表达式引擎** — 条件/赋值节点支持算术 + - * / %、字符串拼接/切片/replace、toString 数字与日期格式化
+- 🗄️ **数据库节点 SQL 辅助** — 表/视图/存储过程浏览一键生成 SQL、单独测试 SQL（更改事务回滚）
+- 🔀 **条件节点扩展** — && || 括号、双变量比较、子属性、数组 length/元素取值
+- 🔗 **接口直连访问** — `/open/api/{code}` + 访问别名 + 停用/启用开关
+- 🧩 **WSDL 解析增强** — generatedXSD / xsd:include/import 递归加载 / XSD 内容粘贴
+
+> 镜像更新：重新 `docker compose up -d --build` 即可升级（SQLite 数据卷自动保留）。

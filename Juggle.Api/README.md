@@ -186,6 +186,9 @@ Authorization: Bearer <token>
 | POST | `/api/system/datasource/add` | 新增数据源 |
 | GET | `/api/system/datasource/list` | 数据源列表 |
 | POST | `/api/system/datasource/test/{id}` | 测试数据源连接 |
+| POST | `/api/system/datasource/metadata` | 表/视图/存储过程列表（SQL 设计辅助） |
+| POST | `/api/system/datasource/columns` | 表/视图字段列表 |
+| POST | `/api/system/datasource/test-sql` | 单独测试 SQL（查询预览/更改事务回滚） |
 | POST | `/api/system/token/add` | 新增访问令牌 |
 | GET | `/api/system/token/list` | 令牌列表 |
 | GET | `/api/system/variable/list` | 全局静态变量列表 |
@@ -224,6 +227,20 @@ Juggle.Api
             └─ 引用 Juggle.Infrastructure
 ```
 
-- **Juggle.Domain** — 15个领域实体 + FlowEngine 流程引擎 + 8个节点执行器
+- **Juggle.Domain** — 15个领域实体 + FlowEngine 流程引擎 + 节点执行器 + ExpressionEvaluator 表达式引擎
 - **Juggle.Infrastructure** — JuggleDbContext（EF Core）+ JsonHelper + Md5Helper
 - **Juggle.Application** — FlowExecutionService + DataSourceService + JwtService + 请求/响应 DTO
+
+---
+
+## 更新日志
+
+### v1.8（最新）
+
+- 🧮 **表达式引擎** — 新增 `ExpressionEvaluator`（Juggle.Domain/Engine），条件/赋值节点共用：算术 + - * / %、字符串拼接/切片/replace、toString 数字与日期格式化
+- 🗄️ **数据库节点 SQL 辅助** — 新增 `metadata` / `columns` / `test-sql` 端点（表/视图/存储过程浏览、字段列表、SQL 单独测试——更改操作事务回滚不污染数据）
+- 📊 **报表模块** — 数据视图 + 报表设计器 + 公式引擎（SUM/AVG/COUNT/IF 等）
+- 📈 **监控模块** — API 拓扑图（健康检查/访问统计/DB 调用连线）+ 告警规则 + 告警记录
+- 🔀 **条件节点扩展** — && || 括号、双变量比较、子属性、数组 length/元素取值
+- 🔗 **接口直连访问** — 套件接口支持 `/open/api/{code}` 直接调用（Token 授权）+ 访问别名 + 停用/启用
+- 🧩 **WSDL 解析增强** — generatedXSD 地址、xsd:include/import schemaLocation 递归加载、XSD 内容粘贴
