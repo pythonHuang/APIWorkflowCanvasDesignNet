@@ -152,6 +152,21 @@ public class DataSourceController : ControllerBase
         }
     }
 
+    /// <summary>获取存储过程的参数列表（辅助生成 CALL/EXEC 语句）</summary>
+    [HttpPost("procedure-params")]
+    public async Task<ApiResult> ProcedureParams([FromBody] DataSourceProcParamsRequest req)
+    {
+        try
+        {
+            var result = await _dsService.GetProcedureParamsAsync(req.DataSourceName, req.ProcName);
+            return ApiResult.Success(result);
+        }
+        catch (Exception ex)
+        {
+            return ApiResult.Fail(ex.Message);
+        }
+    }
+
     /// <summary>单独测试 SQL：QUERY 返回前 100 行预览，UPDATE 事务执行后回滚</summary>
     [HttpPost("test-sql")]
     public async Task<ApiResult> TestSql([FromBody] DataSourceTestSqlRequest req)

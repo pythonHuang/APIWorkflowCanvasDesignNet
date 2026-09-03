@@ -28,6 +28,22 @@ public class DataSourceColumnsRequest
 }
 
 /// <summary>
+/// 获取存储过程参数列表请求模型
+/// </summary>
+public class DataSourceProcParamsRequest
+{
+    /// <summary>
+    /// 数据源名称
+    /// </summary>
+    public string DataSourceName { get; set; } = "";
+
+    /// <summary>
+    /// 存储过程名称
+    /// </summary>
+    public string ProcName { get; set; } = "";
+}
+
+/// <summary>
 /// 单独测试 SQL 请求模型
 /// </summary>
 public class DataSourceTestSqlRequest

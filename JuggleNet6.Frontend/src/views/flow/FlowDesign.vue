@@ -159,6 +159,7 @@
 
           <!-- START 节点 -->
           <template v-if="selectedNode.elementType === 'START'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('START')">帮助</el-button></div>
             <div class="prop-tip">开始节点是流程入口。可在「流程参数」中设置入参。</div>
           </template>
 
@@ -174,6 +175,7 @@
 
           <!-- LOOP 循环节点属性 -->
           <template v-if="selectedNode.elementType === 'LOOP'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('LOOP')">帮助</el-button></div>
             <div class="prop-item">
               <label>数组变量名</label>
               <el-input v-model="selectedNode.loopConfig.arrayVariable" size="small" placeholder="要遍历的数组变量，如 items">
@@ -202,6 +204,7 @@
 
           <!-- DELAY/WAIT 延迟节点属性 -->
           <template v-if="selectedNode.elementType === 'DELAY'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('DELAY')">帮助</el-button></div>
             <div class="prop-item">
               <label>延迟模式</label>
               <el-switch v-model="selectedNode.delayConfig.variableMode" active-text="变量动态" inactive-text="固定时间" size="small" />
@@ -219,6 +222,7 @@
 
           <!-- PARALLEL 并行节点属性 -->
           <template v-if="selectedNode.elementType === 'PARALLEL'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('PARALLEL')">帮助</el-button></div>
             <div class="prop-item">
               <label>等待模式</label>
               <el-radio-group v-model="selectedNode.parallelConfig.waitMode" size="small">
@@ -235,6 +239,7 @@
 
           <!-- TRANSFORM 模板转换节点属性 -->
           <template v-if="selectedNode.elementType === 'TRANSFORM'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('TRANSFORM')">帮助</el-button></div>
             <div class="prop-tip">模板转换：将模板占位符替换为变量/参数值，结果赋值到目标。</div>
             <div class="prop-item">
               <label>赋值给类型</label>
@@ -275,6 +280,7 @@
 
           <!-- NOTIFY 通知节点属性 -->
           <template v-if="selectedNode.elementType === 'NOTIFY'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('NOTIFY')">帮助</el-button></div>
             <div class="prop-item">
               <label>通知类型</label>
               <el-select v-model="selectedNode.notifyConfig.notifyType" size="small" style="width:100%">
@@ -322,6 +328,7 @@
 
           <!-- SUB_FLOW 子流程节点属性 -->
           <template v-if="selectedNode.elementType === 'SUB_FLOW'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('SUB_FLOW')">帮助</el-button></div>
             <div class="prop-item">
               <label>子流程 Key</label>
               <el-select v-model="selectedNode.subFlowConfig.subFlowKey" placeholder="选择已发布的子流程"
@@ -391,6 +398,7 @@
 
           <!-- METHOD 节点属性 -->
           <template v-if="selectedNode.elementType === 'METHOD'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('METHOD')">帮助</el-button></div>
             <div class="prop-item">
               <label>选择 API</label>
               <el-cascader v-model="methodApiSelection" :options="apiOptions"
@@ -649,6 +657,7 @@
 
           <!-- CODE 节点属性 -->
           <template v-if="selectedNode.elementType === 'CODE'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('CODE')">帮助</el-button></div>
             <div class="prop-tip">
               代码节点：编写 JavaScript 脚本操作变量。<br>
               读取：<code>$var.getVariableValue('key')</code><br>
@@ -1233,6 +1242,17 @@ input_list[..3]                            <span class="ch-note">// 数组前 3 
       </div>
     </el-dialog>
 
+    <!-- 通用节点帮助弹窗（各节点完整 demo） -->
+    <el-dialog v-model="nodeHelpVisible" :title="`❓ ${nodeHelpDemo?.title || ''} 使用帮助`" width="700px" append-to-body>
+      <div class="condition-help">
+        <template v-for="(s, i) in (nodeHelpDemo?.sections || [])" :key="i">
+          <div class="ch-section">{{ s.title }}</div>
+          <pre>{{ s.code }}</pre>
+          <div v-if="s.note" class="ch-note" style="margin-bottom:6px">{{ s.note }}</div>
+        </template>
+      </div>
+    </el-dialog>
+
     <!-- 数据库节点：SQL 编写帮助弹窗 -->
     <el-dialog v-model="dbHelpVisible" title="❓ 数据库节点 SQL 编写帮助" width="660px" append-to-body>
       <div class="condition-help">
@@ -1260,7 +1280,7 @@ INSERT INTO logs(msg, created_at) VALUES ('${input_msg}', NOW())</pre>
     </el-dialog>
 
     <!-- 数据库节点：表/视图/存储过程浏览 -->
-    <el-dialog v-model="dbObjectDialogVisible" title="🗄 数据库对象（辅助生成 SQL）" width="760px" append-to-body>
+    <el-dialog v-model="dbObjectDialogVisible" title="🗄 数据库对象（辅助生成 SQL）" width="1020px" append-to-body>
       <div style="display:flex;gap:10px">
         <div style="flex:1;min-width:0">
           <el-radio-group v-model="dbObjectTab" size="small" @change="onDbObjectTabChange">
@@ -1278,19 +1298,61 @@ INSERT INTO logs(msg, created_at) VALUES ('${input_msg}', NOW())</pre>
             <el-empty v-if="!dbObjectLoading && filteredDbObjects.length === 0" description="暂无对象" :image-size="40" />
           </div>
         </div>
-        <div style="width:290px;flex-shrink:0">
+        <div style="width:480px;flex-shrink:0">
           <div class="prop-section-title" style="margin-top:0">
-            字段列表
+            {{ dbObjectTab === 'procedures' ? '参数列表' : '字段列表' }}
             <span v-if="dbSelectedObject" style="font-size:11px;color:#909399;font-weight:normal;margin-left:6px">{{ dbSelectedObject }}</span>
+            <template v-if="dbObjectTab === 'procedures'">
+              <el-button size="small" icon="MagicStick" link @click="smartBindProcParams" style="margin-left:auto">智能参数绑定</el-button>
+              <el-button size="small" icon="VideoPlay" type="primary" link @click="generateCallFromSelectedProc">生成调用语句</el-button>
+            </template>
           </div>
-          <div class="db-column-list" v-loading="dbColumnLoading">
-            <div v-for="c in dbColumns" :key="c.name" class="db-column-item">
-              <span>{{ c.name }}</span><span style="color:#909399;font-size:11px">{{ c.dataType }}</span>
-            </div>
-            <el-empty v-if="!dbColumnLoading && dbColumns.length === 0"
-              :description="dbObjectTab === 'procedures' ? '存储过程无字段列表，可直接生成 CALL 语句' : '点击左侧表/视图查看字段'"
-              :image-size="40" />
+
+          <!-- 表：字段名称/中文注释/类型/默认值/是否必填 -->
+          <el-table v-if="dbObjectTab === 'tables'" :data="dbColumns" size="small" border max-height="400" v-loading="dbColumnLoading">
+            <el-table-column prop="name" label="字段名称" min-width="120" show-overflow-tooltip />
+            <el-table-column prop="comment" label="中文注释" min-width="110" show-overflow-tooltip>
+              <template #default="{ row }"><span style="color:#606266">{{ row.comment || '—' }}</span></template>
+            </el-table-column>
+            <el-table-column prop="dataType" label="类型" width="110" show-overflow-tooltip />
+            <el-table-column prop="defaultValue" label="默认值" width="90" show-overflow-tooltip>
+              <template #default="{ row }"><span style="color:#909399">{{ row.defaultValue ?? '—' }}</span></template>
+            </el-table-column>
+            <el-table-column label="必填" width="60" align="center">
+              <template #default="{ row }"><el-tag size="small" :type="row.isNullable === false ? 'danger' : 'info'">{{ row.isNullable === false ? '是' : '否' }}</el-tag></template>
+            </el-table-column>
+          </el-table>
+
+          <!-- 视图：字段名称/中文注释/类型 -->
+          <el-table v-else-if="dbObjectTab === 'views'" :data="dbColumns" size="small" border max-height="400" v-loading="dbColumnLoading">
+            <el-table-column prop="name" label="字段名称" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="comment" label="中文注释" min-width="140" show-overflow-tooltip>
+              <template #default="{ row }"><span style="color:#606266">{{ row.comment || '—' }}</span></template>
+            </el-table-column>
+            <el-table-column prop="dataType" label="类型" width="130" show-overflow-tooltip />
+          </el-table>
+
+          <!-- 存储过程：参数名/参数类型/默认值/当前值（可编辑） -->
+          <el-table v-else :data="dbProcParams" size="small" border max-height="400" v-loading="dbColumnLoading">
+            <el-table-column prop="name" label="参数名" min-width="110" show-overflow-tooltip />
+            <el-table-column prop="dataType" label="参数类型" width="100" show-overflow-tooltip />
+            <el-table-column prop="mode" label="模式" width="70" align="center">
+              <template #default="{ row }"><el-tag size="small" :type="(row.mode || 'IN').toUpperCase().includes('OUT') ? 'warning' : 'primary'">{{ row.mode || 'IN' }}</el-tag></template>
+            </el-table-column>
+            <el-table-column prop="defaultValue" label="默认值" width="80" show-overflow-tooltip>
+              <template #default="{ row }"><span style="color:#909399">{{ row.defaultValue ?? '—' }}</span></template>
+            </el-table-column>
+            <el-table-column label="当前值" min-width="150">
+              <template #default="{ row }">
+                <el-input v-model="row.currentValue" size="small" placeholder="如: input_id 或 1" :disabled="(row.mode || '').toUpperCase().includes('OUT')" />
+              </template>
+            </el-table-column>
+          </el-table>
+          <div v-if="dbObjectTab === 'procedures'" class="ch-note" style="margin-top:6px">
+            当前值可填字面量（如 1 / '张三'）或变量名（如 input_id → 生成 <code>'$&#123;input_id&#125;'</code>）；留空生成 NULL。OUT/INOUT 参数不参与调用。智能参数绑定会把参数名与流程参数/变量模糊匹配后自动填充。
           </div>
+          <el-empty v-if="dbObjectTab !== 'procedures' && !dbColumnLoading && dbColumns.length === 0"
+            description="点击左侧表/视图查看字段" :image-size="40" />
         </div>
       </div>
     </el-dialog>
@@ -1311,7 +1373,8 @@ INSERT INTO logs(msg, created_at) VALUES ('${input_msg}', NOW())</pre>
         </div>
         <div v-else style="margin-bottom:6px">✅ 执行成功，影响 {{ dbTestResult.affectedRows }} 行（事务已回滚，未实际修改数据）</div>
         <el-table v-if="dbTestResult.operationType === 'QUERY' && dbTestResult.rows.length" :data="dbTestResult.rows" size="small" border max-height="280">
-          <el-table-column v-for="c in dbTestResult.columns" :key="c" :prop="c" :label="c" min-width="110" show-overflow-tooltip />
+          <el-table-column v-for="c in dbTestResult.columns" :key="c.name || c" :prop="c.name || c"
+            :label="c.comment ? `${c.name} (${c.comment})` : (c.name || c)" min-width="110" show-overflow-tooltip />
         </el-table>
         <div v-if="dbTestResult.operationType === 'QUERY' && dbTestResult.rows.length === 0" style="color:#909399;font-size:12px">
           （无返回行）
@@ -1477,6 +1540,210 @@ const conditionHelpVisible = ref(false)
 // 赋值节点表达式语法帮助弹窗
 const assignHelpVisible = ref(false)
 
+// ====== 通用节点帮助弹窗（完整 demo） ======
+const nodeHelpVisible = ref(false)
+const nodeHelpType = ref('')
+const nodeHelpDemos: Record<string, { title: string; sections: { title: string; code: string; note?: string }[] }> = {
+  START: {
+    title: '开始节点',
+    sections: [
+      { title: '一、入参说明', code: `开始节点是流程入口，无需配置。
+在右侧「流程参数 → 入参」中定义入参，流程内通过 input_参数名 读取。`, note: '例如定义了入参 userId，则流程中任何节点都可用 input_userId 取到调用方传入的值。' },
+      { title: '二、后续节点使用示例', code: `// 条件节点
+input_userId != null && input_userId > 0
+
+// 数据库节点 SQL
+SELECT * FROM orders WHERE user_id = ${'{input_userId}'}
+
+// 赋值节点（表达式）
+input_userId + '_done'` }
+    ]
+  },
+  METHOD: {
+    title: '方法节点（HTTP 调用）',
+    sections: [
+      { title: '一、入参填充（调用前：变量 → API 入参）', code: `sourceType 可选：
+  常量 CONSTANT     → 固定值，如 "paid"
+  变量 VARIABLE     → 流程变量 env_xxx
+  入参 INPUT        → 流程入参 input_xxx
+  静态 STATIC       → 全局静态变量
+  子对象 SUB_PROPERTY → 变量.属性路径，如 env_user.name` },
+      { title: '二、输出映射（调用后：API 响应 → 变量）', code: `source 填响应字段路径，如 data.list / code / msg
+targetType 可选 变量/出参/静态/入参/子对象
+
+示例：
+  响应字段 data.userId  →  变量 env_user_id
+  响应字段 code         →  出参 result_code` },
+      { title: '三、Header 填充', code: `target 填 Header 名（如 Authorization）
+sourceType=常量 → 填值，如 Bearer xxx
+sourceType=变量 → 选择变量，运行时取变量值` },
+      { title: '四、常见场景 demo', code: `// 场景：调用登录接口
+入参填充: input_userName → userName
+入参填充: 常量 "123456" → password
+输出映射: data.token → env_token
+
+// 场景：调用列表接口后取第一个元素
+输出映射: data.list[0].name → env_first_name` }
+    ]
+  },
+  CODE: {
+    title: '代码节点（JavaScript 简化脚本）',
+    sections: [
+      { title: '一、读写流程变量', code: `$var.getVariableValue('key')        // 读取流程变量
+$var.setVariableValue('key', value) // 写入流程变量
+
+var name = $var.getVariableValue('input_name')
+$var.setVariableValue('env_greeting', 'Hello, ' + name)` },
+      { title: '二、读写静态变量（执行后自动持久化）', code: `var count = $static.getVariableValue('visit_count')
+$static.setVariableValue('visit_count', count + 1)` },
+      { title: '三、局部变量与运算', code: `// var/let/const 声明局部变量
+var orderId = $var.getVariableValue('input_order_id')
+var title = '订单号: ' + orderId + ' 已处理'
+$var.setVariableValue('env_msg', title)
+
+// 支持: 字符串拼接(+)、数字、布尔、null、局部变量引用
+$var.setVariableValue('env_flag', true)
+$var.setVariableValue('env_total', 100)` },
+      { title: '四、完整 demo', code: `// 处理订单：拼接消息并写回
+var id = $var.getVariableValue('input_order_id')
+var userName = $var.getVariableValue('input_user_name')
+var msg = '用户 ' + userName + ' 的订单 ' + id + ' 已创建'
+$var.setVariableValue('env_result_msg', msg)
+$var.setVariableValue('env_status', 'created')
+$static.setVariableValue('order_count', $static.getVariableValue('order_count') + 1)` }
+    ]
+  },
+  LOOP: {
+    title: '循环节点',
+    sections: [
+      { title: '一、配置说明', code: `数组变量:   要遍历的数组变量名，填实际变量名（如 env_items）
+当前元素:   每次迭代写入的元素变量，默认 _loop_item
+当前索引:   默认 _loop_index（从 0 开始）
+数组总数:   默认 _loop_total
+结果收集:   默认 _loop_results（循环内节点输出自动收集）` },
+      { title: '二、使用 demo', code: `// 假设有数组变量 env_items = [{name:"a"},{name:"b"}]
+数组变量填: env_items
+
+// 循环体内的节点可直接引用:
+_loop_item        // 当前元素对象
+_loop_item.name   // 当前元素的 name 属性
+_loop_index       // 当前索引 0/1
+_loop_total       // 总数 2
+_loop_results     // 循环体执行结果收集数组` },
+      { title: '三、典型场景', code: `// 批量调用接口：循环内放 METHOD 节点
+METHOD 入参填充: _loop_item.id → id
+输出映射: data → env_result
+
+循环结束后:
+env_items.length == _loop_total
+_loop_results 包含每次迭代的输出` }
+    ]
+  },
+  DELAY: {
+    title: '延迟节点',
+    sections: [
+      { title: '一、固定时间', code: `关闭「变量动态」开关，直接填延迟毫秒数:
+1000   = 1 秒
+60000  = 1 分钟` },
+      { title: '二、变量动态', code: `开启「变量动态」开关，填变量名（值为毫秒数）:
+延迟变量填 env_delay_ms
+
+配合赋值节点（表达式）动态计算:
+env_delay_ms = env_retry_count * 1000 + 500` },
+      { title: '三、典型场景', code: `// 限流: 每次请求间隔 500ms
+// 等待: 等待第三方回调, 先延迟再查询
+// 重试退避: 失败分支 → 延迟 → 回到调用节点` }
+    ]
+  },
+  PARALLEL: {
+    title: '并行节点',
+    sections: [
+      { title: '一、等待模式', code: `全部等待(ALL_WAIT): 所有分支执行完成后再继续
+任一完成(ANY_FAST): 任一分支完成即继续（其余分支取消）` },
+      { title: '二、使用 demo', code: `// 通过画布连线把并行节点连到多个下游节点
+并行节点
+├─→ METHOD: 查询用户信息
+├─→ METHOD: 查询订单列表
+└─→ MYSQL: 查询统计数据
+
+三个分支同时执行，全部完成后汇聚到 MERGE 节点继续。
+各分支写入不同变量避免互相覆盖。` },
+      { title: '三、超时', code: `并行超时(ms): 0=不限。设置后超时未完成的分支会被取消。
+场景: 多数据源并发查询 + 汇总。` }
+    ]
+  },
+  TRANSFORM: {
+    title: '模板转换节点',
+    sections: [
+      { title: '一、语法', code: `模板中 \${变量名|管道1|管道2} 占位符会被替换为变量值。
+管道 | 后接转换方法:
+  含 . 为静态调用   如 Math.Round、Json.Parse
+  不含 . 为实例方法  如 ToFix(2)、ToUpper` },
+      { title: '二、实例方法（字符串/数值）', code: `ToUpper / ToLower     大小写转换
+Trim / TrimStart / TrimEnd
+SubString(0,3)        截取
+Replace('a','b')      替换
+Split(',')            分割
+ToFix(2)              保留 2 位小数
+ParseInt / ParseDouble / ParseBool
+ToString` },
+      { title: '三、静态方法', code: `Math.Round / Math.Floor / Math.Ceil / Math.Abs
+Json.Parse / Json.Stringify
+Convert.ToInt / Convert.ToDouble / Convert.ToBoolean / Convert.ToString
+String.Format('0.##')` },
+      { title: '四、完整 demo', code: `模板:
+{"user":"${'${input_name | ToUpper}'}","amount":"${'${env_amount | ToFix(2)}'}","day":"${'${env_time | SubString(0,10)}'}","total":"${'${env_count | Math.Round}'}"}
+
+赋值给: 出参 result_json
+
+子属性也支持:
+${'${input_user.name | ToUpper}'}
+${'${env_list[0].id | Math.Round}'}` }
+    ]
+  },
+  NOTIFY: {
+    title: '通知节点',
+    sections: [
+      { title: '一、Webhook 回调', code: `请求地址: https://your-server.com/callback
+请求方法: POST / GET
+自定义请求头(JSON): {"Authorization":"Bearer xxx"}
+内容模板(支持 ${'${varName}'} 变量替换):
+{"flowKey":"${'${flowKey}'}","status":"success","result":"${'${env_result}'}"}` },
+      { title: '二、邮件通知', code: `收件人: a@xx.com,b@xx.com（逗号分隔）
+邮件主题: 流程执行完成 - ${'${flowKey}'}
+内容模板: 支持 ${'${varName}'} 变量替换` },
+      { title: '三、失败策略', code: `「失败时中断流程」开关:
+开启: 通知发送失败则流程失败
+关闭: 仅记录日志，流程继续执行（默认推荐）` }
+    ]
+  },
+  SUB_FLOW: {
+    title: '子流程节点',
+    sections: [
+      { title: '一、入参映射（当前流程 → 子流程入参）', code: `source: 当前流程变量名（如 env_user_id / input_name）
+sourceType: 变量 VARIABLE / 常量 CONSTANT
+target: 子流程的入参名
+
+示例:
+  当前变量 env_user_id  →  子流程入参 userId
+  常量 "paid"           →  子流程入参 status` },
+      { title: '二、出参映射（子流程输出 → 当前流程变量）', code: `source: 子流程输出变量名（子流程里写的 output_xxx）
+target: 当前流程变量名
+
+示例:
+  子流程输出 output_total  →  当前变量 env_sub_total` },
+      { title: '三、注意事项', code: `1. 子流程需先「部署」发布，才会出现在可选列表
+2. 子流程的入参名以子流程自身「流程参数」为准
+3. 子流程执行日志会记录在总日志中，可展开查看` }
+    ]
+  }
+}
+const nodeHelpDemo = computed(() => nodeHelpDemos[nodeHelpType.value])
+function openNodeHelp(type: string) {
+  nodeHelpType.value = type
+  nodeHelpVisible.value = true
+}
+
 // ====== 数据库节点辅助（表/视图/存储过程 + 测试SQL） ======
 const dbHelpVisible = ref(false)
 const dbObjectDialogVisible = ref(false)
@@ -1489,6 +1756,7 @@ const dbProcedures = ref<any[]>([])
 const dbSelectedObject = ref('')
 const dbColumns = ref<any[]>([])
 const dbColumnLoading = ref(false)
+const dbProcParams = ref<any[]>([])
 const dbTestDialogVisible = ref(false)
 const dbTestParams = ref('{}')
 const dbTestLoading = ref(false)
@@ -1513,7 +1781,8 @@ async function openDbObjectDialog() {
   dbObjectDialogVisible.value = true
   dbObjectLoading.value = true
   dbTables.value = []; dbViews.value = []; dbProcedures.value = []
-  dbColumns.value = []; dbSelectedObject.value = ''; dbObjectSearch.value = ''
+  dbColumns.value = []; dbProcParams.value = []
+  dbSelectedObject.value = ''; dbObjectSearch.value = ''
   try {
     const res: any = await request.post('/system/datasource/metadata', { dataSourceName: name })
     dbTables.value = res.data?.tables || []
@@ -1525,11 +1794,12 @@ async function openDbObjectDialog() {
 function onDbObjectTabChange() {
   dbSelectedObject.value = ''
   dbColumns.value = []
+  dbProcParams.value = []
 }
 
 async function selectDbObject(name: string) {
   dbSelectedObject.value = name
-  if (dbObjectTab.value === 'procedures') return
+  if (dbObjectTab.value === 'procedures') { await loadDbProcParams(name); return }
   await loadDbColumns(name)
 }
 
@@ -1544,19 +1814,66 @@ async function loadDbColumns(name: string) {
   } catch { dbColumns.value = [] } finally { dbColumnLoading.value = false }
 }
 
+async function loadDbProcParams(name: string) {
+  dbColumnLoading.value = true
+  dbProcParams.value = []
+  try {
+    const res: any = await request.post('/system/datasource/procedure-params', {
+      dataSourceName: selectedNode.value.mysqlConfig.dataSourceName, procName: name
+    })
+    dbProcParams.value = (res.data || []).map((p: any) => ({ ...p, currentValue: p.defaultValue || '' }))
+  } catch { dbProcParams.value = [] } finally { dbColumnLoading.value = false }
+}
+
+/** 智能参数绑定：参数名与流程入参/出参/变量模糊匹配，自动填充当前值 */
+function smartBindProcParams() {
+  const candidates: { code: string; name: string }[] = []
+  flowInputParams.value.forEach((p: any) => candidates.push({ code: `input_${p.paramCode}`, name: p.paramName || p.paramCode }))
+  flowOutputParams.value.forEach((p: any) => candidates.push({ code: `output_${p.paramCode}`, name: p.paramName || p.paramCode }))
+  allVariables.value.forEach((v: any) => candidates.push({ code: v.variableCode, name: v.variableName || v.variableCode }))
+  const norm = (s: string) => (s || '').toLowerCase().replace(/[_\s]/g, '')
+  let bound = 0
+  dbProcParams.value.forEach((param: any) => {
+    if ((param.mode || '').toUpperCase().includes('OUT')) return
+    const pn = norm(param.name)
+    let best: { code: string; score: number } | null = null
+    for (const c of candidates) {
+      const cn = norm(c.code); const nn = norm(c.name)
+      let score = 0
+      if (pn === cn || pn === nn) score = 3
+      else if (pn && (cn.includes(pn) || pn.includes(cn) || nn.includes(pn) || pn.includes(nn))) score = 2
+      if (score > 0 && (!best || score > best.score)) best = { code: c.code, score }
+    }
+    if (best) { param.currentValue = best.code; bound++ }
+  })
+  ElMessage.success(`已智能绑定 ${bound} 个参数（当前值）`)
+}
+
+/** 生成存储过程调用语句（按参数当前值） */
+function generateCallFromSelectedProc() {
+  const proc = dbProcedures.value.find((p: any) => p.name === dbSelectedObject.value)
+  if (!proc) { ElMessage.warning('请先在左侧选择存储过程'); return }
+  generateSqlFromObject(proc)
+}
+
 async function generateSqlFromObject(obj: any) {
   const node = selectedNode.value
   if (!node?.mysqlConfig) return
   dbSelectedObject.value = obj.name
-  // 表/视图先取字段（保证生成含字段列表的 SELECT），存储过程直接生成调用语句
-  if (dbObjectTab.value !== 'procedures') await loadDbColumns(obj.name)
   const dsType = selectedDsType()
   let sql = ''
   if (dbObjectTab.value === 'procedures') {
-    sql = dsType === 'sqlserver' || dsType === 'mssql' ? `EXEC ${obj.name}`
-      : dsType === 'oracle' || dsType === 'dm' ? `BEGIN ${obj.name}(); END;`
-      : `CALL ${obj.name}()`
+    // 确保参数列表已加载
+    if (!dbProcParams.value.length) await loadDbProcParams(obj.name)
+    const args = dbProcParams.value
+      .filter((p: any) => !(p.mode || '').toUpperCase().includes('OUT'))
+      .map((p: any) => formatCallArg(p.currentValue))
+    sql = dsType === 'sqlserver' || dsType === 'mssql' ? `EXEC ${obj.name} ${args.join(', ')}`
+      : dsType === 'oracle' || dsType === 'dm' ? `BEGIN ${obj.name}(${args.join(', ')}); END;`
+      : `CALL ${obj.name}(${args.join(', ')})`
   } else {
+    // 表/视图先取字段（保证生成含字段列表的 SELECT）
+    await loadDbColumns(obj.name)
     const cols = dbColumns.value.length ? dbColumns.value.map((c: any) => c.name).join(', ') : '*'
     const from = `FROM ${obj.name}`
     if (dsType === 'sqlserver' || dsType === 'mssql') sql = `SELECT TOP 100 ${cols}\n${from}`
@@ -1566,6 +1883,15 @@ async function generateSqlFromObject(obj: any) {
   node.mysqlConfig.sql = sql
   dbObjectDialogVisible.value = false
   ElMessage.success('已生成 SQL')
+}
+
+/** 存储过程参数 → 调用实参文本：字面量/数字原样，变量名转为 '${var}'，空 → NULL */
+function formatCallArg(v: string): string {
+  const val = (v || '').trim()
+  if (!val) return 'NULL'
+  if (/^-?\d+(\.\d+)?$/.test(val) || val.toUpperCase() === 'NULL') return val
+  if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(val)) return "'\${" + val + "}'"
+  return "'" + val.replace(/'/g, "''") + "'"
 }
 
 function openDbTestDialog() {

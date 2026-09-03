@@ -186,25 +186,252 @@ public class DataSourceService
         return result;
     }
 
-    /// <summary>获取表/视图的字段列表（所有数据库统一使用 SELECT * WHERE 1=0 取元数据）。</summary>
+    /// <summary>
+    /// 获取表/视图的字段列表（含中文注释、默认值、是否必填），按数据库类型适配元数据查询。
+    /// </summary>
     public async Task<List<DbColumnItem>> GetColumnsAsync(string dataSourceName, string tableName)
     {
         var dsInfo = await LoadDataSourceInfoAsync(dataSourceName);
         var columns = new List<DbColumnItem>();
+        var safeName = tableName.Replace("'", "''");
         await using var conn = MysqlNodeExecutor.CreateConnection(dsInfo);
         await conn.OpenAsync();
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"SELECT * FROM {tableName} WHERE 1=0";
-        await using var reader = await cmd.ExecuteReaderAsync();
-        for (int i = 0; i < reader.FieldCount; i++)
+
+        switch (dsInfo.DsType.ToLower())
         {
-            columns.Add(new DbColumnItem
+            case "mysql":
             {
-                Name     = reader.GetName(i),
-                DataType = reader.GetDataTypeName(i)
-            });
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"SHOW FULL COLUMNS FROM {tableName}";
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    columns.Add(new DbColumnItem
+                    {
+                        Name         = reader["Field"]?.ToString() ?? "",
+                        DataType     = reader["Type"]?.ToString() ?? "",
+                        IsNullable   = string.Equals(reader["Null"]?.ToString(), "YES", StringComparison.OrdinalIgnoreCase),
+                        DefaultValue = reader["Default"]?.ToString(),
+                        Comment      = reader["Comment"]?.ToString() ?? ""
+                    });
+                }
+                break;
+            }
+            case "sqlite":
+            {
+                // PRAGMA table_info: cid/name/type/notnull/dflt_value/pk（SQLite 无注释）
+                // 注意: INTEGER PRIMARY KEY 的 notnull 恒为 0，需按主键列补判
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"PRAGMA table_info('{safeName}')";
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var notNull = Convert.ToInt64(reader.GetValue(3)) == 1;
+                    var isPk = Convert.ToInt64(reader.GetValue(5)) > 0;
+                    columns.Add(new DbColumnItem
+                    {
+                        Name         = reader.GetValue(1)?.ToString() ?? "",
+                        DataType     = reader.GetValue(2)?.ToString() ?? "",
+                        IsNullable   = !notNull && !isPk,
+                        DefaultValue = reader.IsDBNull(4) ? null : reader.GetValue(4)?.ToString(),
+                        Comment      = ""
+                    });
+                }
+                break;
+            }
+            case "postgresql" or "postgres":
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
+                           pg_catalog.col_description(format('%I.%I', c.table_schema, c.table_name)::regclass, c.ordinal_position) AS comment
+                    FROM information_schema.columns c
+                    WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema') AND c.table_name = '{safeName}'
+                    ORDER BY c.ordinal_position
+                    """;
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    columns.Add(new DbColumnItem
+                    {
+                        Name         = reader.GetValue(0)?.ToString() ?? "",
+                        DataType     = reader.GetValue(1)?.ToString() ?? "",
+                        IsNullable   = string.Equals(reader.GetValue(2)?.ToString(), "YES", StringComparison.OrdinalIgnoreCase),
+                        DefaultValue = reader.IsDBNull(3) ? null : reader.GetValue(3)?.ToString(),
+                        Comment      = reader.IsDBNull(4) ? "" : reader.GetValue(4)?.ToString() ?? ""
+                    });
+                }
+                break;
+            }
+            case "sqlserver" or "mssql":
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    SELECT c.COLUMN_NAME, c.DATA_TYPE, c.IS_NULLABLE, c.COLUMN_DEFAULT,
+                           CAST(ep.value AS NVARCHAR(500)) AS comment
+                    FROM INFORMATION_SCHEMA.COLUMNS c
+                    LEFT JOIN sys.extended_properties ep
+                      ON ep.major_id = OBJECT_ID(c.TABLE_SCHEMA + '.' + c.TABLE_NAME)
+                     AND ep.minor_id = c.ORDINAL_POSITION
+                     AND ep.class = 1 AND ep.name = 'MS_Description'
+                    WHERE c.TABLE_NAME = '{safeName}'
+                    ORDER BY c.ORDINAL_POSITION
+                    """;
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    columns.Add(new DbColumnItem
+                    {
+                        Name         = reader.GetValue(0)?.ToString() ?? "",
+                        DataType     = reader.GetValue(1)?.ToString() ?? "",
+                        IsNullable   = string.Equals(reader.GetValue(2)?.ToString(), "YES", StringComparison.OrdinalIgnoreCase),
+                        DefaultValue = reader.IsDBNull(3) ? null : reader.GetValue(3)?.ToString(),
+                        Comment      = reader.IsDBNull(4) ? "" : reader.GetValue(4)?.ToString() ?? ""
+                    });
+                }
+                break;
+            }
+            case "oracle":
+            case "dm":   // 达梦兼容 Oracle 数据字典
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    SELECT c.COLUMN_NAME, c.DATA_TYPE, c.NULLABLE, c.DATA_DEFAULT, cc.COMMENTS AS comment
+                    FROM USER_TAB_COLUMNS c
+                    LEFT JOIN USER_COL_COMMENTS cc ON cc.TABLE_NAME = c.TABLE_NAME AND cc.COLUMN_NAME = c.COLUMN_NAME
+                    WHERE c.TABLE_NAME = '{safeName.ToUpper()}'
+                    ORDER BY c.COLUMN_ID
+                    """;
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    columns.Add(new DbColumnItem
+                    {
+                        Name         = reader.GetValue(0)?.ToString() ?? "",
+                        DataType     = reader.GetValue(1)?.ToString() ?? "",
+                        IsNullable   = string.Equals(reader.GetValue(2)?.ToString(), "Y", StringComparison.OrdinalIgnoreCase),
+                        DefaultValue = reader.IsDBNull(3) ? null : reader.GetValue(3)?.ToString(),
+                        Comment      = reader.IsDBNull(4) ? "" : reader.GetValue(4)?.ToString() ?? ""
+                    });
+                }
+                break;
+            }
+            default:
+                throw new InvalidOperationException($"不支持的数据库类型: {dsInfo.DsType}");
         }
+
         return columns;
+    }
+
+    /// <summary>获取存储过程的参数列表（参数名/类型/模式/默认值），按数据库类型适配。</summary>
+    public async Task<List<DbProcParamItem>> GetProcedureParamsAsync(string dataSourceName, string procName)
+    {
+        var dsInfo = await LoadDataSourceInfoAsync(dataSourceName);
+        var safeName = procName.Replace("'", "''");
+        var @params = new List<DbProcParamItem>();
+        await using var conn = MysqlNodeExecutor.CreateConnection(dsInfo);
+        await conn.OpenAsync();
+
+        switch (dsInfo.DsType.ToLower())
+        {
+            case "mysql":
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    SELECT PARAMETER_NAME, DATA_TYPE, PARAMETER_MODE
+                    FROM information_schema.parameters
+                    WHERE SPECIFIC_NAME = '{safeName}' AND ROUTINE_TYPE = 'PROCEDURE'
+                    ORDER BY ORDINAL_POSITION
+                    """;
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    @params.Add(new DbProcParamItem
+                    {
+                        Name     = reader.GetValue(0)?.ToString() ?? "",
+                        DataType = reader.GetValue(1)?.ToString() ?? "",
+                        Mode     = reader.GetValue(2)?.ToString() ?? "IN"
+                    });
+                }
+                break;
+            }
+            case "postgresql" or "postgres":
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    SELECT parameter_name, data_type, parameter_mode
+                    FROM information_schema.parameters
+                    WHERE specific_name = '{safeName}'
+                    ORDER BY ordinal_position
+                    """;
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    @params.Add(new DbProcParamItem
+                    {
+                        Name     = reader.GetValue(0)?.ToString() ?? "",
+                        DataType = reader.GetValue(1)?.ToString() ?? "",
+                        Mode     = reader.GetValue(2)?.ToString() ?? "IN"
+                    });
+                }
+                break;
+            }
+            case "sqlserver" or "mssql":
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    SELECT p.name, t.name AS data_type,
+                           CASE WHEN p.has_default_value = 1 THEN CAST(p.default_value AS NVARCHAR(200)) ELSE NULL END AS default_value,
+                           CASE WHEN p.is_output = 1 THEN 'OUT' ELSE 'IN' END AS mode
+                    FROM sys.procedures sp
+                    JOIN sys.parameters p ON sp.object_id = p.object_id
+                    JOIN sys.types t ON p.user_type_id = t.user_type_id
+                    WHERE sp.name = '{safeName}' AND p.parameter_id > 0
+                    ORDER BY p.parameter_id
+                    """;
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    @params.Add(new DbProcParamItem
+                    {
+                        Name         = reader.GetValue(0)?.ToString() ?? "",
+                        DataType     = reader.GetValue(1)?.ToString() ?? "",
+                        DefaultValue = reader.IsDBNull(2) ? null : reader.GetValue(2)?.ToString(),
+                        Mode         = reader.GetValue(3)?.ToString() ?? "IN"
+                    });
+                }
+                break;
+            }
+            case "oracle":
+            case "dm":
+            {
+                // SUBSTR 兼容 LONG 类型的 DEFAULT_VALUE
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"""
+                    SELECT ARGUMENT_NAME, DATA_TYPE, IN_OUT, SUBSTR(DEFAULT_VALUE, 1, 200)
+                    FROM USER_ARGUMENTS
+                    WHERE OBJECT_NAME = '{safeName.ToUpper()}' AND ARGUMENT_NAME IS NOT NULL
+                    ORDER BY POSITION
+                    """;
+                await using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    @params.Add(new DbProcParamItem
+                    {
+                        Name         = reader.GetValue(0)?.ToString() ?? "",
+                        DataType     = reader.GetValue(1)?.ToString() ?? "",
+                        Mode         = reader.GetValue(2)?.ToString() ?? "IN",
+                        DefaultValue = reader.IsDBNull(3) ? null : reader.GetValue(3)?.ToString()
+                    });
+                }
+                break;
+            }
+            default:
+                // SQLite 等无存储过程
+                break;
+        }
+
+        return @params;
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -244,12 +471,13 @@ public class DataSourceService
 
         // 查询操作：读取前 100 行预览
         var result = new DbTestSqlResult { OperationType = "QUERY" };
+        var colNames = new List<string>();
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = rendered;
             await using var reader = await cmd.ExecuteReaderAsync();
             for (int i = 0; i < reader.FieldCount; i++)
-                result.Columns.Add(reader.GetName(i));
+                colNames.Add(reader.GetName(i));
 
             var total = 0;
             while (await reader.ReadAsync())
@@ -264,6 +492,36 @@ public class DataSourceService
             result.RowCount  = total;
             result.Truncated = total > 100;
         }
+
+        // 单表查询时附带字段中文注释（无 JOIN 且能解析出表名）
+        var tableMatch = Regex.Match(rendered, @"\bfrom\s+([A-Za-z0-9_\.]+)", RegexOptions.IgnoreCase);
+        var hasJoin = Regex.IsMatch(rendered, @"\bjoin\b", RegexOptions.IgnoreCase);
+        if (tableMatch.Success && !hasJoin)
+        {
+            try
+            {
+                var columns = await GetColumnsAsync(dataSourceName, tableMatch.Groups[1].Value);
+                var commentMap = columns.ToDictionary(c => c.Name, c => c.Comment, StringComparer.OrdinalIgnoreCase);
+                foreach (var name in colNames)
+                    result.Columns.Add(new DbResultColumn
+                    {
+                        Name    = name,
+                        Comment = commentMap.TryGetValue(name, out var comment) ? comment : ""
+                    });
+            }
+            catch
+            {
+                // 注释获取失败不影响测试结果展示
+                foreach (var name in colNames)
+                    result.Columns.Add(new DbResultColumn { Name = name });
+            }
+        }
+        else
+        {
+            foreach (var name in colNames)
+                result.Columns.Add(new DbResultColumn { Name = name });
+        }
+
         return result;
     }
 
@@ -295,6 +553,19 @@ public class DbColumnItem
 {
     public string Name { get; set; } = "";
     public string DataType { get; set; } = "";
+    public string Comment { get; set; } = "";
+    public string? DefaultValue { get; set; }
+    public bool IsNullable { get; set; } = true;
+}
+
+/// <summary>存储过程参数</summary>
+public class DbProcParamItem
+{
+    public string Name { get; set; } = "";
+    public string DataType { get; set; } = "";
+    /// <summary>IN / OUT / INOUT</summary>
+    public string Mode { get; set; } = "IN";
+    public string? DefaultValue { get; set; }
 }
 
 /// <summary>SQL 单独测试结果</summary>
@@ -303,8 +574,8 @@ public class DbTestSqlResult
     /// <summary>QUERY / UPDATE</summary>
     public string OperationType { get; set; } = "QUERY";
 
-    /// <summary>查询列名（QUERY）</summary>
-    public List<string> Columns { get; set; } = new();
+    /// <summary>查询列（名称+中文注释）（QUERY）</summary>
+    public List<DbResultColumn> Columns { get; set; } = new();
 
     /// <summary>查询结果行（QUERY，最多 100 行）</summary>
     public List<Dictionary<string, object?>> Rows { get; set; } = new();
@@ -317,4 +588,11 @@ public class DbTestSqlResult
 
     /// <summary>影响行数（UPDATE）</summary>
     public int AffectedRows { get; set; }
+}
+
+/// <summary>查询结果列（名称+中文注释）</summary>
+public class DbResultColumn
+{
+    public string Name { get; set; } = "";
+    public string Comment { get; set; } = "";
 }
