@@ -98,8 +98,16 @@ public class ReportExecutionService
                 var sourceType = ds.TryGetProperty("sourceType", out var stEl) ? stEl.GetString() ?? "" : "";
                 var sourceRef = ds.TryGetProperty("sourceRef", out var srEl) ? srEl.GetString() ?? "" : "";
                 var customSql = ds.TryGetProperty("customSql", out var csEl) ? csEl.GetString() ?? "" : "";
+                var dataSourceId = ds.TryGetProperty("dataSourceId", out var dsi)
+                    ? dsi.ValueKind switch
+                    {
+                        JsonValueKind.Number => dsi.GetInt64(),
+                        JsonValueKind.String when long.TryParse(dsi.GetString(), out var v) => v,
+                        _ => 0
+                    }
+                    : 0;
 
-                var dt = await ResolveSource(sourceType, sourceRef, customSql, queryParams);
+                var dt = await ResolveSource(sourceType, sourceRef, customSql, dataSourceId, queryParams);
                 if (dt != null) datasets[id] = dt;
             }
         }
@@ -333,7 +341,7 @@ public class ReportExecutionService
     // ===== Data Source Helpers =====
 
     private async Task<DataTable?> ResolveSource(string sourceType, string sourceRef, string customSql,
-        Dictionary<string, object?>? queryParams)
+        long dataSourceId, Dictionary<string, object?>? queryParams)
     {
         switch (sourceType)
         {
@@ -348,10 +356,12 @@ public class ReportExecutionService
             case "sql":
                 if (!string.IsNullOrEmpty(customSql))
                 {
-                    // 使用第一个数据源执行自定义SQL
-                    var firstDs = await _db.DataSources.FirstOrDefaultAsync(d => d.Deleted == 0);
-                    if (firstDs != null)
-                        return await ExecuteQuery(firstDs.Id, customSql, queryParams);
+                    // 优先使用数据集保存的数据源；旧数据未保存 dataSourceId 时回退到第一个数据源
+                    var dsEntity = dataSourceId > 0
+                        ? await _db.DataSources.FirstOrDefaultAsync(d => d.Deleted == 0 && d.Id == dataSourceId)
+                        : await _db.DataSources.FirstOrDefaultAsync(d => d.Deleted == 0);
+                    if (dsEntity != null)
+                        return await ExecuteQuery(dsEntity.Id, customSql, queryParams);
                 }
                 break;
         }
