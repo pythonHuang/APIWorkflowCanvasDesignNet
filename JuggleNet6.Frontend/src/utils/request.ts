@@ -20,6 +20,8 @@ request.interceptors.request.use((config) => {
 request.interceptors.response.use(
   (response) => {
     const data = response.data
+    // blob 下载（文件导出）直接放行
+    if (data instanceof Blob) return response
     if (data.code === 200) {
       return data
     } else if (data.code === 401) {

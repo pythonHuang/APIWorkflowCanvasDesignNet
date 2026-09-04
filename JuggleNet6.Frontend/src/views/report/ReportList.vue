@@ -34,18 +34,17 @@
     </el-card>
 
     <el-dialog v-model="previewVisible" title="预览报表" width="90%" top="5vh">
-      <div v-if="previewParams.length>0" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
         <div v-for="p in previewParams" :key="p.name" style="display:flex;align-items:center;gap:4px">
           <span style="font-size:12px">{{ p.label||p.name }}:</span>
           <el-input v-model="previewValues[p.name]" size="small" style="width:140px" />
         </div>
-        <el-button size="small" type="primary" @click="doPreview">查询</el-button>
+        <el-button size="small" type="primary" :loading="previewLoading" @click="doPreview">查询</el-button>
+        <span style="font-size:12px;color:#888;margin-left:auto">第 {{ previewPage }} 页 · 每页 {{ previewPageSize }} 行</span>
+        <el-pagination small layout="prev,next" :total="previewTotal" v-model:current-page="previewPage" :page-size="previewPageSize" @change="doPreview" />
       </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
-        <span style="font-size:12px;color:#888">第 {{ previewPage }} 页 · 每页 {{ previewPageSize }} 行</span>
-        <el-pagination small layout="prev,next" :total="previewTotal" v-model:current-page="previewPage" :page-size="previewPageSize" @change="doPreview" style="margin-left:auto" />
-      </div>
-      <div v-if="previewHtml" v-html="previewHtml" style="border:1px solid #eee;padding:16px;overflow:auto;max-height:65vh"></div>
+      <div v-loading="previewLoading" v-if="previewHtml" v-html="previewHtml" style="border:1px solid #eee;padding:16px;overflow:auto;max-height:65vh"></div>
+      <el-empty v-else-if="!previewLoading" description="暂无数据" :image-size="60" />
     </el-dialog>
   </div>
 </template>
@@ -63,6 +62,7 @@ const page = ref(1)
 const total = ref(0)
 const previewVisible = ref(false)
 const previewHtml = ref('')
+const previewLoading = ref(false)
 const previewParams = ref<any[]>([])
 const previewValues = ref<Record<string,any>>({})
 const previewId = ref(0)
@@ -97,27 +97,42 @@ function openPreview(row: any) {
   previewValues.value = {}
   for (const p of previewParams.value) previewValues.value[p.name] = p.default || ''
   previewHtml.value = ''
+  previewPage.value = 1
   previewVisible.value = true
+  doPreview()   // 打开即自动查询（无参数报表也能出数据）
 }
 
 async function doPreview() {
-  const res = await request.post('/report/preview', { id: previewId.value, params: previewValues.value, page: previewPage.value, pageSize: previewPageSize.value })
-  previewHtml.value = res.data?.html || ''
-  previewTotal.value = res.data?.total || 0
+  previewLoading.value = true
+  try {
+    const res = await request.post('/report/preview', { id: previewId.value, params: previewValues.value, page: previewPage.value, pageSize: previewPageSize.value })
+    previewHtml.value = res.data?.html || ''
+    previewTotal.value = res.data?.total || 0
+  } finally { previewLoading.value = false }
 }
 
 async function doExportPdf(row: any) {
-  const res = await request.post('/report/export-pdf', { id: row.id, params: {} }, { responseType: 'blob' })
-  downloadBlob(res, `${row.name}.html`)
+  const res: any = await request.post('/report/export-pdf', { id: row.id, params: {} }, { responseType: 'blob' })
+  downloadBlob(res.data, `${row.name}.html`)
 }
 
 async function doExportExcel(row: any) {
-  const res = await request.post('/report/export-excel', { id: row.id, params: {} }, { responseType: 'blob' })
-  downloadBlob(res, `${row.name}.xls`)
+  const res: any = await request.post('/report/export-excel', { id: row.id, params: {} }, { responseType: 'blob' })
+  downloadBlob(res.data, `${row.name}.xls`)
 }
 
-function doPrint(_row: any) {
-  window.open(`${location.origin}/api/report/export-pdf`, '_blank')
+/** 打印：取预览 HTML 写入新窗口并触发浏览器打印 */
+async function doPrint(row: any) {
+  try {
+    const res = await request.post('/report/preview', { id: row.id, params: {} })
+    const html = res.data?.html || ''
+    const w = window.open('', '_blank')
+    if (!w) { ElMessage.warning('浏览器拦截了弹出窗口，请允许后重试'); return }
+    w.document.write(`<html><head><title>${row.name}</title><meta charset="utf-8"><style>@media print{@page{size:A4;margin:15mm}}body{font-family:'Microsoft YaHei',sans-serif}</style></head><body>${html}</body></html>`)
+    w.document.close()
+    w.focus()
+    setTimeout(() => { w.print() }, 300)
+  } catch { /* 拦截器已提示 */ }
 }
 
 function downloadBlob(data: any, filename: string) {
