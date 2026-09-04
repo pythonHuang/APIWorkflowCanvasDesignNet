@@ -46,10 +46,10 @@
       </div>
       <div class="center-panel">
         <div class="style-toolbar">
-          <el-select v-model="selFontName" size="small" style="width:110px" @change="applyStyle('fontName')">
+          <el-select v-model="selFontName" size="small" style="width:110px" @change="onStyleChange('fontName')">
             <el-option v-for="f in ['Microsoft YaHei','SimSun','SimHei','Arial','Times New Roman']" :key="f" :label="f" :value="f" />
           </el-select>
-          <el-select v-model="selFontSize" size="small" style="width:55px" @change="applyStyle('fontSize')">
+          <el-select v-model="selFontSize" size="small" style="width:55px" @change="onStyleChange('fontSize')">
             <el-option v-for="s in [8,9,10,11,12,14,16,18,20,24,28,36]" :key="s" :label="String(s)" :value="s" />
           </el-select>
           <el-button-group size="small">
@@ -57,8 +57,8 @@
             <el-button :type="italicActive?'primary':''" @click="applyStyle('italic')"><i>I</i></el-button>
             <el-button @click="applyStyle('underline')"><u>U</u></el-button>
           </el-button-group>
-          <el-color-picker v-model="selColor" size="small" @change="onColorChange('color')" />
-          <el-color-picker v-model="selBgColor" size="small" @change="onColorChange('bgColor')" />
+          <el-color-picker v-model="selColor" size="small" @change="onStyleChange('color')" />
+          <el-color-picker v-model="selBgColor" size="small" @change="onStyleChange('bgColor')" />
           <el-button-group size="small">
             <el-button @click="applyStyle('align','left')">左</el-button>
             <el-button @click="applyStyle('align','center')">中</el-button>
@@ -777,9 +777,13 @@ function applyStyle(prop:string, val?:any) {
   })
 }
 
-/** 颜色选择器变更（v-model 已更新，读取最新值写入选中单元格） */
-function onColorChange(prop: 'color' | 'bgColor') {
-  applyStyle(prop, prop==='color' ? selColor.value : selBgColor.value)
+/** 字体/字号/颜色选择器变更（v-model 已更新，读取最新值写入选中单元格） */
+function onStyleChange(prop: 'color' | 'bgColor' | 'fontName' | 'fontSize') {
+  const val = prop === 'color' ? selColor.value
+    : prop === 'bgColor' ? selBgColor.value
+    : prop === 'fontName' ? selFontName.value
+    : selFontSize.value
+  applyStyle(prop, val)
 }
 
 function toggleBorder() { pushHistory(); forEachSelected((r,c)=>{const key=`${r},${c}`,ex=cells.value[key]||{value:''},s=ex.style||{}; s.border=s.border===false?true:false; cells.value[key]={...ex,style:s}}) }
