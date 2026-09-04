@@ -55,7 +55,7 @@ public class FlowExecutionService
         {
             "sqlite"                       => $"Data Source={(string.IsNullOrEmpty(ds.DbName) ? "juggle.db" : ds.DbName)}",
             "mysql"                        => $"Server={ds.Host};Port={ds.Port};Database={ds.DbName};User={ds.Username};Password={ds.Password};CharSet=utf8mb4;",
-            "postgresql" or "postgres"     => $"Host={ds.Host};Port={ds.Port};Database={ds.DbName};Username={ds.Username};Password={ds.Password};",
+            "postgresql" or "postgres"     => $"Host={ds.Host};Port={ds.Port};Database={ds.DbName};Username={ds.Username};Password={ds.Password};No Reset On Close=true;",
             "sqlserver"  or "mssql"        => $"Server={ds.Host},{ds.Port};Database={ds.DbName};User Id={ds.Username};Password={ds.Password};TrustServerCertificate=True;",
             "oracle"                       => $"Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST={ds.Host})(PORT={ds.Port}))(CONNECT_DATA=(SID={ds.DbName})));User Id={ds.Username};Password={ds.Password};",
             "dm"                           => $"Server={ds.Host};Port={ds.Port};Database={ds.DbName};User Id={ds.Username};PWD={ds.Password};",
