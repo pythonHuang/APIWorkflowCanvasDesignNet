@@ -133,7 +133,10 @@
         <h4 style="margin:0 0 8px">单元格属性</h4>
         <div v-if="hasSelection" style="font-size:12px">
             <p>位置: {{ hasSelection ? colLetter(selC) + (selR+1) : '' }} {{ selectedCells.length>1 ? `(+${selectedCells.length-1}格)` : '' }}</p>
-          <p>值:</p>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin:8px 0 2px">
+            <span>值:</span>
+            <el-button size="small" icon="QuestionFilled" link title="公式语法帮助" @click="formulaHelpVisible = true">公式帮助</el-button>
+          </div>
           <el-input v-model="cellValue" type="textarea" :rows="3" size="small" @input="updateCellValue" placeholder="文本 / ${fieldName} / =SUM(A1:A10)" />
           <p style="margin:8px 0 4px">类型:</p>
           <el-select v-model="rowType" size="small" style="width:100%" @change="updateRowType">
@@ -155,10 +158,10 @@
             渲染 1 次，用于表格列头（姓名/金额/日期…）。
           </div>
           <div v-else-if="rowType==='data'" style="margin-top:6px;color:#909399;font-size:11px;line-height:1.6">
-            绑定数据集后按<b>每条数据自动扩展一行</b>。单元格可写 <code>${'${字段名}'}</code>、<code>${'${数据集.字段}'}</code>、<code>${'${rowIndex}'}</code>（行号）或 <code>=公式</code>。
+            绑定数据集后按<b>每条数据自动扩展一行</b>。单元格可写 <code>${字段名}</code>、<code>${数据集.字段}</code>、<code>${rowIndex}</code>（行号）或 <code>=公式</code>。
           </div>
           <div v-else-if="rowType==='footer'" style="margin-top:6px;color:#909399;font-size:11px;line-height:1.6">
-            渲染 1 次（数据行下方）。绑定数据集后支持聚合：<code>${'${金额:SUM}'}</code>、<code>${'${字段:AVG}'}</code>、MIN / MAX / COUNT。
+            渲染 1 次（数据行下方）。绑定数据集后支持聚合：<code>${金额:SUM}</code>、<code>${字段:AVG}</code>、MIN / MAX / COUNT。
           </div>
         </div>
         <el-empty v-else description="点击单元格查看属性" />
@@ -287,6 +290,42 @@
       </div>
     </el-dialog>
 
+    <!-- 单元格公式语法帮助 -->
+    <el-dialog v-model="formulaHelpVisible" title="❓ 单元格公式语法帮助" width="680px" append-to-body>
+      <div class="formula-help">
+        <div class="fh-section">一、占位符（数据行 / 表头 / 汇总行均可使用）</div>
+        <pre>${字段名}         当前数据行该字段的值，如 ${name}
+${数据集.字段}    指定数据集的字段（跨数据集引用，取第 0 行），如 ${订单.amount}
+${rowIndex}       数据行行号（从 1 开始）</pre>
+        <div class="fh-section">二、聚合占位符（汇总行绑定数据集后生效）</div>
+        <pre>${金额:SUM}        合计
+${金额:AVG}        平均值
+${金额:MIN}        最小值
+${金额:MAX}        最大值
+${金额:COUNT}      条数
+（支持 ${数据集.金额:SUM} 指定数据集）</pre>
+        <div class="fh-section">三、公式（= 开头，数据行可用当前行字段参与计算）</div>
+        <pre>=IF(${amount} &gt;= 100, '大额', '小额')   条件判断
+=${amount} * 1.1                  算术
+=ROUND(${amount} / 3, 2)          四舍五入
+=SUM(A1:A10)                      静态单元格范围求和
+=UPPER(${name})                   转大写</pre>
+        <div class="fh-section">四、可用函数</div>
+        <pre>SUM / AVG / MIN / MAX / COUNT    统计（支持范围引用 A1:A10）
+IF(条件, 真值, 假值)              条件函数
+SUBSTR(文本, 起, 长)              截取    LEN 长度
+UPPER / LOWER / TRIM              大小写 / 去空格
+CONCAT(a, b)                      拼接    ROUND(x, 位)  ABS(x)
+NOW() / TODAY() / ROW()           当前时间 / 日期 / 行号</pre>
+        <div class="fh-section">五、运算符</div>
+        <pre>算术: + - * / %        比较: == != &gt; &lt; &gt;= &lt;=
+逻辑: &amp;&amp; || !          三元: 条件 ? 真值 : 假值</pre>
+        <div class="fh-note" style="margin-top:8px">
+          占位符在数据行逐行替换；汇总行用聚合占位符。公式以 = 开头时用公式引擎计算，优先级：先替换占位符再算公式。
+        </div>
+      </div>
+    </el-dialog>
+
     <!-- 预览 -->
     <el-dialog v-model="showPreview" title="预览" width="90%" top="5vh">
       <div v-if="previewParams.length>0" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
@@ -359,6 +398,7 @@ const rowTypes = ref<string[]>([])            // 每行类型: title/header/data
 const rowDatasets = ref<Record<number, string>>({})  // 行号 → 数据集id
 const rowDataset = ref('')                    // 当前选中行绑定的数据集
 const showPreview = ref(false), pageSettingsVisible = ref(false)
+const formulaHelpVisible = ref(false)
 const previewHtml = ref(''), previewParams = ref<any[]>([])
 const previewValues = ref<Record<string,any>>({})
 
@@ -874,6 +914,11 @@ function colLetter(n:number):string { return String.fromCharCode(65+n) }
 <style scoped>
 .designer-container{height:100vh;display:flex;flex-direction:column;background:#f5f5f5}
 .code-editor :deep(textarea) { font-family: Consolas, Monaco, 'Courier New', monospace; font-size: 12px; }
+.formula-help { max-height: 60vh; overflow-y: auto; }
+.formula-help pre { background: #f6f8fa; border: 1px solid #e4e7ed; border-radius: 6px; padding: 8px 10px; font-size: 12px; line-height: 1.9; margin: 0 0 4px; overflow-x: auto; font-family: Consolas, Monaco, 'Courier New', monospace; white-space: pre; }
+.formula-help .fh-section { font-weight: 600; margin: 12px 0 4px; color: #303133; }
+.formula-help .fh-section:first-child { margin-top: 0; }
+.formula-help .fh-note { color: #909399; font-size: 12px; }
 .toolbar{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:#001529;color:#fff;flex-shrink:0}
 .designer-body{flex:1;display:flex;overflow:hidden}
 .left-panel{width:220px;border-right:1px solid #ddd;padding:6px;overflow-y:auto;background:#fff;flex-shrink:0}
