@@ -142,6 +142,24 @@
             <el-option value="data" label="数据行(扩展)" />
             <el-option value="footer" label="汇总行" />
           </el-select>
+          <template v-if="rowType==='data' || rowType==='footer'">
+            <p style="margin:8px 0 4px">绑定数据集:</p>
+            <el-select v-model="rowDataset" size="small" style="width:100%" clearable placeholder="选择数据集" @change="updateRowDataset">
+              <el-option v-for="ds in datasets" :key="ds.id" :label="ds.name" :value="ds.id" />
+            </el-select>
+          </template>
+          <div v-if="rowType==='title'" style="margin-top:6px;color:#909399;font-size:11px;line-height:1.6">
+            渲染 1 次，用于报表大标题（可合并单元格、调字号）。
+          </div>
+          <div v-else-if="rowType==='header'" style="margin-top:6px;color:#909399;font-size:11px;line-height:1.6">
+            渲染 1 次，用于表格列头（姓名/金额/日期…）。
+          </div>
+          <div v-else-if="rowType==='data'" style="margin-top:6px;color:#909399;font-size:11px;line-height:1.6">
+            绑定数据集后按<b>每条数据自动扩展一行</b>。单元格可写 <code>${'${字段名}'}</code>、<code>${'${数据集.字段}'}</code>、<code>${'${rowIndex}'}</code>（行号）或 <code>=公式</code>。
+          </div>
+          <div v-else-if="rowType==='footer'" style="margin-top:6px;color:#909399;font-size:11px;line-height:1.6">
+            渲染 1 次（数据行下方）。绑定数据集后支持聚合：<code>${'${金额:SUM}'}</code>、<code>${'${字段:AVG}'}</code>、MIN / MAX / COUNT。
+          </div>
         </div>
         <el-empty v-else description="点击单元格查看属性" />
       </div>
@@ -336,6 +354,10 @@ const ctrlDown = ref(false)
 const boldActive = ref(false), italicActive = ref(false)
 const selFontSize = ref(12), selFontName = ref('Microsoft YaHei'), selColor = ref(''), selBgColor = ref('')
 const cellValue = ref(''), rowType = ref('data')
+// 行类型与数据集绑定（完整行语义模型）
+const rowTypes = ref<string[]>([])            // 每行类型: title/header/data/footer
+const rowDatasets = ref<Record<number, string>>({})  // 行号 → 数据集id
+const rowDataset = ref('')                    // 当前选中行绑定的数据集
 const showPreview = ref(false), pageSettingsVisible = ref(false)
 const previewHtml = ref(''), previewParams = ref<any[]>([])
 const previewValues = ref<Record<string,any>>({})
@@ -350,22 +372,25 @@ const redoStack = ref<string[]>([])
 const canUndo = computed(() => undoStack.value.length > 0)
 const canRedo = computed(() => redoStack.value.length > 0)
 
+function snapState() {
+  return JSON.stringify({ cells: cells.value, rows: rowHeights.value, types: rowTypes.value.slice(), datasets: { ...rowDatasets.value }, cols: colWidths.value, maxR: maxRows.value, maxC: maxCols.value })
+}
+
 function pushHistory() {
-  const snap = JSON.stringify({ cells: cells.value, rows: rowHeights.value, cols: colWidths.value, maxR: maxRows.value, maxC: maxCols.value })
-  undoStack.value.push(snap)
+  undoStack.value.push(snapState())
   if (undoStack.value.length > MAX_HISTORY) undoStack.value.shift()
   redoStack.value = []
 }
 
 function undo() {
   if (!canUndo.value) return
-  redoStack.value.push(JSON.stringify({ cells: cells.value, rows: rowHeights.value, cols: colWidths.value, maxR: maxRows.value, maxC: maxCols.value }))
+  redoStack.value.push(snapState())
   restoreState(undoStack.value.pop()!)
 }
 
 function redo() {
   if (!canRedo.value) return
-  undoStack.value.push(JSON.stringify({ cells: cells.value, rows: rowHeights.value, cols: colWidths.value, maxR: maxRows.value, maxC: maxCols.value }))
+  undoStack.value.push(snapState())
   restoreState(redoStack.value.pop()!)
 }
 
@@ -374,6 +399,8 @@ function restoreState(snap: string) {
     const s = JSON.parse(snap)
     cells.value = s.cells || {}
     rowHeights.value = s.rows || []
+    rowTypes.value = s.types || []
+    rowDatasets.value = s.datasets || {}
     colWidths.value = s.cols || []
     maxRows.value = s.maxR || 10
     maxCols.value = s.maxC || 6
@@ -560,6 +587,9 @@ function loadLayoutJson() {
     const layout = JSON.parse(form.layoutJson)
     maxRows.value = layout.rows?.length || 10; maxCols.value = layout.cols?.length || 6
     rowHeights.value = layout.rows?.map((r:any)=> r.type==='data'?'data':r.height||25) || []
+    rowTypes.value = layout.rows?.map((r:any)=> r.type || 'header') || []
+    rowDatasets.value = {}
+    layout.rows?.forEach((r:any, i:number) => { if (r.dataset) rowDatasets.value[i] = r.dataset })
     colWidths.value = layout.cols?.map((c:any)=>c.width||100) || []
     pageSize.value = layout.page?.size||'A4'; pageOrientation.value = layout.page?.orientation||'portrait'
     if (layout.page?.margin) Object.assign(pageMargin, layout.page.margin)
@@ -570,7 +600,7 @@ function loadLayoutJson() {
   } catch {}
 }
 
-function resizeGrid() { while(rowHeights.value.length<maxRows.value) rowHeights.value.push(25); while(colWidths.value.length<maxCols.value) colWidths.value.push(100) }
+function resizeGrid() { while(rowHeights.value.length<maxRows.value) { rowHeights.value.push(25); rowTypes.value.push('header') } while(colWidths.value.length<maxCols.value) colWidths.value.push(100) }
 function getCell(r:number,c:number) { return cells.value[`${r},${c}`] }
 function getCellText(r:number,c:number) { return getCell(r,c)?.value||'' }
 function cellSpan(r:number,c:number) { return { colspan:getCell(r,c)?.colspan||1, rowspan:getCell(r,c)?.rowspan||1 } }
@@ -611,7 +641,8 @@ function onCellMouseDown(_e:MouseEvent, r:number, c:number) {
   }
   const cell = getCell(r,c)
   cellValue.value = cell?.value||''
-  rowType.value = (rowHeights.value[r]==='data')?'data':'header'
+  rowType.value = rowTypes.value[r] || (rowHeights.value[r]==='data'?'data':'header')
+  rowDataset.value = rowDatasets.value[r] || ''
   boldActive.value = cell?.style?.bold||false
   italicActive.value = cell?.style?.italic||false
   selFontSize.value = cell?.style?.fontSize||12
@@ -680,7 +711,17 @@ function updateCellValue() {
   }
 }
 
-function updateRowType() { if (selR.value>=0) rowHeights.value[selR.value]=rowType.value==='title'?35:rowType.value==='header'?28:rowType.value==='data'?'data':25 }
+function updateRowType() {
+  if (selR.value < 0) return
+  rowTypes.value[selR.value] = rowType.value
+  // 标题/表头/汇总行给视觉行高提示，数据行自适应
+  rowHeights.value[selR.value] = rowType.value==='title'?35 : rowType.value==='header'?28 : rowType.value==='footer'?25 : 'data'
+}
+function updateRowDataset() {
+  if (selR.value < 0) return
+  if (rowDataset.value) rowDatasets.value[selR.value] = rowDataset.value
+  else delete rowDatasets.value[selR.value]
+}
 
 function applyStyle(prop:string, val?:any) {
   pushHistory()
@@ -800,7 +841,12 @@ function onCellDrop(e:DragEvent, r:number, c:number) { const field = e.dataTrans
 function onGridScroll() {}
 
 function saveLayoutJson() {
-  const rows=[]; for (let r=0;r<maxRows.value;r++) rows.push({height:typeof rowHeights.value[r]==='string'?25:(rowHeights.value[r]||25),type:rowHeights.value[r]==='data'?'data':'header'})
+  const rows=[]; for (let r=0;r<maxRows.value;r++) rows.push({
+    height:typeof rowHeights.value[r]==='string'?25:(rowHeights.value[r]||25),
+    type:rowTypes.value[r] || (rowHeights.value[r]==='data'?'data':'header'),
+    dataset:rowDatasets.value[r] || '',
+    expand:(rowTypes.value[r]==='data' && rowDatasets.value[r]) ? 'auto' : ''
+  })
   const cols=[]; for (let c=0;c<maxCols.value;c++) cols.push({width:colWidths.value[c]||100})
   const cellArr=Object.entries(cells.value).map(([k,v]:any)=>({r:Number(k.split(',')[0]),c:Number(k.split(',')[1]),...v}))
   const dsArr = datasets.value.map(d=>({id:d.id,name:d.name,sourceType:d.sourceType,sourceRef:d.sourceRef,customSql:d.customSql,dataSourceId:d.dataSourceId,fields:d.fields}))

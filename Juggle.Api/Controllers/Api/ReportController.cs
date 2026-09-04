@@ -85,7 +85,7 @@ public class ReportController : ControllerBase
     {
         var rpt = await _db.Set<ReportEntity>().FindAsync(req.Id);
         if (rpt == null) return NotFound();
-        var data = _reportExec.ExportPdf(rpt.LayoutJson!, req.Params);
+        var data = await _reportExec.ExportPdfAsync(rpt.LayoutJson!, req.Params);
         return File(data, "text/html", $"{rpt.Name}.html");
     }
 
@@ -94,7 +94,7 @@ public class ReportController : ControllerBase
     {
         var rpt = await _db.Set<ReportEntity>().FindAsync(req.Id);
         if (rpt == null) return NotFound();
-        var data = _reportExec.ExportExcel(rpt.LayoutJson!, req.Params);
+        var data = await _reportExec.ExportExcelAsync(rpt.LayoutJson!, req.Params);
         return File(data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{rpt.Name}.xlsx");
     }
 }

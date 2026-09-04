@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using ClosedXML.Excel;
 using Juggle.Domain.Engine;
 using Juggle.Infrastructure.Persistence;
@@ -88,9 +89,15 @@ public class ReportExecutionService
         sb.AppendLine("td{padding:4px 6px;}");
         sb.AppendLine("@media print{@page{size:A4;margin:15mm}}</style></head><body>");
 
-        // 执行所有数据集
+        var datasets = await ResolveDatasetsAsync(root, queryParams);
+        return RenderHtmlCore(root, datasets);
+    }
+
+    /// <summary>执行 layoutJson 中定义的全部数据集，返回 数据集id → DataTable。</summary>
+    private async Task<Dictionary<string, DataTable>> ResolveDatasetsAsync(JsonElement root, Dictionary<string, object?>? queryParams)
+    {
         var datasets = new Dictionary<string, DataTable>();
-        if (root.TryGetProperty("datasets", out var dsArr))
+        if (root.TryGetProperty("datasets", out var dsArr) && dsArr.ValueKind == JsonValueKind.Array)
         {
             foreach (var ds in dsArr.EnumerateArray())
             {
@@ -111,214 +118,344 @@ public class ReportExecutionService
                 if (dt != null) datasets[id] = dt;
             }
         }
+        return datasets;
+    }
 
-        // 渲染表格
+    /// <summary>HTML 渲染核心：数据行按数据集自动扩展，静态行（标题/表头/汇总）渲染一次。</summary>
+    private static string RenderHtmlCore(JsonElement root, Dictionary<string, DataTable> datasets)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("<!DOCTYPE html><html><head><meta charset='utf-8'><style>");
+        sb.AppendLine("table{border-collapse:collapse;font-family:'Microsoft YaHei',sans-serif;}");
+        sb.AppendLine("td{padding:4px 6px;}");
+        sb.AppendLine("@media print{@page{size:A4;margin:15mm}}</style></head><body>");
+
+        var cellMap = BuildCellMap(root);
+        var maxCols = GetColCount(root);
+        var materialized = MaterializeRows(root, datasets);
+        var templateUsed = new HashSet<(int r, int c)>();   // 静态行之间的跨行合并占用
+
         sb.AppendLine("<table>");
-        var rows = root.TryGetProperty("rows", out var rowsEl) ? rowsEl : default;
-        var cols = root.TryGetProperty("cols", out var colsEl) ? colsEl : default;
-        var cells = root.TryGetProperty("cells", out var cellsEl) ? cellsEl : default;
-
-        // 构建 cells lookup
-        var cellMap = new Dictionary<(int r, int c), JsonElement>();
-        if (cells.ValueKind == JsonValueKind.Array)
-            foreach (var c in cells.EnumerateArray())
-            {
-                var r = c.TryGetProperty("r", out var re) ? re.GetInt32() : 0;
-                var cc = c.TryGetProperty("c", out var ce) ? ce.GetInt32() : 0;
-                cellMap[(r, cc)] = c;
-            }
-
-        // 简单渲染：遍历 rows → 渲染每行
-        int maxRows = rows.ValueKind == JsonValueKind.Array ? rows.GetArrayLength() : 0;
-        int maxCols = cols.ValueKind == JsonValueKind.Array ? cols.GetArrayLength() : 0;
-        var usedCells = new HashSet<(int, int)>();
-
-        for (int ri = 0; ri < maxRows; ri++)
+        foreach (var rr in materialized)
         {
-            var rowEl = rows[ri];
-            var rowType = rowEl.TryGetProperty("type", out var rtEl) ? rtEl.GetString() ?? "data" : "data";
-            var dataset = rowEl.TryGetProperty("dataset", out var dsRefEl) ? dsRefEl.GetString() ?? "" : "";
-            var expand = rowEl.TryGetProperty("expand", out var expEl) ? expEl.GetString() ?? "" : "";
+            sb.Append("<tr>");
+            var used = new HashSet<int>();
+            for (int ci = 0; ci < maxCols; ci++)
+            {
+                if (used.Contains(ci)) continue;
+                if (rr.DataIndex == null && templateUsed.Contains((rr.TemplateRow, ci))) continue;
 
-            DataTable? dt = string.IsNullOrEmpty(dataset) || !datasets.ContainsKey(dataset) ? null : datasets[dataset];
+                var hasCell = cellMap.TryGetValue((rr.TemplateRow, ci), out var cell);
+                var value = hasCell ? ResolveCellValue(cell, rr, datasets) : "";
+                var colspan = hasCell ? Math.Max(1, GetInt(cell, "colspan", 1)) : 1;
+                var rowspan = hasCell ? Math.Max(1, GetInt(cell, "rowspan", 1)) : 1;
+                if (rr.DataIndex != null) rowspan = 1;   // 数据扩展行不支持跨行合并
 
-            if (expand == "auto" && dt != null)
-            {
-                // 数据扩展行：为每行数据渲染一次
-                for (int di = 0; di < dt.Rows.Count; di++)
-                {
-                    sb.Append("<tr>");
-                    for (int ci = 0; ci < maxCols; ci++)
-                    {
-                        if (usedCells.Contains((ri, ci))) continue;
-                        RenderCell(sb, ri, ci, cellMap, dt, di, datasets);
-                    }
-                    sb.AppendLine("</tr>");
-                }
-            }
-            else if (dt != null && dt.Rows.Count > 0)
-            {
-                sb.Append("<tr>");
-                for (int ci = 0; ci < maxCols; ci++)
-                {
-                    if (usedCells.Contains((ri, ci))) continue;
-                    RenderCell(sb, ri, ci, cellMap, dt, 0, datasets);
-                }
-                sb.AppendLine("</tr>");
-            }
-            else
-            {
-                // 静态行
-                sb.Append("<tr>");
-                for (int ci = 0; ci < maxCols; ci++)
-                {
-                    if (usedCells.Contains((ri, ci))) continue;
-                    RenderCell(sb, ri, ci, cellMap, null, 0, datasets);
-                }
-                sb.AppendLine("</tr>");
-            }
+                var style = hasCell ? "border:1px solid #ccc;" + ReadCellStyle(cell) : "border:1px solid #ccc;";
+                if (colspan > 1) sb.Append($"<td colspan='{colspan}' style='{style}'>");
+                else sb.Append($"<td style='{style}'>");
+                sb.Append(value);
+                sb.AppendLine("</td>");
 
-            // 标记已处理的合并单元格
-            foreach (var mk in cellMap.Keys.Where(k => k.r == ri))
-            {
-                var cell = cellMap[mk];
-                var colspan = cell.TryGetProperty("colspan", out var csp) ? csp.GetInt32() : 1;
-                var rowspan = cell.TryGetProperty("rowspan", out var rsp) ? rsp.GetInt32() : 1;
-                for (int dr = 0; dr < rowspan; dr++)
-                    for (int dc = 0; dc < colspan; dc++)
-                        if (dr > 0 || dc > 0)
-                            usedCells.Add((ri + dr, mk.c + dc));
+                for (int dc = 1; dc < colspan; dc++) used.Add(ci + dc);
+                if (rr.DataIndex == null)
+                    for (int dr = 0; dr < rowspan; dr++)
+                        for (int dc = 0; dc < colspan; dc++)
+                            if (dr > 0 || dc > 0)
+                                templateUsed.Add((rr.TemplateRow + dr, ci + dc));
             }
+            sb.AppendLine("</tr>");
         }
-
         sb.AppendLine("</table></body></html>");
         return sb.ToString();
     }
 
-    private static void RenderCell(StringBuilder sb, int ri, int ci,
-        Dictionary<(int, int), JsonElement> cells, DataTable? dt, int dataRow,
-        Dictionary<string, DataTable> datasets)
+    /// <summary>物化渲染行：数据行按数据集行数扩展，其余行渲染一次。</summary>
+    private static List<MaterializedRow> MaterializeRows(JsonElement root, Dictionary<string, DataTable> datasets)
     {
-        var style = "border:1px solid #ccc;";
-        string value = "";
-        int colspan = 1, rowspan = 1;
+        var result = new List<MaterializedRow>();
+        if (!root.TryGetProperty("rows", out var rowsEl) || rowsEl.ValueKind != JsonValueKind.Array)
+            return result;
 
-        if (cells.TryGetValue((ri, ci), out var cell))
+        for (int ri = 0; ri < rowsEl.GetArrayLength(); ri++)
         {
-            value = cell.TryGetProperty("value", out var vEl) ? vEl.GetString() ?? "" : "";
-            colspan = cell.TryGetProperty("colspan", out var csp) ? csp.GetInt32() : 1;
-            rowspan = cell.TryGetProperty("rowspan", out var rsp) ? rsp.GetInt32() : 1;
+            var rowEl = rowsEl[ri];
+            var type = rowEl.TryGetProperty("type", out var rtEl) ? rtEl.GetString() ?? "" : "";
+            var datasetId = rowEl.TryGetProperty("dataset", out var dEl) ? dEl.GetString() ?? "" : "";
+            var expand = rowEl.TryGetProperty("expand", out var eEl) ? eEl.GetString() ?? "" : "";
 
-            if (cell.TryGetProperty("style", out var sEl))
+            var dt = !string.IsNullOrEmpty(datasetId) && datasets.TryGetValue(datasetId, out var v) ? v : null;
+
+            if (dt != null && (expand == "auto" || type == "data"))
             {
-                if (sEl.TryGetProperty("bold", out var b) && b.ValueKind == JsonValueKind.True) style += "font-weight:bold;";
-                if (sEl.TryGetProperty("italic", out var it) && it.ValueKind == JsonValueKind.True) style += "font-style:italic;";
-                if (sEl.TryGetProperty("fontSize", out var fs)) style += $"font-size:{fs.GetInt32()}px;";
-                if (sEl.TryGetProperty("color", out var cl)) style += $"color:{cl.GetString()};";
-                if (sEl.TryGetProperty("bgColor", out var bg)) style += $"background-color:{bg.GetString()};";
-                if (sEl.TryGetProperty("align", out var al)) style += $"text-align:{al.GetString()};";
-                if (sEl.TryGetProperty("border", out var bd) && bd.ValueKind == JsonValueKind.False) style = style.Replace("border:1px solid #ccc;", "");
+                // 数据扩展行：每条数据渲染一行
+                for (int di = 0; di < dt.Rows.Count; di++)
+                    result.Add(new MaterializedRow { TemplateRow = ri, DataIndex = di, RowNumber = di + 1, Dataset = dt });
             }
-
-            // ${field} 替换
-            if (dt != null && value.Contains("${"))
+            else
             {
-                foreach (System.Data.DataColumn col in dt.Columns)
+                // 静态行（标题/表头/汇总/无数据集）：渲染一次
+                var dataIdx = dt != null && dt.Rows.Count > 0 ? 0 : (int?)null;
+                result.Add(new MaterializedRow
                 {
-                    var key = $"${{{col.ColumnName}}}";
-                    if (value.Contains(key))
-                    {
-                        var replacement = dt.Rows[dataRow][col]?.ToString() ?? "";
-                        value = value.Replace(key, replacement);
-                    }
-                }
-                value = value.Replace("${rowIndex}", (dataRow + 1).ToString());
+                    TemplateRow = ri,
+                    DataIndex = dataIdx,
+                    RowNumber = 0,
+                    Dataset = dataIdx.HasValue ? dt : null
+                });
             }
+        }
+        return result;
+    }
 
-            // 公式 =xxx
-            if (value.StartsWith("=") && dt != null)
+    /// <summary>解析单元格值：${字段} / ${数据集.字段} / ${字段:聚合} / ${rowIndex} 占位符 + =公式。</summary>
+    private static string ResolveCellValue(JsonElement cell, MaterializedRow rr, Dictionary<string, DataTable> datasets)
+    {
+        var raw = cell.TryGetProperty("value", out var vEl) ? vEl.GetString() ?? "" : "";
+        if (string.IsNullOrEmpty(raw)) return "";
+
+        var value = raw;
+        if (value.Contains("${"))
+            value = Regex.Replace(value, @"\$\{([^}]+)\}", m => ResolvePlaceholder(m.Groups[1].Value.Trim(), rr, datasets));
+
+        // 公式 =xxx（数据行用当前行字段值参与计算，静态/汇总行无数据上下文）
+        if (value.StartsWith("="))
+        {
+            try
             {
-                try
+                if (rr.Dataset != null && rr.DataIndex.HasValue)
                 {
                     var cellVals = new Dictionary<string, object?>();
-                    for (int c = 0; c < dt.Columns.Count; c++)
-                        cellVals[$"${dt.Columns[c].ColumnName}"] = dt.Rows[dataRow][c];
-                    cellVals["_rowIndex"] = dataRow;
+                    for (int c = 0; c < rr.Dataset.Columns.Count; c++)
+                        cellVals[$"${rr.Dataset.Columns[c].ColumnName}"] = rr.Dataset.Rows[rr.DataIndex.Value][c];
+                    cellVals["_rowIndex"] = rr.DataIndex.Value;
                     value = FormulaEngine.Eval(value, cellVals, cellVals)?.ToString() ?? "";
                 }
-                catch { value = "#ERR"; }
+                else
+                {
+                    value = FormulaEngine.Eval(value)?.ToString() ?? "";
+                }
+            }
+            catch { value = "#ERR"; }
+        }
+        return value;
+    }
+
+    /// <summary>解析单个占位符：支持 [数据集.]字段[:SUM|AVG|MIN|MAX|COUNT] 与 rowIndex。</summary>
+    private static string ResolvePlaceholder(string body, MaterializedRow rr, Dictionary<string, DataTable> datasets)
+    {
+        var field = body;
+        var agg = "";
+        var colonIdx = field.LastIndexOf(':');
+        if (colonIdx > 0)
+        {
+            var cand = field[(colonIdx + 1)..].ToUpperInvariant();
+            if (cand is "SUM" or "AVG" or "MIN" or "MAX" or "COUNT")
+            {
+                agg = cand;
+                field = field[..colonIdx];
             }
         }
 
-        var tag = "td";
-        if (colspan > 1) sb.Append($"<{tag} colspan='{colspan}'");
-        else sb.Append($"<{tag}");
-        if (rowspan > 1) sb.Append($" rowspan='{rowspan}'");
-        sb.Append($" style='{style}'>");
-        sb.Append(value);
-        sb.AppendLine($"</{tag}>");
+        string? dsName = null;
+        var dotIdx = field.LastIndexOf('.');
+        if (dotIdx > 0)
+        {
+            dsName = field[..dotIdx];
+            field = field[(dotIdx + 1)..];
+        }
+
+        if (dsName == null && field.Equals("rowIndex", StringComparison.OrdinalIgnoreCase))
+            return rr.DataIndex.HasValue ? rr.RowNumber.ToString() : "";
+
+        var dt = rr.Dataset;
+        if (dsName != null)
+        {
+            if (!datasets.TryGetValue(dsName, out dt) || dt == null) return "";
+        }
+        if (dt == null || !dt.Columns.Contains(field)) return "";
+
+        if (agg.Length > 0) return AggregateValue(dt, field, agg);
+
+        if (rr.DataIndex.HasValue && ReferenceEquals(dt, rr.Dataset))
+            return dt.Rows[rr.DataIndex.Value][field]?.ToString() ?? "";
+        // 引用其它数据集 → 取第 0 行
+        return dt.Rows.Count > 0 ? dt.Rows[0][field]?.ToString() ?? "" : "";
     }
 
-    /// <summary>导出 Excel (.xlsx) — ClosedXML</summary>
-    public byte[] ExportExcel(string layoutJson, Dictionary<string, object?>? queryParams = null)
+    /// <summary>列聚合：SUM/AVG/MIN/MAX/COUNT（数值/日期/字符串自适应）。</summary>
+    private static string AggregateValue(DataTable dt, string field, string agg)
     {
-        using var doc = JsonDocument.Parse(layoutJson);
-        var root = doc.RootElement;
-        using var wb = new XLWorkbook();
-        var ws = wb.Worksheets.Add("Sheet1");
+        var values = new List<object?>();
+        foreach (System.Data.DataRow r in dt.Rows)
+        {
+            var v = r[field];
+            if (v != null && v != DBNull.Value) values.Add(v);
+        }
+        if (agg == "COUNT") return values.Count.ToString();
+        if (values.Count == 0) return "";
 
-        var cells = root.TryGetProperty("cells", out var cellsEl) ? cellsEl : default;
-        var cellMap = new Dictionary<(int r, int c), JsonElement>();
-        if (cells.ValueKind == JsonValueKind.Array)
-            foreach (var c in cells.EnumerateArray())
+        // 数值聚合
+        if (values.All(v => v is sbyte or byte or short or ushort or int or uint or long or ulong or float or double or decimal
+                || (v is string s && double.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))))
+        {
+            var nums = values.Select(v => v is string s
+                ? double.Parse(s, System.Globalization.CultureInfo.InvariantCulture)
+                : Convert.ToDouble(v, System.Globalization.CultureInfo.InvariantCulture)).ToList();
+            var result = agg switch
+            {
+                "SUM" => nums.Sum(),
+                "AVG" => nums.Average(),
+                "MIN" => nums.Min(),
+                "MAX" => nums.Max(),
+                _ => 0d
+            };
+            return FormatNum(result);
+        }
+
+        // 日期聚合
+        if (values.All(v => v is DateTime || (v is string s && DateTime.TryParse(s, out _))))
+        {
+            var dates = values.Select(v => v is DateTime d ? d : DateTime.Parse(v!.ToString()!, System.Globalization.CultureInfo.InvariantCulture)).ToList();
+            return agg switch
+            {
+                "MIN" => dates.Min().ToString("yyyy-MM-dd HH:mm:ss"),
+                "MAX" => dates.Max().ToString("yyyy-MM-dd HH:mm:ss"),
+                _ => ""
+            };
+        }
+
+        // 字符串聚合（MIN/MAX）
+        if (agg is "MIN" or "MAX")
+        {
+            var strs = values.Select(v => v?.ToString() ?? "").ToList();
+            return agg == "MIN" ? strs.Min()! : strs.Max()!;
+        }
+        return "";
+    }
+
+    private static string FormatNum(double d)
+        => d == Math.Floor(d) && !double.IsInfinity(d) && Math.Abs(d) < 1e15
+            ? ((long)d).ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : d.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>构建模板单元格 lookup（模板行号, 列号）→ 单元格定义。</summary>
+    private static Dictionary<(int r, int c), JsonElement> BuildCellMap(JsonElement root)
+    {
+        var map = new Dictionary<(int r, int c), JsonElement>();
+        if (root.TryGetProperty("cells", out var cellsEl) && cellsEl.ValueKind == JsonValueKind.Array)
+            foreach (var c in cellsEl.EnumerateArray())
             {
                 var r = c.TryGetProperty("r", out var re) ? re.GetInt32() : 0;
                 var cc = c.TryGetProperty("c", out var ce) ? ce.GetInt32() : 0;
-                cellMap[(r, cc)] = c;
+                map[(r, cc)] = c;
             }
+        return map;
+    }
 
-        foreach (var kv in cellMap)
+    private static int GetColCount(JsonElement root)
+        => root.TryGetProperty("cols", out var colsEl) && colsEl.ValueKind == JsonValueKind.Array ? colsEl.GetArrayLength() : 0;
+
+    private static int GetInt(JsonElement el, string prop, int def)
+        => el.TryGetProperty(prop, out var v) ? Math.Max(1, v.GetInt32()) : def;
+
+    /// <summary>读取单元格样式为 HTML 内联样式追加内容。</summary>
+    private static string ReadCellStyle(JsonElement cell)
+    {
+        var style = "";
+        if (cell.TryGetProperty("style", out var sEl))
         {
-            var (r, c) = kv.Key;
-            var cell = kv.Value;
-            var value = cell.TryGetProperty("value", out var ve) ? ve.GetString() ?? "" : "";
-            var colspan = cell.TryGetProperty("colspan", out var csp) ? Math.Max(1, csp.GetInt32()) : 1;
-            var rowspan = cell.TryGetProperty("rowspan", out var rsp) ? Math.Max(1, rsp.GetInt32()) : 1;
+            if (sEl.TryGetProperty("bold", out var b) && b.ValueKind == JsonValueKind.True) style += "font-weight:bold;";
+            if (sEl.TryGetProperty("italic", out var it) && it.ValueKind == JsonValueKind.True) style += "font-style:italic;";
+            if (sEl.TryGetProperty("fontSize", out var fs)) style += $"font-size:{fs.GetInt32()}px;";
+            if (sEl.TryGetProperty("color", out var cl)) style += $"color:{cl.GetString()};";
+            if (sEl.TryGetProperty("bgColor", out var bg)) style += $"background-color:{bg.GetString()};";
+            if (sEl.TryGetProperty("align", out var al)) style += $"text-align:{al.GetString()};";
+            if (sEl.TryGetProperty("border", out var bd) && bd.ValueKind == JsonValueKind.False) style = style.Replace("border:1px solid #ccc;", "");
+        }
+        return style;
+    }
 
-            var xlCell = ws.Cell(r + 1, c + 1);
-            xlCell.Value = value;
+    /// <summary>一次渲染输出行（HTML/Excel 共用）。</summary>
+    private class MaterializedRow
+    {
+        public int TemplateRow { get; set; }          // 模板行号（用于取单元格定义/样式）
+        public int? DataIndex { get; set; }           // 数据集行索引（null=静态行）
+        public int RowNumber { get; set; }            // 数据行序号（1-based，静态行为 0）
+        public DataTable? Dataset { get; set; }       // 本行绑定的数据集
+    }
 
-            if (colspan > 1 || rowspan > 1)
+    /// <summary>导出 Excel (.xlsx) — ClosedXML（与 HTML 同一套扩展/聚合/占位符逻辑）</summary>
+    public async Task<byte[]> ExportExcelAsync(string layoutJson, Dictionary<string, object?>? queryParams = null)
+    {
+        using var doc = JsonDocument.Parse(layoutJson);
+        var root = doc.RootElement;
+        var datasets = await ResolveDatasetsAsync(root, queryParams);
+        return ExportExcelCore(root, datasets);
+    }
+
+    private static byte[] ExportExcelCore(JsonElement root, Dictionary<string, DataTable> datasets)
+    {
+        using var wb = new XLWorkbook();
+        var ws = wb.Worksheets.Add("Sheet1");
+        var cellMap = BuildCellMap(root);
+        var maxCols = GetColCount(root);
+        var materialized = MaterializeRows(root, datasets);
+        var templateUsed = new HashSet<(int r, int c)>();
+
+        int outRow = 0;
+        foreach (var rr in materialized)
+        {
+            var used = new HashSet<int>();
+            for (int ci = 0; ci < maxCols; ci++)
             {
-                var endR = r + rowspan;
-                var endC = c + colspan;
-                ws.Range(r + 1, c + 1, endR, endC).Merge();
-            }
+                if (used.Contains(ci)) continue;
+                if (rr.DataIndex == null && templateUsed.Contains((rr.TemplateRow, ci))) continue;
+                if (!cellMap.TryGetValue((rr.TemplateRow, ci), out var cell)) continue;   // Excel 只写有定义的单元格
 
-            if (cell.TryGetProperty("style", out var se))
-            {
-                if (se.TryGetProperty("bold", out var b) && b.ValueKind == JsonValueKind.True) xlCell.Style.Font.Bold = true;
-                if (se.TryGetProperty("fontSize", out var fs)) xlCell.Style.Font.FontSize = fs.GetDouble();
-                if (se.TryGetProperty("color", out var cl)) xlCell.Style.Font.FontColor = XLColor.FromHtml(cl.GetString()!);
-                if (se.TryGetProperty("bgColor", out var bg)) xlCell.Style.Fill.BackgroundColor = XLColor.FromHtml(bg.GetString()!);
-                if (se.TryGetProperty("align", out var al))
-                    xlCell.Style.Alignment.Horizontal = al.GetString() switch
-                    {
-                        "center" => XLAlignmentHorizontalValues.Center,
-                        "right" => XLAlignmentHorizontalValues.Right,
-                        _ => XLAlignmentHorizontalValues.Left
-                    };
-                if (se.TryGetProperty("border", out var bd) && bd.ValueKind != JsonValueKind.False)
-                    xlCell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                var value = ResolveCellValue(cell, rr, datasets);
+                var colspan = Math.Max(1, GetInt(cell, "colspan", 1));
+                var rowspan = Math.Max(1, GetInt(cell, "rowspan", 1));
+                if (rr.DataIndex != null) rowspan = 1;
+
+                var xlCell = ws.Cell(outRow + 1, ci + 1);
+                xlCell.Value = value;
+
+                if (colspan > 1 || rowspan > 1)
+                    ws.Range(outRow + 1, ci + 1, outRow + rowspan, ci + colspan).Merge();
+
+                if (cell.TryGetProperty("style", out var se))
+                {
+                    if (se.TryGetProperty("bold", out var b) && b.ValueKind == JsonValueKind.True) xlCell.Style.Font.Bold = true;
+                    if (se.TryGetProperty("fontSize", out var fs)) xlCell.Style.Font.FontSize = fs.GetDouble();
+                    if (se.TryGetProperty("color", out var cl)) xlCell.Style.Font.FontColor = XLColor.FromHtml(cl.GetString()!);
+                    if (se.TryGetProperty("bgColor", out var bg)) xlCell.Style.Fill.BackgroundColor = XLColor.FromHtml(bg.GetString()!);
+                    if (se.TryGetProperty("align", out var al))
+                        xlCell.Style.Alignment.Horizontal = al.GetString() switch
+                        {
+                            "center" => XLAlignmentHorizontalValues.Center,
+                            "right" => XLAlignmentHorizontalValues.Right,
+                            _ => XLAlignmentHorizontalValues.Left
+                        };
+                    if (se.TryGetProperty("border", out var bd) && bd.ValueKind != JsonValueKind.False)
+                        xlCell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                }
+
+                for (int dc = 1; dc < colspan; dc++) used.Add(ci + dc);
+                if (rr.DataIndex == null)
+                    for (int dr = 0; dr < rowspan; dr++)
+                        for (int dc = 0; dc < colspan; dc++)
+                            if (dr > 0 || dc > 0)
+                                templateUsed.Add((rr.TemplateRow + dr, ci + dc));
             }
+            outRow++;
         }
 
         // 列宽
-        var cols = root.TryGetProperty("cols", out var colsEl) && colsEl.ValueKind == JsonValueKind.Array ? colsEl : default;
-        if (cols.ValueKind == JsonValueKind.Array)
+        if (root.TryGetProperty("cols", out var colsEl) && colsEl.ValueKind == JsonValueKind.Array)
         {
             int ci = 0;
-            foreach (var col in cols.EnumerateArray())
+            foreach (var col in colsEl.EnumerateArray())
             {
                 var w = col.TryGetProperty("width", out var we) ? we.GetInt32() : 100;
                 ws.Column(ci + 1).Width = w / 7.0; // px → character width approx
@@ -332,9 +469,9 @@ public class ReportExecutionService
     }
 
     /// <summary>导出 PDF — 基于 HTML 渲染 + QuestPDF 嵌入（降级为 HTML 输出供浏览器打印）</summary>
-    public byte[] ExportPdf(string layoutJson, Dictionary<string, object?>? queryParams = null)
+    public async Task<byte[]> ExportPdfAsync(string layoutJson, Dictionary<string, object?>? queryParams = null)
     {
-        var html = RenderToHtml(layoutJson, queryParams).GetAwaiter().GetResult();
+        var html = await RenderToHtml(layoutJson, queryParams);
         return Encoding.UTF8.GetBytes(html);
     }
 
