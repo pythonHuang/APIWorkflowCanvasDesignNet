@@ -118,7 +118,7 @@ async function doExportPdf(row: any) {
 
 async function doExportExcel(row: any) {
   const res: any = await request.post('/report/export-excel', { id: row.id, params: {} }, { responseType: 'blob' })
-  downloadBlob(res.data, `${row.name}.xls`)
+  downloadBlob(res.data, `${row.name}.xlsx`)
 }
 
 /** 打印：取预览 HTML 写入新窗口并触发浏览器打印 */
