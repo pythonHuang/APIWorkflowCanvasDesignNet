@@ -145,7 +145,11 @@ public class ReportExecutionService
         sb.AppendLine("<table>");
         foreach (var rr in materialized)
         {
-            sb.Append("<tr>");
+            // 应用设计器的行高设置
+            var rowHeight = GetRowHeight(root, rr.TemplateRow);
+            sb.Append("<tr");
+            if (rowHeight > 0) sb.Append($" style='height:{rowHeight}px'");
+            sb.Append(">");
             var used = new HashSet<int>();
             for (int ci = 0; ci < maxCols; ci++)
             {
@@ -159,6 +163,7 @@ public class ReportExecutionService
                 if (rr.DataIndex != null) rowspan = 1;   // 数据扩展行不支持跨行合并
 
                 var style = hasCell ? "border:1px solid #ccc;" + ReadCellStyle(cell) : "border:1px solid #ccc;";
+                if (rowHeight > 0) style += $"height:{rowHeight}px;";
                 if (colspan > 1) sb.Append($"<td colspan='{colspan}' style='{style}'>");
                 else sb.Append($"<td style='{style}'>");
                 sb.Append(value);
@@ -368,6 +373,19 @@ public class ReportExecutionService
     private static int GetColCount(JsonElement root)
         => root.TryGetProperty("cols", out var colsEl) && colsEl.ValueKind == JsonValueKind.Array ? colsEl.GetArrayLength() : 0;
 
+    /// <summary>读取模板行的行高（px），无设置为 0。</summary>
+    private static int GetRowHeight(JsonElement root, int rowIndex)
+    {
+        if (root.TryGetProperty("rows", out var rowsEl) && rowsEl.ValueKind == JsonValueKind.Array
+            && rowIndex >= 0 && rowIndex < rowsEl.GetArrayLength())
+        {
+            var rowEl = rowsEl[rowIndex];
+            if (rowEl.TryGetProperty("height", out var he) && he.ValueKind == JsonValueKind.Number)
+                return Math.Max(0, he.GetInt32());
+        }
+        return 0;
+    }
+
     private static int GetInt(JsonElement el, string prop, int def)
         => el.TryGetProperty(prop, out var v) ? Math.Max(1, v.GetInt32()) : def;
 
@@ -418,6 +436,9 @@ public class ReportExecutionService
         int outRow = 0;
         foreach (var rr in materialized)
         {
+            // 应用设计器的行高设置
+            var rowHeight = GetRowHeight(root, rr.TemplateRow);
+            if (rowHeight > 0) ws.Row(outRow + 1).Height = rowHeight;
             var used = new HashSet<int>();
             for (int ci = 0; ci < maxCols; ci++)
             {

@@ -823,6 +823,14 @@ function insertRow(dir: number) {
   }
   cells.value = newCells
   rowHeights.value.splice(r, 0, 25)
+  rowTypes.value.splice(r, 0, 'header')
+  // 数据集绑定按新行号重映射
+  const newDs: Record<number, string> = {}
+  for (const [k, v] of Object.entries(rowDatasets.value)) {
+    const idx = Number(k)
+    newDs[idx >= r ? idx + 1 : idx] = v
+  }
+  rowDatasets.value = newDs
   maxRows.value++
   if (dir > 0) selR.value++
 }
@@ -840,6 +848,15 @@ function deleteRow() {
   }
   cells.value = newCells
   rowHeights.value.splice(r, 1)
+  rowTypes.value.splice(r, 1)
+  // 数据集绑定按新行号重映射
+  const newDs: Record<number, string> = {}
+  for (const [k, v] of Object.entries(rowDatasets.value)) {
+    const idx = Number(k)
+    if (idx > r) newDs[idx - 1] = v
+    else if (idx < r) newDs[idx] = v
+  }
+  rowDatasets.value = newDs
   maxRows.value--
   selR.value = Math.min(selR.value, maxRows.value - 1)
 }
