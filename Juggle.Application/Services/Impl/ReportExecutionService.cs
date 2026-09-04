@@ -115,7 +115,14 @@ public class ReportExecutionService
                     : 0;
 
                 var dt = await ResolveSource(sourceType, sourceRef, customSql, dataSourceId, queryParams);
-                if (dt != null) datasets[id] = dt;
+                if (dt != null)
+                {
+                    datasets[id] = dt;
+                    // 占位符通常用数据集名称引用（如 ${订单.字段}），按名称再注册一份索引
+                    var name = ds.TryGetProperty("name", out var nEl) ? nEl.GetString() ?? "" : "";
+                    if (!string.IsNullOrEmpty(name) && !datasets.ContainsKey(name))
+                        datasets[name] = dt;
+                }
             }
         }
         return datasets;
@@ -271,7 +278,12 @@ public class ReportExecutionService
         var dt = rr.Dataset;
         if (dsName != null)
         {
-            if (!datasets.TryGetValue(dsName, out dt) || dt == null) return "";
+            if (!datasets.TryGetValue(dsName, out dt) || dt == null)
+            {
+                // 兼容数据集名称的大小写/命名差异，按名称忽略大小写再匹配一次
+                dt = datasets.FirstOrDefault(kv => string.Equals(kv.Key, dsName, StringComparison.OrdinalIgnoreCase)).Value;
+                if (dt == null) return "";
+            }
         }
         if (dt == null || !dt.Columns.Contains(field)) return "";
 
