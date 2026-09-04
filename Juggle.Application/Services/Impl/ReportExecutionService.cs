@@ -78,17 +78,11 @@ public class ReportExecutionService
             throw new Exception("SQL 包含不允许的操作: UPDATE");
     }
 
-    /// <summary>渲染报表为HTML</summary>
+    /// <summary>渲染报表为HTML（数据行自动扩展、列宽/行高所见即所得、支持斑马纹隔行变色）</summary>
     public async Task<string> RenderToHtml(string layoutJson, Dictionary<string, object?>? queryParams = null)
     {
         using var doc = JsonDocument.Parse(layoutJson);
         var root = doc.RootElement;
-        var sb = new StringBuilder();
-        sb.AppendLine("<!DOCTYPE html><html><head><meta charset='utf-8'><style>");
-        sb.AppendLine("table{border-collapse:collapse;font-family:'Microsoft YaHei',sans-serif;}");
-        sb.AppendLine("td{padding:4px 6px;}");
-        sb.AppendLine("@media print{@page{size:A4;margin:15mm}}</style></head><body>");
-
         var datasets = await ResolveDatasetsAsync(root, queryParams);
         return RenderHtmlCore(root, datasets);
     }
@@ -133,8 +127,8 @@ public class ReportExecutionService
     {
         var sb = new StringBuilder();
         sb.AppendLine("<!DOCTYPE html><html><head><meta charset='utf-8'><style>");
-        sb.AppendLine("table{border-collapse:collapse;font-family:'Microsoft YaHei',sans-serif;}");
-        sb.AppendLine("td{padding:4px 6px;}");
+        sb.AppendLine("table{border-collapse:collapse;font-family:'Microsoft YaHei',sans-serif;table-layout:fixed;}");
+        sb.AppendLine("td{padding:4px 6px;word-wrap:break-word;}");
         sb.AppendLine("@media print{@page{size:A4;margin:15mm}}</style></head><body>");
 
         var cellMap = BuildCellMap(root);
@@ -143,6 +137,17 @@ public class ReportExecutionService
         var templateUsed = new HashSet<(int r, int c)>();   // 静态行之间的跨行合并占用
 
         sb.AppendLine("<table>");
+        // 列宽所见即所得：按设计器 cols[].width 生成 colgroup
+        if (root.TryGetProperty("cols", out var colsEl) && colsEl.ValueKind == JsonValueKind.Array)
+        {
+            sb.Append("<colgroup>");
+            foreach (var col in colsEl.EnumerateArray())
+            {
+                var w = col.TryGetProperty("width", out var we) && we.ValueKind == JsonValueKind.Number ? Math.Max(0, we.GetInt32()) : 0;
+                sb.Append(w > 0 ? $"<col style='width:{w}px'/>" : "<col/>");
+            }
+            sb.AppendLine("</colgroup>");
+        }
         foreach (var rr in materialized)
         {
             // 应用设计器的行高设置
@@ -164,6 +169,9 @@ public class ReportExecutionService
 
                 var style = hasCell ? "border:1px solid #ccc;" + ReadCellStyle(cell) : "border:1px solid #ccc;";
                 if (rowHeight > 0) style += $"height:{rowHeight}px;";
+                // 斑马纹：偶数数据行加浅灰底（单元格自带背景色时优先生效）
+                if (rr.Zebra && rr.RowNumber % 2 == 0 && (!hasCell || !HasBgColor(cell)))
+                    style += "background-color:#f5f7fa;";
                 if (colspan > 1) sb.Append($"<td colspan='{colspan}' style='{style}'>");
                 else sb.Append($"<td style='{style}'>");
                 sb.Append(value);
@@ -198,11 +206,13 @@ public class ReportExecutionService
 
             var dt = !string.IsNullOrEmpty(datasetId) && datasets.TryGetValue(datasetId, out var v) ? v : null;
 
+            var zebra = rowEl.TryGetProperty("zebra", out var zEl) && zEl.ValueKind == JsonValueKind.True;
+
             if (dt != null && (expand == "auto" || type == "data"))
             {
                 // 数据扩展行：每条数据渲染一行
                 for (int di = 0; di < dt.Rows.Count; di++)
-                    result.Add(new MaterializedRow { TemplateRow = ri, DataIndex = di, RowNumber = di + 1, Dataset = dt });
+                    result.Add(new MaterializedRow { TemplateRow = ri, DataIndex = di, RowNumber = di + 1, Dataset = dt, Zebra = zebra });
             }
             else
             {
@@ -415,7 +425,14 @@ public class ReportExecutionService
         public int? DataIndex { get; set; }           // 数据集行索引（null=静态行）
         public int RowNumber { get; set; }            // 数据行序号（1-based，静态行为 0）
         public DataTable? Dataset { get; set; }       // 本行绑定的数据集
+        public bool Zebra { get; set; }               // 斑马纹：偶数数据行浅灰底
     }
+
+    /// <summary>单元格是否显式设置了背景色。</summary>
+    private static bool HasBgColor(JsonElement cell)
+        => cell.TryGetProperty("style", out var sEl)
+           && sEl.TryGetProperty("bgColor", out var bg)
+           && bg.ValueKind == JsonValueKind.String;
 
     /// <summary>导出 Excel (.xlsx) — ClosedXML（与 HTML 同一套扩展/聚合/占位符逻辑）</summary>
     public async Task<byte[]> ExportExcelAsync(string layoutJson, Dictionary<string, object?>? queryParams = null)
@@ -478,6 +495,10 @@ public class ReportExecutionService
                     if (se.TryGetProperty("border", out var bd) && bd.ValueKind != JsonValueKind.False)
                         xlCell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                 }
+
+                // 斑马纹：偶数数据行浅灰底（单元格自带背景色时优先生效）
+                if (rr.Zebra && rr.RowNumber % 2 == 0 && !HasBgColor(cell))
+                    xlCell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f5f7fa");
 
                 for (int dc = 1; dc < colspan; dc++) used.Add(ci + dc);
                 if (rr.DataIndex == null)

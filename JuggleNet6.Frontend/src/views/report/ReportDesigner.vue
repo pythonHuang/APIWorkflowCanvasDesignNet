@@ -159,6 +159,7 @@
           </div>
           <div v-else-if="rowType==='data'" style="margin-top:6px;color:#909399;font-size:11px;line-height:1.6">
             绑定数据集后按<b>每条数据自动扩展一行</b>。单元格可写 <code>${字段名}</code>、<code>${数据集.字段}</code>、<code>${rowIndex}</code>（行号）或 <code>=公式</code>。
+            <el-checkbox v-model="rowZebra" size="small" @change="updateRowZebra" style="margin-top:4px">斑马纹（预览隔行浅灰底）</el-checkbox>
           </div>
           <div v-else-if="rowType==='footer'" style="margin-top:6px;color:#909399;font-size:11px;line-height:1.6">
             渲染 1 次（数据行下方）。绑定数据集后支持聚合：<code>${金额:SUM}</code>、<code>${字段:AVG}</code>、MIN / MAX / COUNT。
@@ -397,6 +398,8 @@ const cellValue = ref(''), rowType = ref('data')
 const rowTypes = ref<string[]>([])            // 每行类型: title/header/data/footer
 const rowDatasets = ref<Record<number, string>>({})  // 行号 → 数据集id
 const rowDataset = ref('')                    // 当前选中行绑定的数据集
+const rowZebras = ref<Record<number, boolean>>({})   // 行号 → 斑马纹开关
+const rowZebra = ref(false)                   // 当前选中行的斑马纹
 const showPreview = ref(false), pageSettingsVisible = ref(false)
 const formulaHelpVisible = ref(false)
 const previewHtml = ref(''), previewParams = ref<any[]>([])
@@ -413,7 +416,7 @@ const canUndo = computed(() => undoStack.value.length > 0)
 const canRedo = computed(() => redoStack.value.length > 0)
 
 function snapState() {
-  return JSON.stringify({ cells: cells.value, rows: rowHeights.value, types: rowTypes.value.slice(), datasets: { ...rowDatasets.value }, cols: colWidths.value, maxR: maxRows.value, maxC: maxCols.value })
+  return JSON.stringify({ cells: cells.value, rows: rowHeights.value, types: rowTypes.value.slice(), datasets: { ...rowDatasets.value }, zebras: { ...rowZebras.value }, cols: colWidths.value, maxR: maxRows.value, maxC: maxCols.value })
 }
 
 function pushHistory() {
@@ -441,6 +444,7 @@ function restoreState(snap: string) {
     rowHeights.value = s.rows || []
     rowTypes.value = s.types || []
     rowDatasets.value = s.datasets || {}
+    rowZebras.value = s.zebras || {}
     colWidths.value = s.cols || []
     maxRows.value = s.maxR || 10
     maxCols.value = s.maxC || 6
@@ -630,6 +634,8 @@ function loadLayoutJson() {
     rowTypes.value = layout.rows?.map((r:any)=> r.type || 'header') || []
     rowDatasets.value = {}
     layout.rows?.forEach((r:any, i:number) => { if (r.dataset) rowDatasets.value[i] = r.dataset })
+    rowZebras.value = {}
+    layout.rows?.forEach((r:any, i:number) => { if (r.zebra === true) rowZebras.value[i] = true })
     colWidths.value = layout.cols?.map((c:any)=>c.width||100) || []
     pageSize.value = layout.page?.size||'A4'; pageOrientation.value = layout.page?.orientation||'portrait'
     if (layout.page?.margin) Object.assign(pageMargin, layout.page.margin)
@@ -683,6 +689,7 @@ function onCellMouseDown(_e:MouseEvent, r:number, c:number) {
   cellValue.value = cell?.value||''
   rowType.value = rowTypes.value[r] || (rowHeights.value[r]==='data'?'data':'header')
   rowDataset.value = rowDatasets.value[r] || ''
+  rowZebra.value = !!rowZebras.value[r]
   boldActive.value = cell?.style?.bold||false
   italicActive.value = cell?.style?.italic||false
   selFontSize.value = cell?.style?.fontSize||12
@@ -762,6 +769,11 @@ function updateRowDataset() {
   if (rowDataset.value) rowDatasets.value[selR.value] = rowDataset.value
   else delete rowDatasets.value[selR.value]
 }
+function updateRowZebra() {
+  if (selR.value < 0) return
+  if (rowZebra.value) rowZebras.value[selR.value] = true
+  else delete rowZebras.value[selR.value]
+}
 
 function applyStyle(prop:string, val?:any) {
   pushHistory()
@@ -834,13 +846,19 @@ function insertRow(dir: number) {
   cells.value = newCells
   rowHeights.value.splice(r, 0, 25)
   rowTypes.value.splice(r, 0, 'header')
-  // 数据集绑定按新行号重映射
+  // 数据集绑定/斑马纹按新行号重映射
   const newDs: Record<number, string> = {}
   for (const [k, v] of Object.entries(rowDatasets.value)) {
     const idx = Number(k)
     newDs[idx >= r ? idx + 1 : idx] = v
   }
   rowDatasets.value = newDs
+  const newZb: Record<number, boolean> = {}
+  for (const [k, v] of Object.entries(rowZebras.value)) {
+    const idx = Number(k)
+    newZb[idx >= r ? idx + 1 : idx] = v
+  }
+  rowZebras.value = newZb
   maxRows.value++
   if (dir > 0) selR.value++
 }
@@ -859,7 +877,7 @@ function deleteRow() {
   cells.value = newCells
   rowHeights.value.splice(r, 1)
   rowTypes.value.splice(r, 1)
-  // 数据集绑定按新行号重映射
+  // 数据集绑定/斑马纹按新行号重映射
   const newDs: Record<number, string> = {}
   for (const [k, v] of Object.entries(rowDatasets.value)) {
     const idx = Number(k)
@@ -867,6 +885,13 @@ function deleteRow() {
     else if (idx < r) newDs[idx] = v
   }
   rowDatasets.value = newDs
+  const newZb: Record<number, boolean> = {}
+  for (const [k, v] of Object.entries(rowZebras.value)) {
+    const idx = Number(k)
+    if (idx > r) newZb[idx - 1] = v
+    else if (idx < r) newZb[idx] = v
+  }
+  rowZebras.value = newZb
   maxRows.value--
   selR.value = Math.min(selR.value, maxRows.value - 1)
 }
@@ -912,7 +937,8 @@ function saveLayoutJson() {
     height:typeof rowHeights.value[r]==='string'?25:(rowHeights.value[r]||25),
     type:rowTypes.value[r] || (rowHeights.value[r]==='data'?'data':'header'),
     dataset:rowDatasets.value[r] || '',
-    expand:(rowTypes.value[r]==='data' && rowDatasets.value[r]) ? 'auto' : ''
+    expand:(rowTypes.value[r]==='data' && rowDatasets.value[r]) ? 'auto' : '',
+    zebra:rowZebras.value[r] === true
   })
   const cols=[]; for (let c=0;c<maxCols.value;c++) cols.push({width:colWidths.value[c]||100})
   const cellArr=Object.entries(cells.value).map(([k,v]:any)=>({r:Number(k.split(',')[0]),c:Number(k.split(',')[1]),...v}))
