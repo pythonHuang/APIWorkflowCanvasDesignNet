@@ -109,48 +109,57 @@ public class DataSourceService
             }
             case "postgresql" or "postgres":
             {
+                var pgTables = new List<(string Schema, string Name, bool IsView)>();
                 await using (var cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_name";
+                    cmd.CommandText = "SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema, table_name";
                     await using var reader = await cmd.ExecuteReaderAsync();
                     while (await reader.ReadAsync())
-                    {
-                        var name = reader.GetValue(0)?.ToString() ?? "";
-                        var type = reader.GetValue(1)?.ToString() ?? "";
-                        if (type == "VIEW") result.Views.Add(new DbObjectItem { Name = name });
-                        else result.Tables.Add(new DbObjectItem { Name = name });
-                    }
+                        pgTables.Add((
+                            reader.GetValue(0)?.ToString() ?? "",
+                            reader.GetValue(1)?.ToString() ?? "",
+                            string.Equals(reader.GetValue(2)?.ToString(), "VIEW", StringComparison.OrdinalIgnoreCase)));
                 }
+                AddWithSchemaQualify(pgTables.Where(t => !t.IsView).Select(t => (t.Schema, t.Name)), result.Tables);
+                AddWithSchemaQualify(pgTables.Where(t => t.IsView).Select(t => (t.Schema, t.Name)), result.Views);
+
+                var pgProcs = new List<(string Schema, string Name)>();
                 await using (var cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = "SELECT routine_name FROM information_schema.routines WHERE routine_type = 'PROCEDURE' AND routine_schema NOT IN ('pg_catalog','information_schema') ORDER BY routine_name";
+                    cmd.CommandText = "SELECT routine_schema, routine_name FROM information_schema.routines WHERE routine_type = 'PROCEDURE' AND routine_schema NOT IN ('pg_catalog','information_schema') ORDER BY routine_schema, routine_name";
                     await using var reader = await cmd.ExecuteReaderAsync();
                     while (await reader.ReadAsync())
-                        result.Procedures.Add(new DbObjectItem { Name = reader.GetValue(0)?.ToString() ?? "" });
+                        pgProcs.Add((reader.GetValue(0)?.ToString() ?? "", reader.GetValue(1)?.ToString() ?? ""));
                 }
+                AddWithSchemaQualify(pgProcs, result.Procedures);
                 break;
             }
             case "sqlserver" or "mssql":
             {
+                // INFORMATION_SCHEMA.TABLES 含所有 schema，同名表跨 schema 时用 schema.名 限定
+                var msTables = new List<(string Schema, string Name, bool IsView)>();
                 await using (var cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = "SELECT TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA.TABLES ORDER BY TABLE_NAME";
+                    cmd.CommandText = "SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA NOT IN ('sys','INFORMATION_SCHEMA') ORDER BY TABLE_SCHEMA, TABLE_NAME";
                     await using var reader = await cmd.ExecuteReaderAsync();
                     while (await reader.ReadAsync())
-                    {
-                        var name = reader.GetValue(0)?.ToString() ?? "";
-                        var type = reader.GetValue(1)?.ToString() ?? "";
-                        if (type == "VIEW") result.Views.Add(new DbObjectItem { Name = name });
-                        else result.Tables.Add(new DbObjectItem { Name = name });
-                    }
+                        msTables.Add((
+                            reader.GetValue(0)?.ToString() ?? "",
+                            reader.GetValue(1)?.ToString() ?? "",
+                            string.Equals(reader.GetValue(2)?.ToString(), "VIEW", StringComparison.OrdinalIgnoreCase)));
                 }
+                AddWithSchemaQualify(msTables.Where(t => !t.IsView).Select(t => (t.Schema, t.Name)), result.Tables);
+                AddWithSchemaQualify(msTables.Where(t => t.IsView).Select(t => (t.Schema, t.Name)), result.Views);
+
+                var msProcs = new List<(string Schema, string Name)>();
                 await using (var cmd = conn.CreateCommand())
                 {
-                    cmd.CommandText = "SELECT name FROM sys.procedures ORDER BY name";
+                    cmd.CommandText = "SELECT s.name, p.name FROM sys.procedures p JOIN sys.schemas s ON p.schema_id = s.schema_id WHERE s.name NOT IN ('sys') ORDER BY s.name, p.name";
                     await using var reader = await cmd.ExecuteReaderAsync();
                     while (await reader.ReadAsync())
-                        result.Procedures.Add(new DbObjectItem { Name = reader.GetValue(0)?.ToString() ?? "" });
+                        msProcs.Add((reader.GetValue(0)?.ToString() ?? "", reader.GetValue(1)?.ToString() ?? ""));
                 }
+                AddWithSchemaQualify(msProcs, result.Procedures);
                 break;
             }
             case "oracle":
@@ -246,12 +255,13 @@ public class DataSourceService
             }
             case "postgresql" or "postgres":
             {
+                var (pgSchema, pgTable) = SplitSchemaName(tableName, "public");
                 await using var cmd = conn.CreateCommand();
                 cmd.CommandText = $"""
                     SELECT c.column_name, c.data_type, c.is_nullable, c.column_default,
                            pg_catalog.col_description(format('%I.%I', c.table_schema, c.table_name)::regclass, c.ordinal_position) AS comment
                     FROM information_schema.columns c
-                    WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema') AND c.table_name = '{safeName}'
+                    WHERE c.table_schema = '{pgSchema}' AND c.table_name = '{pgTable}'
                     ORDER BY c.ordinal_position
                     """;
                 await using var reader = await cmd.ExecuteReaderAsync();
@@ -270,6 +280,8 @@ public class DataSourceService
             }
             case "sqlserver" or "mssql":
             {
+                // 按 schema+表名 精确过滤，避免同名表跨 schema 时字段混合重复
+                var (msSchema, msTable) = SplitSchemaName(tableName, "dbo");
                 await using var cmd = conn.CreateCommand();
                 cmd.CommandText = $"""
                     SELECT c.COLUMN_NAME, c.DATA_TYPE, c.IS_NULLABLE, c.COLUMN_DEFAULT,
@@ -279,7 +291,7 @@ public class DataSourceService
                       ON ep.major_id = OBJECT_ID(c.TABLE_SCHEMA + '.' + c.TABLE_NAME)
                      AND ep.minor_id = c.ORDINAL_POSITION
                      AND ep.class = 1 AND ep.name = 'MS_Description'
-                    WHERE c.TABLE_NAME = '{safeName}'
+                    WHERE c.TABLE_SCHEMA = '{msSchema}' AND c.TABLE_NAME = '{msTable}'
                     ORDER BY c.ORDINAL_POSITION
                     """;
                 await using var reader = await cmd.ExecuteReaderAsync();
@@ -362,11 +374,12 @@ public class DataSourceService
             }
             case "postgresql" or "postgres":
             {
+                var (pgSchema, pgProc) = SplitSchemaName(procName, "public");
                 await using var cmd = conn.CreateCommand();
                 cmd.CommandText = $"""
                     SELECT parameter_name, data_type, parameter_mode
                     FROM information_schema.parameters
-                    WHERE specific_name = '{safeName}'
+                    WHERE routine_schema = '{pgSchema}' AND specific_name = '{pgProc}'
                     ORDER BY ordinal_position
                     """;
                 await using var reader = await cmd.ExecuteReaderAsync();
@@ -383,15 +396,18 @@ public class DataSourceService
             }
             case "sqlserver" or "mssql":
             {
+                // 按 schema+存储过程名 精确过滤，避免跨 schema 同名过程参数混合
+                var (msSchema, msProc) = SplitSchemaName(procName, "dbo");
                 await using var cmd = conn.CreateCommand();
                 cmd.CommandText = $"""
                     SELECT p.name, t.name AS data_type,
                            CASE WHEN p.has_default_value = 1 THEN CAST(p.default_value AS NVARCHAR(200)) ELSE NULL END AS default_value,
                            CASE WHEN p.is_output = 1 THEN 'OUT' ELSE 'IN' END AS mode
                     FROM sys.procedures sp
+                    JOIN sys.schemas s ON sp.schema_id = s.schema_id
                     JOIN sys.parameters p ON sp.object_id = p.object_id
                     JOIN sys.types t ON p.user_type_id = t.user_type_id
-                    WHERE sp.name = '{safeName}' AND p.parameter_id > 0
+                    WHERE s.name = '{msSchema}' AND sp.name = '{msProc}' AND p.parameter_id > 0
                     ORDER BY p.parameter_id
                     """;
                 await using var reader = await cmd.ExecuteReaderAsync();
@@ -537,6 +553,29 @@ public class DataSourceService
             var varName = m.Groups[1].Value.Trim();
             return vars != null && vars.TryGetValue(varName, out var v) && v != null ? v : "";
         });
+    }
+
+    /// <summary>
+    /// 写入对象列表：同名对象跨 schema 时用 schema.名 限定，保证列表唯一不重复。
+    /// </summary>
+    private static void AddWithSchemaQualify(IEnumerable<(string Schema, string Name)> items, List<DbObjectItem> target)
+    {
+        foreach (var group in items.GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            foreach (var item in group)
+                target.Add(new DbObjectItem
+                {
+                    Name = group.Count() > 1 ? $"{item.Schema}.{item.Name}" : item.Name
+                });
+        }
+    }
+
+    /// <summary>拆分 schema.表名（无 schema 时返回默认 schema）</summary>
+    private static (string Schema, string Name) SplitSchemaName(string objectName, string defaultSchema)
+    {
+        var idx = objectName.LastIndexOf('.');
+        if (idx <= 0) return (defaultSchema, objectName.Replace("'", "''"));
+        return (objectName[..idx].Replace("'", "''"), objectName[(idx + 1)..].Replace("'", "''"));
     }
 }
 
