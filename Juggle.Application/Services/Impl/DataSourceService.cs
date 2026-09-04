@@ -183,6 +183,11 @@ public class DataSourceService
                 throw new InvalidOperationException($"不支持的数据库类型: {dsInfo.DsType}");
         }
 
+        // 按名称去重（多 schema 同名对象、驱动重复返回等场景，避免前端列表重复显示）
+        result.Tables     = result.Tables.GroupBy(t => t.Name, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+        result.Views      = result.Views.GroupBy(t => t.Name, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+        result.Procedures = result.Procedures.GroupBy(t => t.Name, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+
         return result;
     }
 

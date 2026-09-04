@@ -1,5 +1,5 @@
 <template>
-  <el-dialog :model-value="visible" @update:model-value="onVisibleChange" title="🗄 数据库对象（辅助生成 SQL）" width="1000px" append-to-body>
+  <el-dialog :model-value="visible" @update:model-value="onVisibleChange" title="🗄 数据库对象（辅助生成 SQL）" width="1000px" append-to-body destroy-on-close>
     <div style="display:flex;gap:10px">
       <div style="flex:1;min-width:0">
         <el-radio-group v-model="tab" size="small" @change="onTabChange">
@@ -105,6 +105,20 @@ const filteredObjects = computed(() => {
   return kw ? list.filter((o: any) => (o.name || '').toLowerCase().includes(kw)) : list
 })
 
+/** 按名称去重（不区分大小写），防止重复加载或多 schema 同名导致列表重复显示 */
+function dedup(list: any[]): any[] {
+  const seen = new Set<string>()
+  return (list || []).filter((o: any) => {
+    const key = (o.name || '').toLowerCase()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+// 加载序号守卫：只应用最新一次请求的结果（防止慢网络下旧响应覆盖新数据）
+let loadSeq = 0
+
 watch(() => props.visible, async v => {
   if (!v) return
   tab.value = 'tables'
@@ -114,12 +128,16 @@ watch(() => props.visible, async v => {
   procParams.value = []
   tables.value = []; views.value = []; procedures.value = []
   loading.value = true
+  const seq = ++loadSeq
   try {
     const res: any = await request.post('/system/datasource/metadata', { dataSourceName: props.dataSourceName })
-    tables.value = res.data?.tables || []
-    views.value = res.data?.views || []
-    procedures.value = res.data?.procedures || []
-  } catch { /* 拦截器已提示 */ } finally { loading.value = false }
+    if (seq !== loadSeq) return   // 已有更新的加载，丢弃本次结果
+    tables.value = dedup(res.data?.tables || [])
+    views.value = dedup(res.data?.views || [])
+    procedures.value = dedup(res.data?.procedures || [])
+  } catch { /* 拦截器已提示 */ } finally {
+    if (seq === loadSeq) loading.value = false
+  }
 })
 
 function onTabChange() {
