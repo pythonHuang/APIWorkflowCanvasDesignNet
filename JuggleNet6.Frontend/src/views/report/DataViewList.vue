@@ -77,14 +77,14 @@
     </el-dialog>
 
     <el-dialog v-model="previewVisible" title="预览数据" width="800px">
-      <div v-if="previewParams.length>0" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
         <div v-for="p in previewParams" :key="p.name" style="display:flex;align-items:center;gap:4px">
           <span style="font-size:12px">{{ p.label || p.name }}:</span>
           <el-input v-model="previewValues[p.name]" size="small" style="width:140px" />
         </div>
-        <el-button size="small" type="primary" @click="doPreview">查询</el-button>
+        <el-button size="small" type="primary" :loading="previewLoading" @click="doPreview">查询</el-button>
       </div>
-      <el-table :data="previewRows" max-height="400" border size="small">
+      <el-table :data="previewRows" max-height="400" border size="small" v-loading="previewLoading">
         <el-table-column v-for="col in previewColumns" :key="col" :prop="col" :label="col" show-overflow-tooltip />
       </el-table>
       <div style="margin-top:8px;color:#888;font-size:12px">共 {{ previewRows.length }} 条</div>
@@ -127,6 +127,7 @@ const previewColumns = ref<string[]>([])
 const previewParams = ref<any[]>([])
 const previewValues = ref<Record<string,any>>({})
 const previewId = ref(0)
+const previewLoading = ref(false)
 const dbBrowserVisible = ref(false)
 const testVisible = ref(false)
 const mappingLoading = ref(false)
@@ -183,11 +184,15 @@ function openPreview(row: any) {
   previewRows.value = []
   previewColumns.value = []
   previewVisible.value = true
+  doPreview()   // 打开即自动查询（无参数也能出数据）
 }
 async function doPreview() {
-  const res = await request.post('/report/dataview/preview', { id: previewId.value, params: previewValues.value })
-  previewColumns.value = res.data?.columns || []
-  previewRows.value = res.data?.rows || []
+  previewLoading.value = true
+  try {
+    const res = await request.post('/report/dataview/preview', { id: previewId.value, params: previewValues.value })
+    previewColumns.value = res.data?.columns || []
+    previewRows.value = res.data?.rows || []
+  } finally { previewLoading.value = false }
 }
 
 function openDbBrowser() {
