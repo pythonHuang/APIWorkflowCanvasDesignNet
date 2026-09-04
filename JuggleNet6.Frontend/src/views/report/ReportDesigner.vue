@@ -164,6 +164,40 @@
           <div v-else-if="rowType==='footer'" style="margin-top:6px;color:#909399;font-size:11px;line-height:1.6">
             渲染 1 次（数据行下方）。绑定数据集后支持聚合：<code>${金额:SUM}</code>、<code>${字段:AVG}</code>、MIN / MAX / COUNT。
           </div>
+
+          <p style="margin:10px 0 4px">边框:</p>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <el-button size="small" :type="bdState.top?'primary':''" @click="setBorderSide('top')">上</el-button>
+            <el-button size="small" :type="bdState.bottom?'primary':''" @click="setBorderSide('bottom')">下</el-button>
+            <el-button size="small" :type="bdState.left?'primary':''" @click="setBorderSide('left')">左</el-button>
+            <el-button size="small" :type="bdState.right?'primary':''" @click="setBorderSide('right')">右</el-button>
+            <el-button size="small" @click="setBorderAll(true)">全部</el-button>
+            <el-button size="small" @click="setBorderAll(false)">无</el-button>
+            <el-button size="small" :type="bdState.diagonal?'primary':''" @click="setBorderDiagonal">交叉</el-button>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+            <el-select v-model="bdStyle" size="small" style="width:80px" @change="applyBorderMeta">
+              <el-option value="solid" label="实线" />
+              <el-option value="dashed" label="虚线" />
+              <el-option value="dotted" label="点线" />
+              <el-option value="double" label="双线" />
+            </el-select>
+            <el-select v-model="bdWidth" size="small" style="width:66px" @change="applyBorderMeta">
+              <el-option :value="1" label="1px" />
+              <el-option :value="2" label="2px" />
+              <el-option :value="3" label="3px" />
+            </el-select>
+            <el-color-picker v-model="bdColor" size="small" @change="applyBorderMeta" />
+          </div>
+
+          <p style="margin:10px 0 4px">单元格背景图:</p>
+          <el-input v-model="bgImage" size="small" placeholder="图片 URL（可留空清除）" clearable @change="applyBgImage" />
+          <p style="margin:10px 0 4px">背景图填充:</p>
+          <el-select v-model="bgImageSize" size="small" style="width:100%" @change="applyBgImage">
+            <el-option value="cover" label="铺满(cover)" />
+            <el-option value="contain" label="完整(contain)" />
+            <el-option value="auto" label="原始大小(auto)" />
+          </el-select>
         </div>
         <el-empty v-else description="点击单元格查看属性" />
       </div>
@@ -181,6 +215,7 @@
         <el-form-item label="页边距(px)"><el-input v-model="pageMargin.top" placeholder="上" style="width:60px" /><span style="margin:0 4px">-</span><el-input v-model="pageMargin.right" placeholder="右" style="width:60px" /><span style="margin:0 4px">-</span><el-input v-model="pageMargin.bottom" placeholder="下" style="width:60px" /><span style="margin:0 4px">-</span><el-input v-model="pageMargin.left" placeholder="左" style="width:60px" /></el-form-item>
         <el-form-item label="页眉"><el-input v-model="pageHeader" placeholder="如: &quot;销售报表 - ${date}&quot;" /></el-form-item>
         <el-form-item label="页脚"><el-input v-model="pageFooter" placeholder="如: &quot;第 ${page} 页 / 共 ${total} 页&quot;" /></el-form-item>
+        <el-form-item label="背景图"><el-input v-model="pageBgImage" placeholder="文档背景图片 URL（可留空）" clearable /></el-form-item>
       </el-form>
       <template #footer><el-button @click="pageSettingsVisible=false">确定</el-button></template>
     </el-dialog>
@@ -393,6 +428,12 @@ const selectedCols = ref(new Set<number>())
 const ctrlDown = ref(false)
 const boldActive = ref(false), italicActive = ref(false)
 const selFontSize = ref(12), selFontName = ref('Microsoft YaHei'), selColor = ref(''), selBgColor = ref('')
+// 边框设置（分边/粗细/颜色/线型/交叉斜线）
+const bdState = reactive({ top: true, bottom: true, left: true, right: true, diagonal: false })
+const bdStyle = ref('solid'), bdWidth = ref(1), bdColor = ref('#cccccc')
+// 单元格背景图 / 文档背景图
+const bgImage = ref(''), bgImageSize = ref('cover')
+const pageBgImage = ref('')
 const cellValue = ref(''), rowType = ref('data')
 // 行类型与数据集绑定（完整行语义模型）
 const rowTypes = ref<string[]>([])            // 每行类型: title/header/data/footer
@@ -640,6 +681,7 @@ function loadLayoutJson() {
     pageSize.value = layout.page?.size||'A4'; pageOrientation.value = layout.page?.orientation||'portrait'
     if (layout.page?.margin) Object.assign(pageMargin, layout.page.margin)
     pageHeader.value = layout.page?.header||''; pageFooter.value = layout.page?.footer||''
+    pageBgImage.value = layout.page?.bgImage||''
     cells.value = {}; if (layout.cells) for (const c of layout.cells) cells.value[`${c.r},${c.c}`] = c
     previewParams.value = layout.params||[]
     if (layout.datasets) datasets.value = layout.datasets.map((d:any)=>({...d,expanded:true,loading:false}))
@@ -661,7 +703,20 @@ function getCellStyle(r:number,c:number) {
   if (s.color) style+=`color:${s.color};`
   if (s.bgColor) style+=`background-color:${s.bgColor};`
   if (s.align) style+=`text-align:${s.align};`
-  if (s.border===false) style+='border:none;'
+  // 边框：false=无；对象=分边/粗细/颜色/线型/交叉斜线；缺省=默认细边框
+  const b = s.border
+  if (b === false) style+='border:none;'
+  else if (b && typeof b === 'object') {
+    const w=b.width||1, col=b.color||'#333', st=b.style||'solid'
+    style+='border:none;'
+    if (b.top) style+=`border-top:${w}px ${st} ${col};`
+    if (b.bottom) style+=`border-bottom:${w}px ${st} ${col};`
+    if (b.left) style+=`border-left:${w}px ${st} ${col};`
+    if (b.right) style+=`border-right:${w}px ${st} ${col};`
+    if (b.diagonal) style+=`background-image:linear-gradient(to top right,transparent calc(50% - ${w*0.5}px),${col},transparent calc(50% + ${w*0.5}px)),linear-gradient(to bottom right,transparent calc(50% - ${w*0.5}px),${col},transparent calc(50% + ${w*0.5}px));`
+  }
+  // 单元格背景图
+  if (s.bgImage) style+=`background-image:url('${s.bgImage}');background-size:${s.bgImageSize||'cover'};background-position:center;background-repeat:no-repeat;`
   return style
 }
 
@@ -694,6 +749,7 @@ function onCellMouseDown(_e:MouseEvent, r:number, c:number) {
   italicActive.value = cell?.style?.italic||false
   selFontSize.value = cell?.style?.fontSize||12
   selColor.value = cell?.style?.color||''; selBgColor.value = cell?.style?.bgColor||''
+  loadBorderState(cell)
 }
 
 function commitEdit() {
@@ -798,7 +854,57 @@ function onStyleChange(prop: 'color' | 'bgColor' | 'fontName' | 'fontSize') {
   applyStyle(prop, val)
 }
 
-function toggleBorder() { pushHistory(); forEachSelected((r,c)=>{const key=`${r},${c}`,ex=cells.value[key]||{value:''},s=ex.style||{}; s.border=s.border===false?true:false; cells.value[key]={...ex,style:s}}) }
+// ===== 边框设置（分边/粗细/颜色/线型/交叉斜线） =====
+function loadBorderState(cell: any) {
+  const b = cell?.style?.border
+  if (b && typeof b === 'object') {
+    bdState.top = !!b.top; bdState.bottom = !!b.bottom; bdState.left = !!b.left; bdState.right = !!b.right; bdState.diagonal = !!b.diagonal
+    bdStyle.value = b.style || 'solid'; bdWidth.value = b.width || 1; bdColor.value = b.color || '#cccccc'
+  } else {
+    bdState.top = bdState.bottom = bdState.left = bdState.right = true; bdState.diagonal = false
+    bdStyle.value = 'solid'; bdWidth.value = 1; bdColor.value = '#cccccc'
+  }
+  bgImage.value = cell?.style?.bgImage || ''
+  bgImageSize.value = cell?.style?.bgImageSize || 'cover'
+}
+
+function applyBorder() {
+  pushHistory()
+  forEachSelected((r:number, c:number) => {
+    const key=`${r},${c}`, existing=cells.value[key]||{value:''}
+    const style = {...(existing.style||{})}
+    style.border = { top:bdState.top, bottom:bdState.bottom, left:bdState.left, right:bdState.right, diagonal:bdState.diagonal, width:bdWidth.value, style:bdStyle.value, color:bdColor.value }
+    cells.value[key] = {...existing, style}
+  })
+}
+function setBorderSide(side: 'top'|'bottom'|'left'|'right') { bdState[side] = !bdState[side]; applyBorder() }
+function setBorderAll(on: boolean) { bdState.top = bdState.bottom = bdState.left = bdState.right = on; applyBorder() }
+function setBorderDiagonal() { bdState.diagonal = !bdState.diagonal; applyBorder() }
+function applyBorderMeta() { applyBorder() }
+
+/** 单元格背景图 */
+function applyBgImage() {
+  pushHistory()
+  forEachSelected((r:number, c:number) => {
+    const key=`${r},${c}`, existing=cells.value[key]||{value:''}
+    const style = {...(existing.style||{})}
+    if (bgImage.value) { style.bgImage = bgImage.value; style.bgImageSize = bgImageSize.value }
+    else { delete style.bgImage; delete style.bgImageSize }
+    cells.value[key] = {...existing, style}
+  })
+}
+
+function toggleBorder() {
+  pushHistory()
+  forEachSelected((r:number,c:number) => {
+    const key=`${r},${c}`, ex=cells.value[key]||{value:''}, s={...(ex.style||{})}
+    const b = s.border
+    const hasAny = b === undefined || b === true || (typeof b==='object' && (b.top||b.bottom||b.left||b.right))
+    s.border = hasAny ? false : { top:true,bottom:true,left:true,right:true,width:1,style:'solid',color:'#cccccc' }
+    cells.value[key] = {...ex, style:s}
+  })
+  loadBorderState(getCell(selR.value, selC.value))
+}
 
 function mergeSelected() {
   if (selectedCells.value.length<2) return
@@ -944,7 +1050,7 @@ function saveLayoutJson() {
   const cellArr=Object.entries(cells.value).map(([k,v]:any)=>({r:Number(k.split(',')[0]),c:Number(k.split(',')[1]),...v}))
   const dsArr = datasets.value.map(d=>({id:d.id,name:d.name,sourceType:d.sourceType,sourceRef:d.sourceRef,customSql:d.customSql,dataSourceId:d.dataSourceId,fields:d.fields}))
   form.layoutJson = JSON.stringify({
-    page:{size:pageSize.value,orientation:pageOrientation.value,margin:{...pageMargin},header:pageHeader.value,footer:pageFooter.value},
+    page:{size:pageSize.value,orientation:pageOrientation.value,margin:{...pageMargin},header:pageHeader.value,footer:pageFooter.value,bgImage:pageBgImage.value},
     params:previewParams.value, rows, cols, cells:cellArr,
     datasets: dsArr
   })

@@ -136,6 +136,13 @@ public class ReportExecutionService
         var materialized = MaterializeRows(root, datasets);
         var templateUsed = new HashSet<(int r, int c)>();   // 静态行之间的跨行合并占用
 
+        // 文档背景图：包一层容器渲染
+        var pageBg = root.TryGetProperty("page", out var pgEl)
+            && pgEl.TryGetProperty("bgImage", out var pbi) && pbi.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(pbi.GetString())
+            ? pbi.GetString() : null;
+        if (pageBg != null)
+            sb.AppendLine($"<div style=\"background-image:url('{pageBg}');background-size:cover;background-position:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;padding:8px;\">");
+
         sb.AppendLine("<table>");
         // 列宽所见即所得：按设计器 cols[].width 生成 colgroup
         if (root.TryGetProperty("cols", out var colsEl) && colsEl.ValueKind == JsonValueKind.Array)
@@ -167,7 +174,7 @@ public class ReportExecutionService
                 var rowspan = hasCell ? Math.Max(1, GetInt(cell, "rowspan", 1)) : 1;
                 if (rr.DataIndex != null) rowspan = 1;   // 数据扩展行不支持跨行合并
 
-                var style = hasCell ? "border:1px solid #ccc;" + ReadCellStyle(cell) : "border:1px solid #ccc;";
+                var style = ReadCellStyle(cell, hasCell);
                 if (rowHeight > 0) style += $"height:{rowHeight}px;";
                 // 斑马纹：偶数数据行加浅灰底（单元格自带背景色时优先生效）
                 if (rr.Zebra && rr.RowNumber % 2 == 0 && (!hasCell || !HasBgColor(cell)))
@@ -186,7 +193,9 @@ public class ReportExecutionService
             }
             sb.AppendLine("</tr>");
         }
-        sb.AppendLine("</table></body></html>");
+        sb.AppendLine("</table>");
+        if (pageBg != null) sb.AppendLine("</div>");
+        sb.AppendLine("</body></html>");
         return sb.ToString();
     }
 
@@ -399,11 +408,13 @@ public class ReportExecutionService
     private static int GetInt(JsonElement el, string prop, int def)
         => el.TryGetProperty(prop, out var v) ? Math.Max(1, v.GetInt32()) : def;
 
-    /// <summary>读取单元格样式为 HTML 内联样式追加内容。</summary>
-    private static string ReadCellStyle(JsonElement cell)
+    /// <summary>读取单元格样式为 HTML 内联样式（含默认边框处理）。</summary>
+    private static string ReadCellStyle(JsonElement cell, bool hasCell)
     {
-        var style = "";
-        if (cell.TryGetProperty("style", out var sEl))
+        var hasBorderProp = hasCell && cell.TryGetProperty("style", out var sEl) && sEl.TryGetProperty("border", out _);
+        // 未显式设置边框时给默认细边框；设置了（false/对象）则由下面逻辑接管
+        var style = hasBorderProp ? "" : "border:1px solid #ccc;";
+        if (hasCell && cell.TryGetProperty("style", out sEl))
         {
             if (sEl.TryGetProperty("bold", out var b) && b.ValueKind == JsonValueKind.True) style += "font-weight:bold;";
             if (sEl.TryGetProperty("italic", out var it) && it.ValueKind == JsonValueKind.True) style += "font-style:italic;";
@@ -413,7 +424,35 @@ public class ReportExecutionService
             if (sEl.TryGetProperty("color", out var cl) && cl.ValueKind == JsonValueKind.String) style += $"color:{cl.GetString()};";
             if (sEl.TryGetProperty("bgColor", out var bg) && bg.ValueKind == JsonValueKind.String) style += $"background-color:{bg.GetString()};";
             if (sEl.TryGetProperty("align", out var al) && al.ValueKind == JsonValueKind.String) style += $"text-align:{al.GetString()};";
-            if (sEl.TryGetProperty("border", out var bd) && bd.ValueKind == JsonValueKind.False) style = style.Replace("border:1px solid #ccc;", "");
+
+            // 边框：对象=分边(上/下/左/右)/粗细/颜色/线型/交叉斜线；false=无边框
+            if (sEl.TryGetProperty("border", out var bdEl) && bdEl.ValueKind == JsonValueKind.Object)
+            {
+                var bw = GetInt(bdEl, "width", 1);
+                var bc = bdEl.TryGetProperty("color", out var bce) && bce.ValueKind == JsonValueKind.String ? bce.GetString() : "#333";
+                var bs = bdEl.TryGetProperty("style", out var bse) && bse.ValueKind == JsonValueKind.String ? bse.GetString() : "solid";
+                var bt = bdEl.TryGetProperty("top", out var bte) && bte.ValueKind == JsonValueKind.True;
+                var bb = bdEl.TryGetProperty("bottom", out var bbe) && bbe.ValueKind == JsonValueKind.True;
+                var bl = bdEl.TryGetProperty("left", out var ble) && ble.ValueKind == JsonValueKind.True;
+                var br = bdEl.TryGetProperty("right", out var bre) && bre.ValueKind == JsonValueKind.True;
+                if (bt) style += $"border-top:{bw}px {bs} {bc};";
+                if (bb) style += $"border-bottom:{bw}px {bs} {bc};";
+                if (bl) style += $"border-left:{bw}px {bs} {bc};";
+                if (br) style += $"border-right:{bw}px {bs} {bc};";
+                // 交叉斜线：两条对角渐变
+                if (bdEl.TryGetProperty("diagonal", out var bdD) && bdD.ValueKind == JsonValueKind.True)
+                {
+                    var half = bw * 0.5;
+                    style += $"background-image:linear-gradient(to top right,transparent calc(50% - {half}px),{bc},transparent calc(50% + {half}px)),linear-gradient(to bottom right,transparent calc(50% - {half}px),{bc},transparent calc(50% + {half}px));";
+                }
+            }
+
+            // 单元格背景图
+            if (sEl.TryGetProperty("bgImage", out var bgi) && bgi.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(bgi.GetString()))
+            {
+                var size = sEl.TryGetProperty("bgImageSize", out var bis) && bis.ValueKind == JsonValueKind.String ? bis.GetString() : "cover";
+                style += $"background-image:url('{bgi.GetString()}');background-size:{size};background-position:center;background-repeat:no-repeat;";
+            }
         }
         return style;
     }
@@ -492,8 +531,42 @@ public class ReportExecutionService
                             "right" => XLAlignmentHorizontalValues.Right,
                             _ => XLAlignmentHorizontalValues.Left
                         };
-                    if (se.TryGetProperty("border", out var bd) && bd.ValueKind != JsonValueKind.False)
-                        xlCell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    // 边框：false=无；对象=分边/粗细/颜色/线型/交叉斜线；true=旧格式外框细线
+                    if (se.TryGetProperty("border", out var bdEl))
+                    {
+                        if (bdEl.ValueKind == JsonValueKind.False)
+                        {
+                            xlCell.Style.Border.OutsideBorder = XLBorderStyleValues.None;
+                            xlCell.Style.Border.InsideBorder = XLBorderStyleValues.None;
+                        }
+                        else if (bdEl.ValueKind == JsonValueKind.Object)
+                        {
+                            var bw = GetInt(bdEl, "width", 1);
+                            var bc = bdEl.TryGetProperty("color", out var bce) && bce.ValueKind == JsonValueKind.String ? bce.GetString() : "#333";
+                            var bs = bdEl.TryGetProperty("style", out var bse) && bse.ValueKind == JsonValueKind.String ? bse.GetString() : "solid";
+                            var lineStyle = bw >= 2 ? XLBorderStyleValues.Medium : XLBorderStyleValues.Thin;
+                            if (bs == "dashed") lineStyle = XLBorderStyleValues.Dashed;
+                            else if (bs == "dotted") lineStyle = XLBorderStyleValues.Dotted;
+                            else if (bs == "double") lineStyle = XLBorderStyleValues.Double;
+                            var xlColor = XLColor.FromHtml(bc!);
+                            var xlBorder = xlCell.Style.Border;
+                            if (bdEl.TryGetProperty("top", out var bte) && bte.ValueKind == JsonValueKind.True) { xlBorder.TopBorder = lineStyle; xlBorder.TopBorderColor = xlColor; }
+                            if (bdEl.TryGetProperty("bottom", out var bbe) && bbe.ValueKind == JsonValueKind.True) { xlBorder.BottomBorder = lineStyle; xlBorder.BottomBorderColor = xlColor; }
+                            if (bdEl.TryGetProperty("left", out var ble) && ble.ValueKind == JsonValueKind.True) { xlBorder.LeftBorder = lineStyle; xlBorder.LeftBorderColor = xlColor; }
+                            if (bdEl.TryGetProperty("right", out var bre) && bre.ValueKind == JsonValueKind.True) { xlBorder.RightBorder = lineStyle; xlBorder.RightBorderColor = xlColor; }
+                            if (bdEl.TryGetProperty("diagonal", out var bdD) && bdD.ValueKind == JsonValueKind.True)
+                            {
+                                xlBorder.DiagonalBorder = lineStyle;
+                                xlBorder.DiagonalBorderColor = xlColor;
+                                xlBorder.DiagonalUp = true;
+                                xlBorder.DiagonalDown = true;
+                            }
+                        }
+                        else if (bdEl.ValueKind != JsonValueKind.False)
+                        {
+                            xlCell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        }
+                    }
                 }
 
                 // 斑马纹：偶数数据行浅灰底（单元格自带背景色时优先生效）
