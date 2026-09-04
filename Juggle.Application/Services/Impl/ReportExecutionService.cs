@@ -397,10 +397,12 @@ public class ReportExecutionService
         {
             if (sEl.TryGetProperty("bold", out var b) && b.ValueKind == JsonValueKind.True) style += "font-weight:bold;";
             if (sEl.TryGetProperty("italic", out var it) && it.ValueKind == JsonValueKind.True) style += "font-style:italic;";
-            if (sEl.TryGetProperty("fontSize", out var fs)) style += $"font-size:{fs.GetInt32()}px;";
-            if (sEl.TryGetProperty("color", out var cl)) style += $"color:{cl.GetString()};";
-            if (sEl.TryGetProperty("bgColor", out var bg)) style += $"background-color:{bg.GetString()};";
-            if (sEl.TryGetProperty("align", out var al)) style += $"text-align:{al.GetString()};";
+            if (sEl.TryGetProperty("underline", out var un) && un.ValueKind == JsonValueKind.True) style += "text-decoration:underline;";
+            if (sEl.TryGetProperty("fontSize", out var fs) && fs.ValueKind == JsonValueKind.Number) style += $"font-size:{fs.GetInt32()}px;";
+            if (sEl.TryGetProperty("fontName", out var fn) && fn.ValueKind == JsonValueKind.String) style += $"font-family:{fn.GetString()};";
+            if (sEl.TryGetProperty("color", out var cl) && cl.ValueKind == JsonValueKind.String) style += $"color:{cl.GetString()};";
+            if (sEl.TryGetProperty("bgColor", out var bg) && bg.ValueKind == JsonValueKind.String) style += $"background-color:{bg.GetString()};";
+            if (sEl.TryGetProperty("align", out var al) && al.ValueKind == JsonValueKind.String) style += $"text-align:{al.GetString()};";
             if (sEl.TryGetProperty("border", out var bd) && bd.ValueKind == JsonValueKind.False) style = style.Replace("border:1px solid #ccc;", "");
         }
         return style;
@@ -460,10 +462,13 @@ public class ReportExecutionService
                 if (cell.TryGetProperty("style", out var se))
                 {
                     if (se.TryGetProperty("bold", out var b) && b.ValueKind == JsonValueKind.True) xlCell.Style.Font.Bold = true;
-                    if (se.TryGetProperty("fontSize", out var fs)) xlCell.Style.Font.FontSize = fs.GetDouble();
-                    if (se.TryGetProperty("color", out var cl)) xlCell.Style.Font.FontColor = XLColor.FromHtml(cl.GetString()!);
-                    if (se.TryGetProperty("bgColor", out var bg)) xlCell.Style.Fill.BackgroundColor = XLColor.FromHtml(bg.GetString()!);
-                    if (se.TryGetProperty("align", out var al))
+                    if (se.TryGetProperty("italic", out var it) && it.ValueKind == JsonValueKind.True) xlCell.Style.Font.Italic = true;
+                    if (se.TryGetProperty("underline", out var un) && un.ValueKind == JsonValueKind.True) xlCell.Style.Font.Underline = XLFontUnderlineValues.Single;
+                    if (se.TryGetProperty("fontSize", out var fs) && fs.ValueKind == JsonValueKind.Number) xlCell.Style.Font.FontSize = fs.GetDouble();
+                    if (se.TryGetProperty("fontName", out var fn) && fn.ValueKind == JsonValueKind.String) xlCell.Style.Font.FontName = fn.GetString()!;
+                    if (se.TryGetProperty("color", out var cl) && cl.ValueKind == JsonValueKind.String) xlCell.Style.Font.FontColor = XLColor.FromHtml(cl.GetString()!);
+                    if (se.TryGetProperty("bgColor", out var bg) && bg.ValueKind == JsonValueKind.String) xlCell.Style.Fill.BackgroundColor = XLColor.FromHtml(bg.GetString()!);
+                    if (se.TryGetProperty("align", out var al) && al.ValueKind == JsonValueKind.String)
                         xlCell.Style.Alignment.Horizontal = al.GetString() switch
                         {
                             "center" => XLAlignmentHorizontalValues.Center,

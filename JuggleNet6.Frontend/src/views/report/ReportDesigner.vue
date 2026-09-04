@@ -57,8 +57,8 @@
             <el-button :type="italicActive?'primary':''" @click="applyStyle('italic')"><i>I</i></el-button>
             <el-button @click="applyStyle('underline')"><u>U</u></el-button>
           </el-button-group>
-          <el-color-picker v-model="selColor" size="small" @change="applyStyle('color')" />
-          <el-color-picker v-model="selBgColor" size="small" @change="applyStyle('bgColor')" />
+          <el-color-picker v-model="selColor" size="small" @change="onColorChange('color')" />
+          <el-color-picker v-model="selBgColor" size="small" @change="onColorChange('bgColor')" />
           <el-button-group size="small">
             <el-button @click="applyStyle('align','left')">左</el-button>
             <el-button @click="applyStyle('align','center')">中</el-button>
@@ -771,9 +771,15 @@ function applyStyle(prop:string, val?:any) {
     if (prop==='bold') { style.bold = val!==undefined?val:!style.bold; boldActive.value=style.bold }
     else if (prop==='italic') { style.italic = val!==undefined?val:!style.italic; italicActive.value=style.italic }
     else if (prop==='underline') { style.underline = val!==undefined?val:!style.underline }
+    else if (val===null || val===undefined) { delete (style as any)[prop] }   // 清除颜色等
     else { (style as any)[prop] = val }
     cells.value[key] = {...existing, style}
   })
+}
+
+/** 颜色选择器变更（v-model 已更新，读取最新值写入选中单元格） */
+function onColorChange(prop: 'color' | 'bgColor') {
+  applyStyle(prop, prop==='color' ? selColor.value : selBgColor.value)
 }
 
 function toggleBorder() { pushHistory(); forEachSelected((r,c)=>{const key=`${r},${c}`,ex=cells.value[key]||{value:''},s=ex.style||{}; s.border=s.border===false?true:false; cells.value[key]={...ex,style:s}}) }
