@@ -80,6 +80,15 @@ public class ReportController : ControllerBase
         catch (Exception ex) { return ApiResult.Fail(ex.Message); }
     }
 
+    /// <summary>报表详情（正式访问页用：名称/参数配置等）</summary>
+    [HttpGet("info/{id}")]
+    public async Task<ApiResult> Info(long id)
+    {
+        var rpt = await _db.Set<ReportEntity>().FindAsync(id);
+        if (rpt == null) return ApiResult.Fail("报表不存在");
+        return ApiResult.Success(new { rpt.Id, rpt.Name, rpt.GroupName, rpt.ParamsConfig, rpt.Status });
+    }
+
     [HttpPost("export-pdf")]
     public async Task<IActionResult> ExportPdf([FromBody] ReportPreviewRequest req)
     {

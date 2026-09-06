@@ -75,6 +75,7 @@
           <el-button size="small" @click="deleteCol">删列</el-button>
           <el-button size="small" :disabled="!canUndo" @click="undo" title="Ctrl+Z">↩</el-button>
           <el-button size="small" :disabled="!canRedo" @click="redo" title="Ctrl+Y">↪</el-button>
+          <el-button size="small" type="primary" plain @click="paramDialogVisible = true">查询参数</el-button>
           <span style="font-size:11px;color:#888;margin-left:4px">Ctrl多选</span>
         </div>
         <div class="grid-wrapper" @scroll="onGridScroll">
@@ -362,10 +363,38 @@ NOW() / TODAY() / ROW()           当前时间 / 日期 / 行号</pre>
       </div>
     </el-dialog>
 
+    <!-- 查询参数配置 -->
+    <el-dialog v-model="paramDialogVisible" title="查询参数配置" width="820px" append-to-body>
+      <div v-for="(p, i) in previewParams" :key="i" style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
+        <el-input v-model="p.name" placeholder="参数名(如 beginDate)" size="small" style="width:150px;flex-shrink:0" />
+        <el-input v-model="p.label" placeholder="显示名" size="small" style="width:110px;flex-shrink:0" />
+        <el-select v-model="p.type" size="small" style="width:90px;flex-shrink:0">
+          <el-option value="text" label="文本" />
+          <el-option value="number" label="数字" />
+          <el-option value="date" label="日期" />
+          <el-option value="switch" label="开关" />
+          <el-option value="select" label="下拉" />
+        </el-select>
+        <el-input v-if="p.type==='select'" v-model="p.options" placeholder="选项，逗号/换行分隔" size="small" style="width:180px;flex-shrink:0" />
+        <el-input v-else-if="p.type!=='switch'" v-model="p.default" placeholder="默认值" size="small" style="width:110px;flex-shrink:0" />
+        <el-switch v-else v-model="p.default" size="small" />
+        <span v-if="p.type==='switch'" style="font-size:11px;color:#888;width:70px;flex-shrink:0">{{ p.default ? '默认开' : '默认关' }}</span>
+        <el-button size="small" type="danger" link @click="previewParams.splice(i, 1)">删</el-button>
+      </div>
+      <el-button size="small" @click="previewParams.push({ name:'', label:'', type:'text', default:'' })">+添加参数</el-button>
+      <div style="margin-top:8px;color:#909399;font-size:12px">
+        参数类型：文本/数字/日期/开关/下拉（下拉需填选项，逗号或换行分隔）。默认值在正式访问页生效；访问 URL 带同参数名（如 ?beginDate=2026-01-01）时以 URL 值为准。<br>
+        数据集 SQL 中用 <code>@参数名</code> 引用即可按查询条件过滤，推荐写成 <code>(@参数名 IS NULL OR 字段 = @参数名)</code> / <code>(@kw IS NULL OR 字段 LIKE '%' || @kw || '%')</code> — 未填值时该条件自动失效（不过滤）。
+      </div>
+      <template #footer>
+        <el-button @click="paramDialogVisible=false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 预览 -->
     <el-dialog v-model="showPreview" title="预览" width="90%" top="5vh">
-      <div v-if="previewParams.length>0" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <el-input v-for="p in previewParams" :key="p.name" v-model="previewValues[p.name]" size="small" style="width:160px" :placeholder="p.label||p.name" />
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-end">
+        <ReportParams :params="previewParams" :values="previewValues" />
         <el-button size="small" type="primary" @click="doRender">查询</el-button>
         <el-button size="small" @click="doPrint">打印</el-button>
       </div>
@@ -392,7 +421,9 @@ import { Edit, View, Refresh, Loading, Close } from '@element-plus/icons-vue'
 import request from '../../utils/request'
 import DbObjectBrowser from '../../components/DbObjectBrowser.vue'
 import SqlTestDialog from '../../components/SqlTestDialog.vue'
+import ReportParams from '../../components/ReportParams.vue'
 import { generateColumnMapping } from '../../utils/dbAssist'
+import { initParamValues, buildParamPayload } from '../../utils/reportParams'
 
 const route = useRoute()
 const router = useRouter()
@@ -442,6 +473,7 @@ const rowDataset = ref('')                    // 当前选中行绑定的数据�
 const rowZebras = ref<Record<number, boolean>>({})   // 行号 → 斑马纹开关
 const rowZebra = ref(false)                   // 当前选中行的斑马纹
 const showPreview = ref(false), pageSettingsVisible = ref(false)
+const paramDialogVisible = ref(false)
 const formulaHelpVisible = ref(false)
 const previewHtml = ref(''), previewParams = ref<any[]>([])
 const previewValues = ref<Record<string,any>>({})
@@ -1061,11 +1093,26 @@ async function saveReport() { saveLayoutJson()
   else { const res=await request.post('/report/add',form); form.id=res.data; ElMessage.success('已创建') }
 }
 
-function openPreview() { saveLayoutJson(); showPreview.value=true; doRender() }
+function openPreview() {
+  saveLayoutJson()
+  previewValues.value = initParamValues(previewParams.value)
+  showPreview.value = true
+  doRender()
+}
 
-async function doRender() { try { const res=await request.post('/report/preview',{id:form.id,params:previewValues.value}); previewHtml.value=res.data?.html||'' } catch { ElMessage.error('预览失败') } }
+async function doRender() {
+  try {
+    const res = await request.post('/report/preview', { id: form.id, params: buildParamPayload(previewParams.value, previewValues.value) })
+    previewHtml.value = res.data?.html || ''
+  } catch { ElMessage.error('预览失败') }
+}
 
-function doPrint() { window.print() }
+function doPrint() {
+  const w = window.open('', '_blank')
+  if (!w || !previewHtml.value) { ElMessage.warning('请先预览再打印'); return }
+  w.document.write(`<html><head><title>${form.name}</title><meta charset="utf-8"><style>@media print{@page{size:A4;margin:15mm}}body{font-family:'Microsoft YaHei',sans-serif}</style></head><body>${previewHtml.value}</body></html>`)
+  w.document.close(); w.focus(); setTimeout(() => { w.print() }, 300)
+}
 
 function colLetter(n:number):string { return String.fromCharCode(65+n) }
 </script>

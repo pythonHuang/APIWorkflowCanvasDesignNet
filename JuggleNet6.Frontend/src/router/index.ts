@@ -38,7 +38,8 @@ const routes = [
       { path: 'flow/testcase',     component: () => import('../views/flow/FlowTestCase.vue') },
       { path: 'report/dataview',  component: () => import('../views/report/DataViewList.vue') },
       { path: 'report/design',    component: () => import('../views/report/ReportList.vue') },
-      { path: 'report/designer/:id', component: () => import('../views/report/ReportDesigner.vue') }
+      { path: 'report/designer/:id', component: () => import('../views/report/ReportDesigner.vue') },
+      { path: 'report/view/:id',  component: () => import('../views/report/ReportView.vue') }
     ]
   },
   {

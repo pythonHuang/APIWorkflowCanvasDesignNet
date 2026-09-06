@@ -33,19 +33,6 @@
       <el-pagination v-model:current-page="page" :page-size="20" layout="prev,next" :total="total" @change="loadData" style="margin-top:12px;justify-content:flex-end" />
     </el-card>
 
-    <el-dialog v-model="previewVisible" title="预览报表" width="90%" top="5vh">
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-        <div v-for="p in previewParams" :key="p.name" style="display:flex;align-items:center;gap:4px">
-          <span style="font-size:12px">{{ p.label||p.name }}:</span>
-          <el-input v-model="previewValues[p.name]" size="small" style="width:140px" />
-        </div>
-        <el-button size="small" type="primary" :loading="previewLoading" @click="doPreview">查询</el-button>
-        <span style="font-size:12px;color:#888;margin-left:auto">第 {{ previewPage }} 页 · 每页 {{ previewPageSize }} 行</span>
-        <el-pagination small layout="prev,next" :total="previewTotal" v-model:current-page="previewPage" :page-size="previewPageSize" @change="doPreview" />
-      </div>
-      <div v-loading="previewLoading" v-if="previewHtml" v-html="previewHtml" style="border:1px solid #eee;padding:16px;overflow:auto;max-height:65vh"></div>
-      <el-empty v-else-if="!previewLoading" description="暂无数据" :image-size="60" />
-    </el-dialog>
   </div>
 </template>
 
@@ -60,15 +47,6 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 const page = ref(1)
 const total = ref(0)
-const previewVisible = ref(false)
-const previewHtml = ref('')
-const previewLoading = ref(false)
-const previewParams = ref<any[]>([])
-const previewValues = ref<Record<string,any>>({})
-const previewId = ref(0)
-const previewPage = ref(1)
-const previewPageSize = ref(20)
-const previewTotal = ref(0)
 
 onMounted(loadData)
 
@@ -91,24 +69,10 @@ function openDesigner(id?: number) {
   else router.push('/report/designer/0')
 }
 
+/** 预览：打开正式报表访问页（新窗口） */
 function openPreview(row: any) {
-  previewId.value = row.id
-  try { previewParams.value = JSON.parse(row.paramsConfig||'[]') } catch { previewParams.value = [] }
-  previewValues.value = {}
-  for (const p of previewParams.value) previewValues.value[p.name] = p.default || ''
-  previewHtml.value = ''
-  previewPage.value = 1
-  previewVisible.value = true
-  doPreview()   // 打开即自动查询（无参数报表也能出数据）
-}
-
-async function doPreview() {
-  previewLoading.value = true
-  try {
-    const res = await request.post('/report/preview', { id: previewId.value, params: previewValues.value, page: previewPage.value, pageSize: previewPageSize.value })
-    previewHtml.value = res.data?.html || ''
-    previewTotal.value = res.data?.total || 0
-  } finally { previewLoading.value = false }
+  const w = window.open(`/report/view/${row.id}`, '_blank')
+  if (!w) ElMessage.warning('浏览器拦截了弹出窗口，请允许后重试')
 }
 
 async function doExportPdf(row: any) {

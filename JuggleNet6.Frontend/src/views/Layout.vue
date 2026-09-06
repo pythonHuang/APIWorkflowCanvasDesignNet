@@ -47,6 +47,13 @@
           <el-menu-item index="/report/dataview">数据视图</el-menu-item>
           <el-menu-item index="/report/design">报表管理</el-menu-item>
         </el-sub-menu>
+        <el-sub-menu index="report-view" v-if="reportMenuList.length > 0">
+          <template #title>
+            <el-icon><Document /></el-icon>
+            <span>报表查询</span>
+          </template>
+          <el-menu-item v-for="r in reportMenuList" :key="r.id" :index="`/report/view/${r.id}`">{{ r.name }}</el-menu-item>
+        </el-sub-menu>
         <el-sub-menu index="system" v-if="hasMenu('/system/token')">
           <template #title>
             <el-icon><Setting /></el-icon>
@@ -98,15 +105,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram, Document } from '@element-plus/icons-vue'
+import request from '../utils/request'
 
 const route = useRoute()
 const router = useRouter()
 const userName = computed(() => localStorage.getItem('userName') || 'User')
 const activeMenu = computed(() => route.path)
+
+// 报表查询菜单：每个启用报表一个子菜单
+const reportMenuList = ref<any[]>([])
+onMounted(async () => {
+  try {
+    const res = await request.post('/report/page', { pageNum: 1, pageSize: 200 })
+    reportMenuList.value = (res.data?.list || []).filter((r: any) => r.status === 1)
+  } catch { /* 忽略菜单加载失败 */ }
+})
 
 // 权限菜单列表
 const menuKeys = ref<string[]>([])

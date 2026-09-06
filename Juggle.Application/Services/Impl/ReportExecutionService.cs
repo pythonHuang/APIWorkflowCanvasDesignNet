@@ -39,9 +39,28 @@ public class ReportExecutionService
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
+
+        // 查询参数绑定：SQL 中以 @参数名 引用的参数必须全部提供值；
+        // 未提供/空字符串/空值统一绑定 NULL，配合 SQL 内 "(@p IS NULL OR 字段 = @p)" 判空实现"未填即不过滤"
+        var sqlParamNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match m in Regex.Matches(sql, @"@([A-Za-z_][A-Za-z0-9_]*)"))
+            sqlParamNames.Add(m.Groups[1].Value);
+
+        var boundNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (parameters != null)
-            foreach (var p in parameters)
-                cmd.Parameters.Add(CreateParameter(p.Key, p.Value, ds.DsType!));
+            foreach (var (key, value) in parameters)
+            {
+                // JSON 反序列化的 JsonElement 转为原生类型（如前端传来的数字/布尔）
+                var v = value is JsonElement je ? ToNativeValue(je) : value;
+                if (v is string s && string.IsNullOrEmpty(s)) v = null;
+                cmd.Parameters.Add(CreateParameter(key, v, ds.DsType!));
+                boundNames.Add(key);
+            }
+        foreach (var name in sqlParamNames)
+        {
+            if (boundNames.Contains(name)) continue;
+            cmd.Parameters.Add(CreateParameter(name, null, ds.DsType!));
+        }
 
         var dt = new DataTable();
         using var reader = cmd.ExecuteReader();
@@ -826,6 +845,20 @@ public class ReportExecutionService
         "sqlserver" or "mssql" => new Microsoft.Data.SqlClient.SqlConnection(connStr),
         _ => throw new Exception($"Unsupported DB: {dsType}")
     };
+
+    /// <summary>JsonElement → 原生类型（查询参数绑定用）</summary>
+    private static object? ToNativeValue(JsonElement je)
+    {
+        return je.ValueKind switch
+        {
+            JsonValueKind.String => je.GetString(),
+            JsonValueKind.Number => je.TryGetInt64(out var l) ? l : je.GetDouble(),
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Null => null,
+            _ => je.ToString()
+        };
+    }
 
     private static IDbDataParameter CreateParameter(string name, object? value, string dsType)
     {
