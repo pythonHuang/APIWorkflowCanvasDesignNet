@@ -12,7 +12,7 @@
 
     <!-- 查询条件 -->
     <el-card v-if="params.length>0" style="margin-bottom:12px" shadow="never">
-      <ReportParams :params="params" :values="values" />
+      <ReportParams :params="params" :values="values" :report-id="reportId" />
     </el-card>
 
     <!-- 报表内容 -->

@@ -86,7 +86,32 @@ public class ReportController : ControllerBase
     {
         var rpt = await _db.Set<ReportEntity>().FindAsync(id);
         if (rpt == null) return ApiResult.Fail("报表不存在");
-        return ApiResult.Success(new { rpt.Id, rpt.Name, rpt.GroupName, rpt.ParamsConfig, rpt.Status });
+        // 参数配置：优先 paramsConfig 列；旧数据未写入时回退到 layoutJson.params
+        var paramsConfig = rpt.ParamsConfig;
+        if (string.IsNullOrWhiteSpace(paramsConfig))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(rpt.LayoutJson ?? "{}");
+                var root = doc.RootElement;
+                if (root.TryGetProperty("params", out var p) && p.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    paramsConfig = p.ToString();
+            }
+            catch { /* 忽略解析失败 */ }
+        }
+        return ApiResult.Success(new { rpt.Id, rpt.Name, rpt.GroupName, ParamsConfig = paramsConfig, rpt.Status });
+    }
+
+    /// <summary>查询参数选项绑定数据集：执行数据集 SQL 返回行数据（供下拉/单选组/筛选组选项）</summary>
+    [HttpPost("dataset-options")]
+    public async Task<ApiResult> DatasetOptions([FromBody] ReportDatasetOptionsRequest req)
+    {
+        try
+        {
+            var rows = await _reportExec.GetDatasetRowsAsync(req.Id, req.DatasetId);
+            return ApiResult.Success(rows);
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
     }
 
     [HttpPost("export-pdf")]
@@ -114,4 +139,10 @@ public class ReportPreviewRequest
     public Dictionary<string, object?>? Params { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
+}
+
+public class ReportDatasetOptionsRequest
+{
+    public long Id { get; set; }
+    public string? DatasetId { get; set; }
 }

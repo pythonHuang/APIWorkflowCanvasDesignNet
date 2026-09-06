@@ -364,27 +364,54 @@ NOW() / TODAY() / ROW()           当前时间 / 日期 / 行号</pre>
     </el-dialog>
 
     <!-- 查询参数配置 -->
-    <el-dialog v-model="paramDialogVisible" title="查询参数配置" width="820px" append-to-body>
-      <div v-for="(p, i) in previewParams" :key="i" style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
-        <el-input v-model="p.name" placeholder="参数名(如 beginDate)" size="small" style="width:150px;flex-shrink:0" />
-        <el-input v-model="p.label" placeholder="显示名" size="small" style="width:110px;flex-shrink:0" />
-        <el-select v-model="p.type" size="small" style="width:90px;flex-shrink:0">
-          <el-option value="text" label="文本" />
-          <el-option value="number" label="数字" />
-          <el-option value="date" label="日期" />
-          <el-option value="switch" label="开关" />
-          <el-option value="select" label="下拉" />
-        </el-select>
-        <el-input v-if="p.type==='select'" v-model="p.options" placeholder="选项，逗号/换行分隔" size="small" style="width:180px;flex-shrink:0" />
-        <el-input v-else-if="p.type!=='switch'" v-model="p.default" placeholder="默认值" size="small" style="width:110px;flex-shrink:0" />
-        <el-switch v-else v-model="p.default" size="small" />
-        <span v-if="p.type==='switch'" style="font-size:11px;color:#888;width:70px;flex-shrink:0">{{ p.default ? '默认开' : '默认关' }}</span>
-        <el-button size="small" type="danger" link @click="previewParams.splice(i, 1)">删</el-button>
+    <el-dialog v-model="paramDialogVisible" title="查询参数配置" width="960px" append-to-body>
+      <div v-for="(p, i) in previewParams" :key="i" style="border:1px solid #eee;border-radius:6px;padding:8px;margin-bottom:8px">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <el-input v-model="p.name" placeholder="参数名(如 beginDate)" size="small" style="width:150px;flex-shrink:0" />
+          <el-input v-model="p.label" placeholder="显示名" size="small" style="width:110px;flex-shrink:0" />
+          <el-select v-model="p.type" size="small" style="width:100px;flex-shrink:0">
+            <el-option value="text" label="文本" />
+            <el-option value="number" label="数字" />
+            <el-option value="date" label="日期" />
+            <el-option value="switch" label="开关" />
+            <el-option value="select" label="下拉" />
+            <el-option value="radio" label="单选组" />
+            <el-option value="checkgroup" label="筛选组" />
+          </el-select>
+          <template v-if="p.type==='switch'">
+            <el-switch v-model="p.default" size="small" />
+            <span style="font-size:11px;color:#888">{{ p.default ? '默认开' : '默认关' }}</span>
+          </template>
+          <template v-else-if="['select','radio','checkgroup'].includes(p.type)">
+            <el-select v-model="p.optionsSource" size="small" style="width:90px;flex-shrink:0">
+              <el-option value="fixed" label="固定选项" />
+              <el-option value="dataset" label="数据集" />
+            </el-select>
+            <template v-if="p.optionsSource !== 'dataset'">
+              <el-input v-model="p.options" placeholder="选项，逗号/换行分隔" size="small" style="width:220px;flex-shrink:0" />
+            </template>
+            <template v-else>
+              <el-select v-model="p.optionsDataset" placeholder="绑定数据集" size="small" style="width:140px;flex-shrink:0">
+                <el-option v-for="ds in datasets" :key="ds.id" :label="ds.name" :value="ds.id" />
+              </el-select>
+              <el-input v-model="p.optionsValueField" placeholder="值字段" size="small" style="width:90px;flex-shrink:0" />
+              <el-input v-model="p.optionsLabelField" placeholder="显示字段" size="small" style="width:100px;flex-shrink:0" />
+            </template>
+            <template v-if="p.type==='select'">
+              <el-checkbox v-model="p.multiple" size="small" style="margin-right:0">多选</el-checkbox>
+              <el-checkbox v-model="p.filterable" size="small" style="margin-right:0">模糊</el-checkbox>
+            </template>
+            <el-input v-model="p.default" :placeholder="p.type==='checkgroup' ? '默认值(逗号分隔)' : '默认值'" size="small" style="width:110px;flex-shrink:0" />
+          </template>
+          <el-input v-else v-model="p.default" placeholder="默认值" size="small" style="width:110px;flex-shrink:0" />
+          <el-button size="small" type="danger" link @click="previewParams.splice(i, 1)">删</el-button>
+        </div>
       </div>
-      <el-button size="small" @click="previewParams.push({ name:'', label:'', type:'text', default:'' })">+添加参数</el-button>
+      <el-button size="small" @click="previewParams.push({ name:'', label:'', type:'text', default:'', optionsSource:'fixed', options:'', optionsDataset:'', optionsValueField:'', optionsLabelField:'', multiple:false, filterable:false })">+添加参数</el-button>
       <div style="margin-top:8px;color:#909399;font-size:12px">
-        参数类型：文本/数字/日期/开关/下拉（下拉需填选项，逗号或换行分隔）。默认值在正式访问页生效；访问 URL 带同参数名（如 ?beginDate=2026-01-01）时以 URL 值为准。<br>
-        数据集 SQL 中用 <code>@参数名</code> 引用即可按查询条件过滤，推荐写成 <code>(@参数名 IS NULL OR 字段 = @参数名)</code> / <code>(@kw IS NULL OR 字段 LIKE '%' || @kw || '%')</code> — 未填值时该条件自动失效（不过滤）。
+        参数类型：文本/数字/日期/开关/下拉/单选组/筛选组。下拉支持单选/多选/模糊查询；下拉、单选组、筛选组的选项可用<b>固定选项</b>（逗号或换行分隔）或<b>绑定数据集</b>（选数据集+值字段+显示字段）；筛选组与下拉多选的值以逗号拼接传给 SQL。<br>
+        默认值在正式访问页生效；访问 URL 带同参数名（如 ?beginDate=2026-01-01）时以 URL 值为准。<br>
+        数据集 SQL 中用 <code>@参数名</code> 引用即可按查询条件过滤，推荐 <code>(@参数名 IS NULL OR 字段 = @参数名)</code> — 未填值时该条件自动失效（不过滤）。
       </div>
       <template #footer>
         <el-button @click="paramDialogVisible=false">关闭</el-button>
@@ -394,7 +421,7 @@ NOW() / TODAY() / ROW()           当前时间 / 日期 / 行号</pre>
     <!-- 预览 -->
     <el-dialog v-model="showPreview" title="预览" width="90%" top="5vh">
       <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-end">
-        <ReportParams :params="previewParams" :values="previewValues" />
+        <ReportParams :params="previewParams" :values="previewValues" :report-id="form.id" />
         <el-button size="small" type="primary" @click="doRender">查询</el-button>
         <el-button size="small" @click="doPrint">打印</el-button>
       </div>
@@ -715,7 +742,9 @@ function loadLayoutJson() {
     pageHeader.value = layout.page?.header||''; pageFooter.value = layout.page?.footer||''
     pageBgImage.value = layout.page?.bgImage||''
     cells.value = {}; if (layout.cells) for (const c of layout.cells) cells.value[`${c.r},${c.c}`] = c
-    previewParams.value = layout.params||[]
+    previewParams.value = layout.params && layout.params.length > 0
+      ? layout.params
+      : (() => { try { return JSON.parse(form.paramsConfig || '[]') } catch { return [] } })()
     if (layout.datasets) datasets.value = layout.datasets.map((d:any)=>({...d,expanded:true,loading:false}))
   } catch {}
 }
@@ -1071,6 +1100,8 @@ function onCellDrop(e:DragEvent, r:number, c:number) { const field = e.dataTrans
 function onGridScroll() {}
 
 function saveLayoutJson() {
+  // 同步查询参数到 paramsConfig 列（正式访问页读取该字段）
+  form.paramsConfig = JSON.stringify(previewParams.value)
   const rows=[]; for (let r=0;r<maxRows.value;r++) rows.push({
     height:typeof rowHeights.value[r]==='string'?25:(rowHeights.value[r]||25),
     type:rowTypes.value[r] || (rowHeights.value[r]==='data'?'data':'header'),

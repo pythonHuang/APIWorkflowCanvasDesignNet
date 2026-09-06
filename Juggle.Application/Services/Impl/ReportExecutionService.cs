@@ -109,6 +109,31 @@ public class ReportExecutionService
         return RenderHtmlCore(root, datasets);
     }
 
+    /// <summary>
+    /// 查询参数选项绑定数据集：执行报表内指定数据集的 SQL 返回行数据。
+    /// （不带查询参数 → @参数名 全部绑 NULL，配合 SQL 判空写法返回全量选项）
+    /// </summary>
+    public async Task<List<Dictionary<string, object?>>> GetDatasetRowsAsync(long reportId, string? datasetId)
+    {
+        var rpt = await _db.Set<Juggle.Domain.Entities.ReportEntity>().FindAsync(reportId)
+            ?? throw new Exception("报表不存在");
+        using var doc = JsonDocument.Parse(rpt.LayoutJson ?? "{}");
+        var root = doc.RootElement;
+        var datasets = await ResolveDatasetsAsync(root, null);
+        if (string.IsNullOrEmpty(datasetId) || !datasets.TryGetValue(datasetId, out var dt))
+            return new List<Dictionary<string, object?>>();
+
+        var rows = new List<Dictionary<string, object?>>();
+        foreach (DataRow row in dt.Rows)
+        {
+            var dict = new Dictionary<string, object?>();
+            foreach (DataColumn col in dt.Columns)
+                dict[col.ColumnName] = row[col];
+            rows.Add(dict);
+        }
+        return rows;
+    }
+
     /// <summary>执行 layoutJson 中定义的全部数据集，返回 数据集id → DataTable。</summary>
     private async Task<Dictionary<string, DataTable>> ResolveDatasetsAsync(JsonElement root, Dictionary<string, object?>? queryParams)
     {
