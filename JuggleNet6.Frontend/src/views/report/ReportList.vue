@@ -113,7 +113,7 @@ async function doPreview() {
 
 async function doExportPdf(row: any) {
   const res: any = await request.post('/report/export-pdf', { id: row.id, params: {} }, { responseType: 'blob' })
-  downloadBlob(res.data, `${row.name}.html`)
+  downloadBlob(res.data, `${row.name}.pdf`)
 }
 
 async function doExportExcel(row: any) {
@@ -135,9 +135,15 @@ async function doPrint(row: any) {
   } catch { /* 拦截器已提示 */ }
 }
 
-function downloadBlob(data: any, filename: string) {
-  const url = URL.createObjectURL(new Blob([data]))
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
+function downloadBlob(data: Blob, filename: string) {
+  // 直接使用响应 Blob（保留原始 MIME 类型，避免浏览器按未知类型补 .txt 后缀）
+  const url = URL.createObjectURL(data)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
 

@@ -86,7 +86,7 @@ public class ReportController : ControllerBase
         var rpt = await _db.Set<ReportEntity>().FindAsync(req.Id);
         if (rpt == null) return NotFound();
         var data = await _reportExec.ExportPdfAsync(rpt.LayoutJson!, req.Params);
-        return File(data, "text/html", $"{rpt.Name}.html");
+        return File(data, "application/pdf", $"{rpt.Name}.pdf");
     }
 
     [HttpPost("export-excel")]

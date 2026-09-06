@@ -2,6 +2,9 @@ using System.Data;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using QuestPDF.Fluent;
+using QuestPDF.Infrastructure;
+using QuestPDF.Helpers;
 using ClosedXML.Excel;
 using Juggle.Domain.Engine;
 using Juggle.Infrastructure.Persistence;
@@ -600,11 +603,187 @@ public class ReportExecutionService
         return ms.ToArray();
     }
 
-    /// <summary>导出 PDF — 基于 HTML 渲染 + QuestPDF 嵌入（降级为 HTML 输出供浏览器打印）</summary>
+    /// <summary>导出 PDF — QuestPDF 生成真实 PDF（与 HTML/Excel 同一套扩展/聚合/样式逻辑）</summary>
     public async Task<byte[]> ExportPdfAsync(string layoutJson, Dictionary<string, object?>? queryParams = null)
     {
-        var html = await RenderToHtml(layoutJson, queryParams);
-        return Encoding.UTF8.GetBytes(html);
+        using var doc = JsonDocument.Parse(layoutJson);
+        var root = doc.RootElement;
+        var datasets = await ResolveDatasetsAsync(root, queryParams);
+        try
+        {
+            return ExportPdfCore(root, datasets);
+        }
+        catch (Exception ex)
+        {
+            // PDF 生成失败（如缺少中文字体）时降级为 HTML 输出
+            _lastPdfError = ex.ToString();
+            return Encoding.UTF8.GetBytes(RenderHtmlCore(root, datasets));
+        }
+    }
+
+    private static bool _pdfFontReady;
+    private static string? _lastPdfError;
+    /// <summary>最近一次 PDF 生成失败的原因（排查用）</summary>
+    public static string? LastPdfError => _lastPdfError;
+    private static readonly List<FileStream> _pdfFontStreams = new();   // 保持字体文件流存活
+
+    /// <summary>注册支持中文的字体（Windows 常见字体路径）。</summary>
+    private static void EnsurePdfFont()
+    {
+        if (_pdfFontReady) return;
+        QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+        string[] candidates =
+        {
+            @"C:\Windows\Fonts\msyh.ttc",      // 微软雅黑
+            @"C:\Windows\Fonts\msyh.ttf",
+            @"C:\Windows\Fonts\simsun.ttc",    // 宋体
+            @"C:\Windows\Fonts\Deng.ttf",      // 等线
+            @"C:\Windows\Fonts\simhei.ttf"     // 黑体
+        };
+        foreach (var path in candidates)
+        {
+            if (!File.Exists(path)) continue;
+            try
+            {
+                var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                QuestPDF.Drawing.FontManager.RegisterFontWithCustomName("RptFont", fs);
+                _pdfFontStreams.Add(fs);
+                _pdfFontReady = true;
+                return;
+            }
+            catch { /* 尝试下一个字体 */ }
+        }
+    }
+
+    private static byte[] ExportPdfCore(JsonElement root, Dictionary<string, DataTable> datasets)
+    {
+        EnsurePdfFont();
+        var cellMap = BuildCellMap(root);
+        var maxCols = GetColCount(root);
+        var materialized = MaterializeRows(root, datasets);
+        var colWidths = GetColWidths(root, maxCols);
+        var templateUsed = new HashSet<(int r, int c)>();
+
+        var document = QuestPDF.Fluent.Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(QuestPDF.Helpers.PageSizes.A4);
+                page.Margin(15);
+                page.Content().Table(table =>
+                {
+                    table.ColumnsDefinition(cols =>
+                    {
+                        foreach (var w in colWidths)
+                            cols.RelativeColumn(Math.Max(1, w));
+                    });
+
+                    foreach (var rr in materialized)
+                    {
+                        var used = new HashSet<int>();
+                        for (int ci = 0; ci < maxCols; ci++)
+                        {
+                            if (used.Contains(ci)) continue;
+                            if (rr.DataIndex == null && templateUsed.Contains((rr.TemplateRow, ci))) continue;
+
+                            var hasCell = cellMap.TryGetValue((rr.TemplateRow, ci), out var cell);
+                            var value = hasCell ? ResolveCellValue(cell, rr, datasets) : "";
+                            var colspan = hasCell ? Math.Max(1, GetInt(cell, "colspan", 1)) : 1;
+                            var rowspan = hasCell ? Math.Max(1, GetInt(cell, "rowspan", 1)) : 1;
+                            if (rr.DataIndex != null) rowspan = 1;
+
+                            var cellBase = table.Cell();
+                            IContainer cellEl = cellBase;
+                            if (colspan > 1 && rowspan > 1) { cellBase.ColumnSpan((uint)colspan); cellEl = cellBase.RowSpan((uint)rowspan); }
+                            else if (colspan > 1) cellEl = cellBase.ColumnSpan((uint)colspan);
+                            else if (rowspan > 1) cellEl = cellBase.RowSpan((uint)rowspan);
+                            var height = GetRowHeight(root, rr.TemplateRow);
+                            if (height > 0) cellEl = cellEl.MinHeight(height * 0.75f);
+
+                            cellEl = ApplyPdfCellAppearance(cellEl, cell, hasCell, rr);
+
+                            var align = hasCell && cell.TryGetProperty("style", out var alS)
+                                && alS.TryGetProperty("align", out var al) && al.ValueKind == JsonValueKind.String
+                                ? al.GetString() : "";
+                            cellEl.Padding(3).Text(text =>
+                            {
+                                if (align == "center") text.AlignCenter();
+                                else if (align == "right") text.AlignRight();
+                                else text.AlignLeft();
+                                text.DefaultTextStyle(st =>
+                                {
+                                    if (_pdfFontReady) st.FontFamily("RptFont");
+                                    if (hasCell && cell.TryGetProperty("style", out var sEl))
+                                    {
+                                        if (sEl.TryGetProperty("bold", out var b) && b.ValueKind == JsonValueKind.True) st.Bold();
+                                        if (sEl.TryGetProperty("italic", out var it) && it.ValueKind == JsonValueKind.True) st.Italic();
+                                        if (sEl.TryGetProperty("underline", out var un) && un.ValueKind == JsonValueKind.True) st.Underline();
+                                        if (sEl.TryGetProperty("fontSize", out var fs) && fs.ValueKind == JsonValueKind.Number) st.FontSize(fs.GetSingle());
+                                        if (sEl.TryGetProperty("color", out var cl) && cl.ValueKind == JsonValueKind.String)
+                                            st.FontColor(Color.FromHex(cl.GetString()!));
+                                    }
+                                    else st.FontSize(10);
+                                    return st;
+                                });
+                                text.Span(value.Replace("\n", " "));
+                            });
+
+                            for (int dc = 1; dc < colspan; dc++) used.Add(ci + dc);
+                            if (rr.DataIndex == null)
+                                for (int dr = 0; dr < rowspan; dr++)
+                                    for (int dc = 0; dc < colspan; dc++)
+                                        if (dr > 0 || dc > 0)
+                                            templateUsed.Add((rr.TemplateRow + dr, ci + dc));
+                        }
+                    }
+                });
+            });
+        });
+        return document.GeneratePdf();
+    }
+
+    /// <summary>PDF 单元格外观（单一链式构建，返回链上容器）：边框（分边/粗细/颜色）、背景色、斑马纹。</summary>
+    private static IContainer ApplyPdfCellAppearance(IContainer cellEl, JsonElement cell, bool hasCell, MaterializedRow rr)
+    {
+        // 背景
+        if (hasCell && HasBgColor(cell))
+            cellEl = cellEl.Background(Color.FromHex(cell.GetProperty("style").GetProperty("bgColor").GetString()!));
+        else if (rr.Zebra && rr.RowNumber % 2 == 0)
+            cellEl = cellEl.Background(Color.FromHex("#F5F7FA"));
+
+        // 边框
+        if (hasCell && cell.TryGetProperty("style", out var sEl) && sEl.TryGetProperty("border", out var bdEl))
+        {
+            if (bdEl.ValueKind == JsonValueKind.False) return cellEl;   // 无边框
+            if (bdEl.ValueKind != JsonValueKind.Object)
+            {
+                return cellEl.Border(0.6f).BorderColor(Color.FromHex("#CCCCCC"));
+            }
+            var bw = Math.Max(0.4f, GetInt(bdEl, "width", 1) * 0.6f);
+            var bc = Color.FromHex(
+                bdEl.TryGetProperty("color", out var bce) && bce.ValueKind == JsonValueKind.String ? bce.GetString()! : "#333333");
+            if (bdEl.TryGetProperty("top", out var bte) && bte.ValueKind == JsonValueKind.True) cellEl = cellEl.BorderTop(bw);
+            if (bdEl.TryGetProperty("bottom", out var bbe) && bbe.ValueKind == JsonValueKind.True) cellEl = cellEl.BorderBottom(bw);
+            if (bdEl.TryGetProperty("left", out var ble) && ble.ValueKind == JsonValueKind.True) cellEl = cellEl.BorderLeft(bw);
+            if (bdEl.TryGetProperty("right", out var bre) && bre.ValueKind == JsonValueKind.True) cellEl = cellEl.BorderRight(bw);
+            return cellEl.BorderColor(bc);   // QuestPDF 单元格边框颜色统一应用
+        }
+        return cellEl.Border(0.6f).BorderColor(Color.FromHex("#CCCCCC"));
+    }
+
+    private static List<float> GetColWidths(JsonElement root, int maxCols)
+    {
+        var widths = new List<float>();
+        if (root.TryGetProperty("cols", out var colsEl) && colsEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var col in colsEl.EnumerateArray())
+            {
+                var w = col.TryGetProperty("width", out var we) && we.ValueKind == JsonValueKind.Number ? we.GetInt32() : 100;
+                widths.Add(Math.Max(10, w) * 0.75f);   // px → pt
+            }
+        }
+        while (widths.Count < maxCols) widths.Add(75f);
+        return widths;
     }
 
     // ===== Data Source Helpers =====
