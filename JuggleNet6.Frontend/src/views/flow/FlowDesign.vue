@@ -12,6 +12,7 @@
         <el-tooltip content="撤销 (Ctrl+Z)"><el-button size="small" icon="RefreshLeft" :disabled="undoStack.length === 0" @click="undo" /></el-tooltip>
         <el-tooltip content="重做 (Ctrl+Y)"><el-button size="small" icon="RefreshRight" :disabled="redoStack.length === 0" @click="redo" /></el-tooltip>
         <el-button size="small" @click="autoLayout" icon="Grid">自动布局</el-button>
+        <el-button size="small" type="warning" @click="openAiDialog" icon="MagicStick">AI 生成</el-button>
         <el-button size="small" @click="paramDrawer = true" icon="Setting">流程参数</el-button>
         <el-button size="small" @click="variableDrawer = true" icon="List">变量</el-button>
         <el-button size="small" type="warning" @click="openDebug">调试</el-button>
@@ -1253,6 +1254,43 @@ input_list[..3]                            <span class="ch-note">// 数组前 3 
       </div>
     </el-dialog>
 
+    <!-- AI 智能生成流程 -->
+    <el-dialog v-model="aiDialogVisible" title="🤖 AI 智能生成流程编排" width="720px" append-to-body>
+      <div class="prop-item">
+        <label>需求描述</label>
+        <el-input v-model="aiRequirement" type="textarea" :rows="5"
+          placeholder="例如：接收用户id，先调用获取用户信息接口，再根据用户id查询该用户的订单列表，最后返回用户名称和订单列表" />
+      </div>
+      <div class="ch-note" style="margin-bottom:8px">
+        当前已加载 <b>{{ apiOptions.length }}</b> 个套件的接口，AI 会从这些接口中选择并编排（入参自动映射流程入参、出参写入 env_ 变量）。生成结果将<b>替换当前画布</b>，建议先保存当前流程。
+      </div>
+      <el-collapse>
+        <el-collapse-item title="模型设置（OpenAI 兼容接口，支持 DeepSeek/通义/Kimi 等）">
+          <div class="prop-item">
+            <label>接口地址</label>
+            <el-input v-model="aiConfig.baseUrl" size="small" placeholder="如 https://api.deepseek.com/v1" />
+          </div>
+          <div class="prop-item">
+            <label>API Key</label>
+            <el-input v-model="aiConfig.apiKey" size="small" type="password" show-password placeholder="sk-..." />
+          </div>
+          <div class="prop-item">
+            <label>模型名</label>
+            <el-input v-model="aiConfig.model" size="small" placeholder="如 deepseek-chat / qwen-plus / moonshot-v1-8k" />
+          </div>
+          <el-button size="small" @click="saveAiConfig" :loading="aiConfigSaving">保存配置</el-button>
+        </el-collapse-item>
+      </el-collapse>
+      <div v-if="aiError" class="db-test-error">❌ {{ aiError }}</div>
+      <div v-if="aiResult" style="margin-top:10px;color:#67c23a;font-size:13px">
+        ✅ 已生成 {{ aiResult.nodes.length }} 个节点（{{ aiResult.nodes.map((n: any) => nodeTypeName(n.elementType)).join(' → ') }}）
+      </div>
+      <template #footer>
+        <el-button @click="aiDialogVisible = false">取消</el-button>
+        <el-button type="primary" icon="MagicStick" :loading="aiGenerating" @click="generateAiFlow">生成并替换画布</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 数据库节点：SQL 编写帮助弹窗 -->
     <el-dialog v-model="dbHelpVisible" title="❓ 数据库节点 SQL 编写帮助" width="660px" append-to-body>
       <div class="condition-help">
@@ -1539,6 +1577,85 @@ const nodeDebugDetailStr = ref('')
 const conditionHelpVisible = ref(false)
 // 赋值节点表达式语法帮助弹窗
 const assignHelpVisible = ref(false)
+
+// ====== AI 智能生成流程 ======
+const aiDialogVisible = ref(false)
+const aiRequirement = ref('')
+const aiGenerating = ref(false)
+const aiConfigSaving = ref(false)
+const aiError = ref('')
+const aiResult = ref<any>(null)
+const aiConfig = ref<{ baseUrl: string; apiKey: string; model: string }>({ baseUrl: '', apiKey: '', model: '' })
+
+async function openAiDialog() {
+  aiDialogVisible.value = true
+  aiError.value = ''
+  aiResult.value = null
+  try {
+    const res: any = await request.get('/ai/config')
+    if (res.data) aiConfig.value = { baseUrl: res.data.baseUrl || '', apiKey: res.data.apiKey || '', model: res.data.model || '' }
+  } catch { /* 未配置时保持空 */ }
+}
+
+async function saveAiConfig() {
+  aiConfigSaving.value = true
+  try {
+    await request.post('/ai/config', aiConfig.value)
+    ElMessage.success('AI 配置已保存')
+  } catch { /* 拦截器已提示 */ } finally { aiConfigSaving.value = false }
+}
+
+/** 构建可用接口清单（供 AI 选择编排） */
+function buildAiApiContext(): any[] {
+  const apis: any[] = []
+  for (const suite of apiOptions.value) {
+    for (const child of (suite.children || [])) {
+      const a = child.api || {}
+      apis.push({
+        suiteCode: suite.value,
+        methodCode: a.methodCode || child.value,
+        methodName: a.methodName || child.label,
+        methodDesc: a.methodDesc || '',
+        url: a.url || '',
+        method: a.requestType || a.method || 'POST'
+      })
+    }
+  }
+  return apis
+}
+
+async function generateAiFlow() {
+  if (!aiRequirement.value.trim()) { ElMessage.warning('请先描述编排需求'); return }
+  aiGenerating.value = true
+  aiError.value = ''
+  aiResult.value = null
+  try {
+    const res: any = await request.post('/ai/generate-flow', {
+      requirement: aiRequirement.value,
+      apis: buildAiApiContext(),
+      inputParams: flowInputParams.value.map((p: any) => ({ code: p.paramCode, name: p.paramName })),
+      outputParams: flowOutputParams.value.map((p: any) => ({ code: p.paramCode, name: p.paramName }))
+    })
+    const nodes = res.data?.nodes || []
+    if (!nodes.length) { aiError.value = 'AI 未生成有效节点，请调整需求描述后重试'; return }
+    // 归一化节点 key（确保与画布数据一致）
+    const cleaned = nodes.map((n: any) => {
+      const c = { ...n }
+      if (!c.outgoings) c.outgoings = []
+      if (!c.label) c.label = c.elementType
+      return c
+    })
+    // 替换画布内容
+    businessNodes.value = cleaned
+    selectedNodeKey.value = null
+    await nextTick()
+    syncBusinessNodesToVf()
+    aiResult.value = { nodes: cleaned }
+    ElMessage.success('AI 流程已生成，请检查并保存')
+  } catch (e: any) {
+    aiError.value = e?.message || '生成失败，请检查模型配置'
+  } finally { aiGenerating.value = false }
+}
 
 // ====== 通用节点帮助弹窗（完整 demo） ======
 const nodeHelpVisible = ref(false)

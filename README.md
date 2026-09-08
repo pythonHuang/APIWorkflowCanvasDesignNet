@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎪 Juggle 接口编排平台
+# 🎪 Juggle 接口流程编排平台（支持AI自动生成流程）
 
 <p>
   <a href="https://github.com/pythonHuang/JuggleNet6/releases"><img src="https://img.shields.io/github/v/release/pythonHuang/JuggleNet6?style=flat-square" alt="Release"></a>
@@ -27,12 +27,14 @@ Juggle 是一个**图形化微服务编排工具**，通过简单的流程编排
 
 ### ✨ 核心能力
 
-| 场景 | 说明 |
-|------|------|
-| 🧩 微服务编排 | 根据已有基础接口快速编排开发新接口 |
-| 🔗 系统集成 | 快速打通第三方系统平台，消除系统壁垒 |
-| 📦 BFF 层 | 面向前端提供聚合/适配层（Backend for Frontend）|
-| 🎨 定制开发 | 私有化标准功能定制，避免污染标准代码 |
+
+| 场景          | 说明                                            |
+| ------------- | ----------------------------------------------- |
+| 🧩 微服务编排 | 根据已有基础接口快速编排开发新接口              |
+| 🤖 **AI 智能编排** | **对话式描述需求，大模型自动生成接口流程编排** |
+| 🔗 系统集成   | 快速打通第三方系统平台，消除系统壁垒            |
+| 📦 BFF 层     | 面向前端提供聚合/适配层（Backend for Frontend） |
+| 🎨 定制开发   | 私有化标准功能定制，避免污染标准代码            |
 
 ---
 
@@ -59,21 +61,43 @@ docker-compose up -d
 
 ---
 
+## 🤖 AI 智能编排
+
+通过自然语言对话，让大模型自动生成接口流程编排，无需手动拖拽节点。
+
+### 使用方式
+
+1. 进入**流程设计器**，点击工具栏「AI 生成」按钮
+2. 展开「模型设置」，填写 OpenAI 兼容接口的地址、密钥与模型名（支持 DeepSeek / 通义千问 / Kimi / OpenAI 等，配置保存在系统配置中）
+3. 在需求描述中说明编排需求，例如：
+   > 接收用户id，先调用获取用户信息接口，再根据用户id查询该用户的订单列表，最后返回用户名称和订单列表
+4. 点击「生成并替换画布」— AI 会从已加载的接口清单中选择接口、自动映射入参（流程入参）与出参（env_ 变量）、自动连线，并支持生成条件分支（CONDITION）、数据库节点（MYSQL）等 14 种节点
+5. 生成后可在画布上继续手工调整，保存/部署后即可对外提供接口
+
+### 支持的节点
+
+START / END / METHOD（接口调用）/ CONDITION（条件分支）/ MERGE（汇聚）/ ASSIGN / CODE / MYSQL（SQL）/ LOOP / DELAY / PARALLEL / NOTIFY / TRANSFORM / SUB_FLOW
+
+---
+
 ## 🛠️ 技术栈
 
-| 层级 | 技术 |
-|------|------|
+
+| 层级 | 技术                                |
+| ---- | ----------------------------------- |
 | 后端 | ASP.NET Core 8 / EF Core 8 / SQLite |
-| 前端 | Vue3 / Vite / Element Plus / Pinia |
-| 容器 | Docker (multi-stage build) |
-| 认证 | JWT + RBAC 角色权限 |
+| 前端 | Vue3 / Vite / Element Plus / Pinia  |
+| 容器 | Docker (multi-stage build)          |
+| 认证 | JWT + RBAC 角色权限                 |
 
 ---
 
 ## 📦 功能特性（30+ 项）
 
 ### 核心流程
+
 - ✅ 可视化流程设计器（节点画布）
+- ✅ **🤖 AI 智能编排** — 对话式描述需求，大模型自动生成接口流程编排（OpenAI 兼容接口，支持 DeepSeek/通义/Kimi 等）
 - ✅ **14 种节点**：START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / DB / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY / TRANSFORM（模板转换）
 - ✅ **对象子属性级联选择**（赋值/方法节点支持 object/array 类型属性树形选择）
 - ✅ **数组操作**（赋值节点支持分页/取第n个/转JSON）
@@ -84,6 +108,7 @@ docker-compose up -d
 - ✅ 流程分组管理
 
 ### 触发方式
+
 - ✅ 同步触发 `GET/POST /open/flow/trigger/{key}`
 - ✅ 异步触发 + 结果查询
 - ✅ Webhook 触发（含签名验证）
@@ -93,6 +118,7 @@ docker-compose up -d
 - ✅ **WSDL 自动生成**（`GET /open/flow/wsdl/{key}`，无需认证）
 
 ### 套件 & 接口
+
 - ✅ 套件 / 接口 / 对象 / 参数管理
 - ✅ 接口 Mock 功能
 - ✅ WebService（SOAP 1.1 / 1.2）支持
@@ -102,6 +128,7 @@ docker-compose up -d
 - ✅ 对象子属性级联选择（object/array 类型参数关联全局对象）
 
 ### 监控 & 测试
+
 - ✅ 监控仪表盘
 - ✅ **API 拓扑图**（健康检查/访问统计/DB 调用连线）
 - ✅ **告警规则 + 告警记录**
@@ -111,12 +138,14 @@ docker-compose up -d
 - ✅ **报表模块**（数据视图 + 报表设计器 + 公式引擎）
 
 ### 系统管理
+
 - ✅ 用户管理 / 角色管理 / 菜单权限（RBAC）
 - ✅ 多租户数据隔离（JWT Claims 驱动）
 - ✅ 审计日志 / Token 权限管理
 - ✅ 系统配置中心 / 全局异常告警
 
 ### 数据库支持
+
 - **系统数据库**：SQLite / MySQL / PostgreSQL / SQLServer
 - **业务数据源**：SQLite / MySQL / PostgreSQL / SQLServer / Oracle / 达梦
 
@@ -138,6 +167,7 @@ docker-compose up -d
 
 ### v1.8（最新）
 
+- 🤖 **AI 智能编排** — 接入大模型能力（OpenAI 兼容接口，支持 DeepSeek/通义千问/Kimi 等），设计器对话式描述需求自动生成接口流程编排（自动选接口/映射入参出参/连线/条件分支，支持 14 种节点）
 - 📊 **报表模块** — 新增数据视图 + 报表设计器 + 公式引擎（SUM/AVG/COUNT/IF 等）；数据集管理支持 4 种数据源与字段树点击填入；A4 分页预览、撤销/重做、单元格直接编辑、行列插入删除
 - 📈 **监控模块** — API 拓扑图（健康检查/访问统计/状态红黄绿/DB 节点与连线/流程过滤）+ 告警规则 + 告警记录
 - 🧮 **表达式引擎** — 条件/赋值节点支持算术运算 + - * / %、字符串拼接/切片（[..5]/[2..5]）/replace、toString("#.0##") 数字与日期格式化；赋值节点新增 EXPRESSION 表达式来源
@@ -228,12 +258,14 @@ Juggle is a **graphical microservice orchestration tool** that enables rapid API
 
 ### ✨ Core Capabilities
 
-| Scenario | Description |
-|----------|-------------|
-| 🧩 Microservice Orchestration | Quickly build new APIs by orchestrating existing base APIs |
-| 🔗 System Integration | Rapidly integrate with third-party platforms, breaking down system barriers |
-| 📦 BFF Layer | Provide aggregation/adaptation layer for frontend (Backend for Frontend) |
-| 🎨 Custom Development | Privatized standard function customization without polluting core code |
+
+| Scenario                      | Description                                                                 |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| 🧩 Microservice Orchestration | Quickly build new APIs by orchestrating existing base APIs                  |
+| 🤖 **AI Orchestration**       | **Describe requirements in natural language and let LLM auto-generate flow orchestration** |
+| 🔗 System Integration         | Rapidly integrate with third-party platforms, breaking down system barriers |
+| 📦 BFF Layer                  | Provide aggregation/adaptation layer for frontend (Backend for Frontend)    |
+| 🎨 Custom Development         | Privatized standard function customization without polluting core code      |
 
 ---
 
@@ -260,21 +292,43 @@ docker-compose up -d
 
 ---
 
+## 🤖 AI Orchestration
+
+Generate API flow orchestration from natural language requirements — no manual node dragging needed.
+
+### How to Use
+
+1. Open the **Flow Designer** and click the "AI Generate" button in the toolbar
+2. Expand "Model Settings" and fill in an OpenAI-compatible API base URL, API key and model name (DeepSeek / Qwen / Kimi / OpenAI etc.; saved in system config)
+3. Describe your requirement, e.g.:
+   > Take a userId, call the get-user-info API, then query the user's order list, finally return the user name and the order list
+4. Click "Generate & Replace Canvas" — the LLM picks APIs from the available list, auto-maps inputs (flow input params) and outputs (`env_` variables), wires nodes automatically, and supports all 14 node types including CONDITION branches and MYSQL (SQL) nodes
+5. Fine-tune the result on the canvas, then save/deploy to expose it as an API
+
+### Supported Node Types
+
+START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / MYSQL / LOOP / DELAY / PARALLEL / NOTIFY / TRANSFORM / SUB_FLOW
+
+---
+
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Backend | ASP.NET Core 8 / EF Core 8 / SQLite |
-| Frontend | Vue3 / Vite / Element Plus / Pinia |
-| Container | Docker (multi-stage build) |
-| Auth | JWT + RBAC Role-Based Access Control |
+
+| Layer     | Technology                           |
+| --------- | ------------------------------------ |
+| Backend   | ASP.NET Core 8 / EF Core 8 / SQLite  |
+| Frontend  | Vue3 / Vite / Element Plus / Pinia   |
+| Container | Docker (multi-stage build)           |
+| Auth      | JWT + RBAC Role-Based Access Control |
 
 ---
 
 ## 📦 Features (30+)
 
 ### Core Workflow
+
 - ✅ Visual workflow designer (node canvas)
+- ✅ **🤖 AI orchestration** — Describe requirements in natural language and let the LLM auto-generate flow orchestration (OpenAI-compatible API; DeepSeek/Qwen/Kimi supported)
 - ✅ **14 Node Types**: START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / DB / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY / TRANSFORM
 - ✅ **Object sub-property cascading** (ASSIGN/METHOD nodes support object/array tree property selection)
 - ✅ **Array operations** (ASSIGN node: paginate / get by index / to JSON)
@@ -285,6 +339,7 @@ docker-compose up -d
 - ✅ Workflow grouping
 
 ### Trigger Methods
+
 - ✅ Synchronous trigger `GET/POST /open/flow/trigger/{key}`
 - ✅ Asynchronous trigger + result query
 - ✅ Webhook trigger (with signature verification)
@@ -294,6 +349,7 @@ docker-compose up -d
 - ✅ **Auto WSDL generation** (`GET /open/flow/wsdl/{key}`, no auth required)
 
 ### Suite & API Management
+
 - ✅ Suite / API / Object / Parameter management
 - ✅ API Mock functionality
 - ✅ WebService (SOAP 1.1 / 1.2) support
@@ -303,6 +359,7 @@ docker-compose up -d
 - ✅ Object sub-property cascading selection (object/array type params linked to global objects)
 
 ### Monitoring & Testing
+
 - ✅ Monitoring dashboard
 - ✅ **API topology map** (health check / visit stats / DB call edges)
 - ✅ **Alert rules + alert records**
@@ -312,12 +369,14 @@ docker-compose up -d
 - ✅ **Report module** (data views + report designer + formula engine)
 
 ### System Management
+
 - ✅ User management / Role management / Menu permissions (RBAC)
 - ✅ Multi-tenant data isolation (JWT Claims driven)
 - ✅ Audit logs / Token permission management
 - ✅ System config center / Global exception alerting
 
 ### Database Support
+
 - **System Database**: SQLite / MySQL / PostgreSQL / SQLServer
 - **Business Data Sources**: SQLite / MySQL / PostgreSQL / SQLServer / Oracle / Dameng
 
@@ -327,6 +386,7 @@ docker-compose up -d
 
 ### v1.8（Latest）
 
+- 🤖 **AI orchestration** — LLM integration (OpenAI-compatible API; DeepSeek/Qwen/Kimi supported); describe requirements in the designer to auto-generate flow orchestration (auto API selection, input/output mapping, wiring, condition branches; all 14 node types)
 - 📊 **Report module** — Data views + Report designer + Formula engine (SUM/AVG/COUNT/IF etc.); datasets with 4 source types and field-tree click-to-fill; A4 paged preview, undo/redo, inline cell editing, row/column insert & delete
 - 📈 **Monitoring module** — API topology map (health check / visit stats / red-yellow-green status / DB nodes & edges / flow filter) + alert rules + alert records
 - 🧮 **Expression engine** — CONDITION/ASSIGN nodes support arithmetic + - * / %, string concat / slice ([..5]/[2..5]) / replace, toString("#.0##") number & date formatting; ASSIGN node adds EXPRESSION source type
