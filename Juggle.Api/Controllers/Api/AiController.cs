@@ -21,13 +21,53 @@ public class AiController : ControllerBase
     private readonly AiService _aiService;
     private readonly JuggleDbContext _db;
     private readonly ITenantAccessor _tenant;
+    private readonly IHttpClientFactory _httpClientFactory;
 
-    public AiController(AiService aiService, JuggleDbContext db, ITenantAccessor tenant)
+    public AiController(AiService aiService, JuggleDbContext db, ITenantAccessor tenant, IHttpClientFactory httpClientFactory)
     {
         _aiService = aiService;
         _db = db;
         _tenant = tenant;
+        _httpClientFactory = httpClientFactory;
     }
+
+    /// <summary>拉取供应商可用模型列表（兼作配置测试：密钥正确返回模型列表）</summary>
+    [HttpPost("fetch-models")]
+    public async Task<ApiResult> FetchModels([FromBody] AiFetchModelsRequest req)
+    {
+        try
+        {
+            var url = (req.BaseUrl ?? "").Trim().TrimEnd('/');
+            if (!url.EndsWith("/models", StringComparison.OrdinalIgnoreCase))
+                url += "/models";
+            var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(30);
+            using var msg = new HttpRequestMessage(HttpMethod.Get, url);
+            if (!string.IsNullOrWhiteSpace(req.ApiKey))
+                msg.Headers.TryAddWithoutValidation("Authorization", $"Bearer {req.ApiKey.Trim()}");
+            using var resp = await client.SendAsync(msg);
+            var body = await resp.Content.ReadAsStringAsync();
+            if (!resp.IsSuccessStatusCode)
+                throw new Exception($"接口返回 {(int)resp.StatusCode}: {Truncate(body, 200)}");
+            using var doc = System.Text.Json.JsonDocument.Parse(body);
+            var models = new List<string>();
+            if (doc.RootElement.TryGetProperty("data", out var dataEl) && dataEl.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var m in dataEl.EnumerateArray())
+                {
+                    var id = m.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+                    if (!string.IsNullOrEmpty(id) && !models.Contains(id)) models.Add(id);
+                }
+            }
+            return ApiResult.Success(new { models });
+        }
+        catch (Exception ex)
+        {
+            return ApiResult.Fail($"配置测试失败: {ex.Message}");
+        }
+    }
+
+    private static string Truncate(string s, int len) => s.Length <= len ? s : s[..len] + "...";
 
     // ==================== 供应商管理 ====================
 
@@ -217,4 +257,10 @@ public class AiProviderToggleRequest
 {
     public long Id { get; set; }
     public bool Enabled { get; set; }
+}
+
+public class AiFetchModelsRequest
+{
+    public string BaseUrl { get; set; } = "";
+    public string ApiKey { get; set; } = "";
 }

@@ -30,13 +30,33 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="form.id ? '编辑供应商' : '添加供应商'" width="560px">
+    <el-dialog v-model="dialogVisible" :title="form.id ? '编辑供应商' : '添加供应商'" width="620px">
       <el-form :model="form" label-width="90px">
-        <el-form-item label="供应商名称"><el-input v-model="form.providerName" placeholder="如 DeepSeek / 通义千问" /></el-form-item>
+        <el-form-item label="供应商名称">
+          <el-select v-model="form.providerName" filterable allow-create default-first-option placeholder="选择或输入供应商名称"
+            style="width:100%" @change="onProviderNameChange">
+            <el-option v-for="p in presetProviders" :key="p.name" :label="p.name" :value="p.name" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="接口地址"><el-input v-model="form.baseUrl" placeholder="https://api.deepseek.com/v1" /></el-form-item>
-        <el-form-item label="API Key"><el-input v-model="form.apiKey" type="password" show-password placeholder="sk-..." /></el-form-item>
-        <el-form-item label="默认模型"><el-input v-model="form.model" placeholder="deepseek-chat" /></el-form-item>
-        <el-form-item label="可用模型"><el-input v-model="form.models" placeholder="逗号分隔，如 deepseek-chat,deepseek-reasoner" /></el-form-item>
+        <el-form-item label="API Key">
+          <div style="display:flex;gap:6px;width:100%">
+            <el-input v-model="form.apiKey" type="password" show-password placeholder="sk-..." style="flex:1" />
+            <el-button :loading="testingConfig" @click="doFetchModels">获取模型/测试</el-button>
+          </div>
+          <div v-if="testMsg" :style="`font-size:12px;margin-top:4px;color:${testOk ? '#67c23a' : '#f56c6c'}`">{{ testMsg }}</div>
+        </el-form-item>
+        <el-form-item label="默认模型">
+          <el-select v-model="form.model" filterable allow-create default-first-option placeholder="选择或输入模型名" style="width:100%">
+            <el-option v-for="m in fetchedModels" :key="m" :label="m" :value="m" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="可用模型">
+          <el-select v-model="selectedModels" multiple filterable allow-create default-first-option
+            collapse-tags collapse-tags-tooltip placeholder="多选可用模型（对话中可切换）" style="width:100%">
+            <el-option v-for="m in fetchedModels" :key="m" :label="m" :value="m" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="启用"><el-switch v-model="form.enabled" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" /></el-form-item>
       </el-form>
@@ -57,6 +77,22 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 const dialogVisible = ref(false)
 const form = ref<any>({ id: 0, providerName: '', baseUrl: '', apiKey: '', model: '', models: '', enabled: true, remark: '' })
+// 模型拉取/多选状态
+const fetchedModels = ref<string[]>([])
+const selectedModels = ref<string[]>([])
+const testingConfig = ref(false)
+const testMsg = ref('')
+const testOk = ref(false)
+
+// 预置供应商（选择后自动填默认接口地址）
+const presetProviders = [
+  { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1' },
+  { name: '通义千问', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+  { name: 'Kimi (Moonshot)', baseUrl: 'https://api.moonshot.cn/v1' },
+  { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
+  { name: '智谱GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
+  { name: 'Ollama', baseUrl: 'http://localhost:11434/v1' }
+]
 
 onMounted(loadData)
 
@@ -70,13 +106,50 @@ async function loadData() {
 
 function openAdd() {
   form.value = { id: 0, providerName: '', baseUrl: '', apiKey: '', model: '', models: '', enabled: true, remark: '' }
+  fetchedModels.value = []
+  selectedModels.value = []
+  testMsg.value = ''
   dialogVisible.value = true
 }
 function openEdit(row: any) {
   form.value = { ...row, enabled: row.enabled === 1 }
+  fetchedModels.value = String(row.models || '').split(',').map((s: string) => s.trim()).filter(Boolean)
+  selectedModels.value = [...fetchedModels.value]
+  testMsg.value = ''
   dialogVisible.value = true
 }
+
+/** 选择预置供应商 → 自动填接口地址默认值 */
+function onProviderNameChange() {
+  const preset = presetProviders.find((p: any) => p.name === form.value.providerName)
+  if (preset && !form.value.baseUrl) form.value.baseUrl = preset.baseUrl
+}
+
+/** 获取模型列表（兼作配置测试） */
+async function doFetchModels() {
+  if (!form.value.baseUrl) { ElMessage.warning('请先填写接口地址'); return }
+  testingConfig.value = true
+  testMsg.value = ''
+  try {
+    const res: any = await request.post('/ai/fetch-models', { baseUrl: form.value.baseUrl, apiKey: form.value.apiKey })
+    const models: string[] = res.data?.models || []
+    fetchedModels.value = models
+    // 默认模型：优先保留当前选择，否则取第一个
+    if (models.length > 0) {
+      if (!form.value.model || !models.includes(form.value.model)) form.value.model = models[0]
+      selectedModels.value = models.filter((m: string) => selectedModels.value.includes(m))
+      if (selectedModels.value.length === 0) selectedModels.value = [...models]
+    }
+    testOk.value = true
+    testMsg.value = `✅ 配置测试通过，共 ${models.length} 个模型`
+  } catch (e: any) {
+    testOk.value = false
+    testMsg.value = e?.message || '测试失败'
+  } finally { testingConfig.value = false }
+}
+
 async function doSave() {
+  form.value.models = selectedModels.value.join(',')
   await request.post('/ai/provider/save', form.value)
   ElMessage.success('保存成功')
   dialogVisible.value = false
