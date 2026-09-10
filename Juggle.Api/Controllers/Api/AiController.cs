@@ -276,6 +276,21 @@ public class AiController : ControllerBase
         catch (Exception ex) { return ApiResult.Fail(ex.Message); }
     }
 
+    // ==================== 报表智能生成 ====================
+
+    /// <summary>根据需求生成报表（数据集/查询参数/排版），供预览确认后入库</summary>
+    [HttpPost("generate-report")]
+    public async Task<ApiResult> GenerateReport([FromBody] AiGenerateReportRequest req)
+    {
+        try
+        {
+            var result = await _aiService.GenerateReportAsync(req.Requirement, req.ReportName,
+                req.DataViews, req.DataSources, req.Flows, req.Apis, req.ProviderId, req.Model);
+            return ApiResult.Success(result);
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
+    }
+
     // ==================== 多轮对话 ====================
 
     /// <summary>开启新对话（快照助手配置与输入参数）</summary>
@@ -465,4 +480,16 @@ public class AiConversationEndRequest
     public long ConversationId { get; set; }
     public long ProviderId { get; set; }
     public string? Model { get; set; }
+}
+
+public class AiGenerateReportRequest
+{
+    public string Requirement { get; set; } = "";
+    public string? ReportName { get; set; }
+    public long ProviderId { get; set; }
+    public string? Model { get; set; }
+    public List<Dictionary<string, object?>>? DataViews { get; set; }
+    public List<Dictionary<string, object?>>? DataSources { get; set; }
+    public List<Dictionary<string, object?>>? Flows { get; set; }
+    public List<Dictionary<string, object?>>? Apis { get; set; }
 }

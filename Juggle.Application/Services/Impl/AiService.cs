@@ -450,6 +450,195 @@ public class AiService
     private static string GetStr(JsonElement el, string prop)
         => el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
 
+    // ==================== 报表智能生成 ====================
+
+    /// <summary>
+    /// 根据需求生成报表（数据集 + 查询参数 + 排版），返回与报表设计器一致的 layoutJson 结构。
+    /// </summary>
+    public async Task<object> GenerateReportAsync(string requirement, string? reportName,
+        List<Dictionary<string, object?>>? dataViews, List<Dictionary<string, object?>>? dataSources,
+        List<Dictionary<string, object?>>? flows, List<Dictionary<string, object?>>? apis,
+        long providerId = 0, string? model = null)
+    {
+        if (string.IsNullOrWhiteSpace(requirement))
+            throw new Exception("请先描述报表需求");
+
+        var systemPrompt = """
+            你是报表设计助手。根据用户需求生成报表定义 JSON（与报表设计器 layoutJson 结构一致）。
+            只输出 JSON（不要 markdown 围栏、不要解释），结构如下：
+            {
+              "page": { "size": "A4", "orientation": "portrait", "margin": {}, "header": "", "footer": "", "bgImage": "" },
+              "params": [                                  // 查询参数（用户可筛选，与数据集 SQL 中 @参数名 对应）
+                { "name": "beginDate", "label": "开始日期", "type": "date", "default": "" },
+                { "name": "status", "label": "状态", "type": "select", "options": "paid,pending", "default": "" }
+              ],
+              "datasets": [                                // 数据集（尽量复用已有数据视图）
+                {
+                  "id": "ds1",
+                  "name": "订单数据",
+                  "sourceType": "dataview",               // dataview=复用数据视图 / sql=自定义SQL / flow=流程 / api=接口
+                  "sourceRef": "12",                      // dataview=视图id；flow=flowKey；api=methodCode
+                  "customSql": "",                        // sql 类型时填 SQL（用 @参数名 引用查询参数，参数为空时不过滤）
+                  "dataSourceId": 3,                      // sql 类型时填数据源 id（必须来自可用数据源清单）
+                  "fields": []
+                }
+              ],
+              "rows": [
+                { "height": 35, "type": "title", "dataset": "", "expand": "" },
+                { "height": 28, "type": "header", "dataset": "", "expand": "" },
+                { "height": 25, "type": "data", "dataset": "ds1", "expand": "auto", "zebra": true },
+                { "height": 25, "type": "footer", "dataset": "ds1", "expand": "" }
+              ],
+              "cols": [ { "width": 60 }, { "width": 150 }, { "width": 100 } ],
+              "cells": [
+                { "r": 0, "c": 0, "value": "销售报表", "colspan": 3, "style": { "bold": true, "align": "center", "fontSize": 16 } },
+                { "r": 1, "c": 0, "value": "编号", "style": { "bold": true } },
+                { "r": 1, "c": 1, "value": "名称" },
+                { "r": 1, "c": 2, "value": "金额" },
+                { "r": 2, "c": 0, "value": "${rowIndex}" },
+                { "r": 2, "c": 1, "value": "${ds1.name}" },   // 数据行占位符：${字段} 或 ${数据集.字段}
+                { "r": 2, "c": 2, "value": "${amount}" },
+                { "r": 3, "c": 0, "value": "合计", "colspan": 2 },
+                { "r": 3, "c": 2, "value": "${amount:SUM}", "style": { "bold": true } }
+              ]
+            }
+
+            规则：
+            1. 数据集优先复用「可用数据视图」：sourceType=dataview、sourceRef=视图 id，不得编造；视图不满足时用 sourceType=sql + 可用数据源 id 写自定义 SQL（注意数据源方言：sqlite/mysql/postgresql/sqlserver）；需要流程/接口数据时用 flow/api 类型并复用清单中的 flowKey/methodCode。
+            2. 数据集 SQL 中需要筛选的字段用 @参数名 引用 params 中的查询参数（如 WHERE status = @status），参数类型取 text/number/date/select（select 配 options 逗号分隔）。
+            3. 行结构固定：第 1 行 title（合并全部列）、第 2 行 header（列名）、数据行 type=data + dataset + expand=auto + zebra=true（可用多行）、最后 footer 行。
+            4. 数据行单元格用 ${字段名} 或 ${数据集.字段} 占位符；序号列用 ${rowIndex}。
+            5. 汇总/合计用聚合占位符：${金额:SUM}、${字段:AVG}、${字段:COUNT}、MIN/MAX；需要条件计算时用公式 =IF(条件, 真, 假)（如 =IF(${amount} > 100, '大额', '普通')）。
+            6. cols 宽度按内容合理分配（序号 60、文本 150、数字 100 左右）。
+            7. 标题行居中加粗 16 号，表头加粗；列名用中文。
+            8. 只输出 JSON 本体。
+            """;
+
+        var userPrompt = $"""
+            ## 报表需求
+            {requirement.Trim()}
+
+            ## 可用数据视图（dataview）
+            {BuildSimpleList(dataViews, "id", "name", "groupName", "sql")}
+
+            ## 可用数据源（自定义SQL用）
+            {BuildSimpleList(dataSources, "id", "dataSourceName", "dataSourceType", null)}
+
+            ## 已发布流程（flow）
+            {BuildSimpleList(flows, "flowKey", "flowName", null, null)}
+
+            ## 可用接口（api）
+            {BuildSimpleList(apis, "methodCode", "methodName", "suiteCode", "url")}
+
+            请生成报表 JSON。
+            """;
+
+        var content = await ChatAsync(systemPrompt, userPrompt, providerId, modelOverride: model);
+        return ExtractAndValidateReport(content, reportName);
+    }
+
+    /// <summary>提取报表查询参数（name/label/type/options/default）。</summary>
+    private static List<Dictionary<string, object?>> ExtractReportParams(JsonElement root)
+    {
+        var list = new List<Dictionary<string, object?>>();
+        if (!root.TryGetProperty("params", out var arr) || arr.ValueKind != JsonValueKind.Array) return list;
+        foreach (var p in arr.EnumerateArray())
+        {
+            if (p.ValueKind != JsonValueKind.Object) continue;
+            var name = GetStr(p, "name");
+            if (string.IsNullOrEmpty(name)) continue;
+            list.Add(new Dictionary<string, object?>
+            {
+                ["name"] = name,
+                ["label"] = GetStr(p, "label") is { Length: > 0 } l ? l : name,
+                ["type"] = GetStr(p, "type") is { Length: > 0 } t ? t : "text",
+                ["options"] = GetStr(p, "options"),
+                ["default"] = GetStr(p, "default")
+            });
+        }
+        return list;
+    }
+
+    private static string BuildSimpleList(List<Dictionary<string, object?>>? items, string code, string name, string? extra, string? extra2)
+    {
+        if (items == null || items.Count == 0) return "（无）";
+        var sb = new StringBuilder();
+        foreach (var it in items)
+        {
+            sb.Append($"- {code}={it.GetValueOrDefault(code)} {name}={it.GetValueOrDefault(name)}");
+            if (extra != null) sb.Append($" {extra}={it.GetValueOrDefault(extra)}");
+            if (extra2 != null)
+            {
+                var v = it.GetValueOrDefault(extra2)?.ToString();
+                if (!string.IsNullOrEmpty(v) && v.Length > 60) v = v[..60] + "...";
+                sb.Append($" {extra2}={v}");
+            }
+            sb.AppendLine();
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>报表 JSON 校验归一化：结构完整 + 数据行展开标记补全。</summary>
+    private static object ExtractAndValidateReport(string content, string? reportName)
+    {
+        var json = ExtractJson(content);
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        var layout = new Dictionary<string, object?>();
+
+        // page
+        if (root.TryGetProperty("page", out var pg) && pg.ValueKind == JsonValueKind.Object)
+            layout["page"] = CloneToObject(pg);
+        else
+            layout["page"] = new Dictionary<string, object?> { ["size"] = "A4", ["orientation"] = "portrait" };
+
+        // params（报表查询参数：name/label/type/options/default）
+        layout["params"] = ExtractReportParams(root);
+        var datasets = new List<object?>();
+        if (root.TryGetProperty("datasets", out var dsArr) && dsArr.ValueKind == JsonValueKind.Array)
+            datasets.AddRange(dsArr.EnumerateArray().Select(CloneToObject));
+        layout["datasets"] = datasets;
+
+        // rows：数据行绑定数据集时补 expand=auto
+        var rows = new List<object?>();
+        if (root.TryGetProperty("rows", out var rowsArr) && rowsArr.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var r in rowsArr.EnumerateArray())
+            {
+                if (r.ValueKind != JsonValueKind.Object) continue;
+                var row = r.EnumerateObject().ToDictionary(p => p.Name, p => CloneToObject(p.Value));
+                var type = row.GetValueOrDefault("type")?.ToString() ?? "";
+                if (type == "data" && !string.IsNullOrEmpty(row.GetValueOrDefault("dataset")?.ToString())
+                    && string.IsNullOrEmpty(row.GetValueOrDefault("expand")?.ToString()))
+                    row["expand"] = "auto";
+                rows.Add(row);
+            }
+        }
+        layout["rows"] = rows;
+
+        // cols / cells
+        layout["cols"] = root.TryGetProperty("cols", out var colsArr) && colsArr.ValueKind == JsonValueKind.Array
+            ? colsArr.EnumerateArray().Select(CloneToObject).ToList()
+            : new List<object?>();
+        layout["cells"] = root.TryGetProperty("cells", out var cellsArr) && cellsArr.ValueKind == JsonValueKind.Array
+            ? cellsArr.EnumerateArray().Select(CloneToObject).ToList()
+            : new List<object?>();
+
+        if (rows.Count == 0 || ((List<object?>)layout["cols"]!).Count == 0)
+            throw new Exception("AI 返回的报表缺少行/列定义，请调整需求重试");
+
+        var layoutJson = JsonSerializer.Serialize(layout);
+        return new
+        {
+            reportName = reportName ?? "",
+            layoutJson,
+            paramsList = layout["params"],
+            datasets = datasets,
+            rows = rows.Count,
+            cols = ((List<object?>)layout["cols"]!).Count
+        };
+    }
+
     // ==================== 自定义助手 ====================
 
     /// <summary>

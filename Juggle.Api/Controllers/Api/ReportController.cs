@@ -80,6 +80,18 @@ public class ReportController : ControllerBase
         catch (Exception ex) { return ApiResult.Fail(ex.Message); }
     }
 
+    /// <summary>按 layoutJson 直接渲染预览（AI 报表助手生成预览用，无需先保存）</summary>
+    [HttpPost("preview-layout")]
+    public async Task<ApiResult> PreviewLayout([FromBody] ReportPreviewLayoutRequest req)
+    {
+        try
+        {
+            var html = await _reportExec.RenderToHtml(req.LayoutJson ?? "{}", req.Params);
+            return ApiResult.Success(new { html });
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
+    }
+
     /// <summary>报表详情（正式访问页用：名称/参数配置等）</summary>
     [HttpGet("info/{id}")]
     public async Task<ApiResult> Info(long id)
@@ -145,4 +157,10 @@ public class ReportDatasetOptionsRequest
 {
     public long Id { get; set; }
     public string? DatasetId { get; set; }
+}
+
+public class ReportPreviewLayoutRequest
+{
+    public string? LayoutJson { get; set; }
+    public Dictionary<string, object?>? Params { get; set; }
 }

@@ -44,7 +44,8 @@ const routes = [
       { path: 'ai/flow-assistant',  component: () => import('../views/ai/FlowAssistant.vue') },
       { path: 'ai/api-assistant',   component: () => import('../views/ai/ApiAssistant.vue') },
       { path: 'ai/assistants',      component: () => import('../views/ai/AiAssistantList.vue') },
-      { path: 'ai/assistant/:id',   component: () => import('../views/ai/AssistantRun.vue') }
+      { path: 'ai/assistant/:id',   component: () => import('../views/ai/AssistantRun.vue') },
+      { path: 'ai/report-assistant', component: () => import('../views/ai/ReportAssistant.vue') }
     ]
   },
   {

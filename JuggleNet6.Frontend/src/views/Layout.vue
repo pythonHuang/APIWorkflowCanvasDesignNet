@@ -62,6 +62,7 @@
           <el-menu-item index="/ai/assistants">模型助手管理</el-menu-item>
           <el-menu-item index="/ai/flow-assistant">流程智能编排助手</el-menu-item>
           <el-menu-item index="/ai/api-assistant">接口智能接入助手</el-menu-item>
+          <el-menu-item index="/ai/report-assistant">报表智能助手</el-menu-item>
           <el-menu-item v-for="a in assistantMenuList" :key="a.id" :index="`/ai/assistant/${a.id}`">{{ a.assistantName }}</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="system" v-if="hasMenu('/system/token')">
