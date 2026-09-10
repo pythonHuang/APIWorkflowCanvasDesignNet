@@ -206,6 +206,9 @@ public class AiService
                   "inputParams": [                    // 接口入参
                     { "paramCode": "userId", "paramName": "用户id", "paramType": "string", "paramPosition": "body", "required": 1, "description": "用户唯一标识" }
                   ],
+                  "headerParams": [                   // 接口 Header 配置（鉴权/内容类型等）
+                    { "paramCode": "Authorization", "paramName": "授权令牌", "paramType": "string", "required": 1, "description": "Bearer 令牌" }
+                  ],
                   "outputParams": [                   // 接口出参（响应字段）
                     { "paramCode": "name", "paramName": "姓名", "paramType": "string", "required": 0, "description": "用户姓名" }
                   ]
@@ -215,7 +218,7 @@ public class AiService
             规则：
             1. suiteCode/methodCode 用英文小驼峰或下划线，全局唯一。
             2. 每个接口必须有 methodCode、methodName、url、requestType。
-            3. 根据接口功能合理设计 inputParams（POST 多为 body、GET 多为 query）与 outputParams（响应字段），paramType 取 string/integer/double/boolean/object/array。
+            3. 根据接口功能合理设计 inputParams（POST 多为 body、GET 多为 query）、headerParams（需要鉴权时生成 Authorization 等，无需鉴权的接口可为空数组）与 outputParams（响应字段），paramType 取 string/integer/double/boolean/object/array。
             4. 接口数量与需求匹配，不要遗漏也不要过度添加。
             """;
         var userPrompt = $"""
@@ -266,6 +269,7 @@ public class AiService
                     url = GetStr(a, "url"),
                     requestType = GetStr(a, "requestType") == "GET" ? "GET" : "POST",
                     inputParams = ExtractParamArray(a, "inputParams"),
+                    headerParams = ExtractParamArray(a, "headerParams"),
                     outputParams = ExtractParamArray(a, "outputParams")
                 });
             }
@@ -321,8 +325,9 @@ public class AiService
             await _db.SaveChangesAsync();
             createdApis++;
 
-            // 写入接口入参/出参（paramType: 1=入参 2=出参）
+            // 写入接口入参/header/出参（paramType: 1=入参 4=header 2=出参）
             createdParams += await SaveApiParamsAsync(apiEntity.Id, code, 1, ToParamList(a.GetValueOrDefault("inputParams")));
+            createdParams += await SaveApiParamsAsync(apiEntity.Id, code, 4, ToParamList(a.GetValueOrDefault("headerParams")));
             createdParams += await SaveApiParamsAsync(apiEntity.Id, code, 2, ToParamList(a.GetValueOrDefault("outputParams")));
         }
         return new { createdSuites, createdApis, createdParams };
@@ -370,7 +375,7 @@ public class AiService
                 ParamCode     = code,
                 ParamName     = p.GetValueOrDefault("paramName")?.ToString() ?? code,
                 DataType      = p.GetValueOrDefault("paramType")?.ToString() ?? "string",
-                Required      = p.GetValueOrDefault("required") is int r ? r : 0,
+                Required      = p.GetValueOrDefault("required") switch { int r => r, long rl => (int)rl, _ => 0 },
                 DefaultValue  = p.GetValueOrDefault("defaultValue")?.ToString(),
                 Description   = p.GetValueOrDefault("description")?.ToString(),
                 ParamPosition = p.GetValueOrDefault("paramPosition")?.ToString(),
@@ -429,7 +434,7 @@ public class AiService
                 ParamCode     = code,
                 ParamName     = p.GetValueOrDefault("paramName")?.ToString() ?? code,
                 DataType      = p.GetValueOrDefault("paramType")?.ToString() ?? "string",
-                Required      = p.GetValueOrDefault("required") is int r ? r : 0,
+                Required      = p.GetValueOrDefault("required") switch { int r => r, long rl => (int)rl, _ => 0 },
                 DefaultValue  = p.GetValueOrDefault("defaultValue")?.ToString(),
                 Description   = p.GetValueOrDefault("description")?.ToString(),
                 ParamPosition = p.GetValueOrDefault("paramPosition")?.ToString(),

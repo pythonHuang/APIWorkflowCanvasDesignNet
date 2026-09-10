@@ -42,27 +42,39 @@
       <el-table :data="preview.apis" size="small" border max-height="320" row-key="methodCode">
         <el-table-column type="expand">
           <template #default="{ row }">
-            <div style="display:flex;gap:16px;padding:8px 16px">
-              <div style="flex:1">
-                <div style="font-weight:600;margin-bottom:4px;font-size:12px">入参（{{ row.inputParams?.length || 0 }}）</div>
+            <div style="display:flex;gap:12px;padding:8px 12px">
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;margin-bottom:4px;font-size:12px">入参配置（{{ row.inputParams?.length || 0 }}）</div>
                 <el-table :data="row.inputParams || []" size="small" border>
-                  <el-table-column prop="paramCode" label="参数code" min-width="130" show-overflow-tooltip />
-                  <el-table-column prop="paramName" label="名称" min-width="100" show-overflow-tooltip />
-                  <el-table-column prop="paramType" label="类型" width="90" />
-                  <el-table-column prop="paramPosition" label="位置" width="70" />
-                  <el-table-column label="必填" width="60" align="center">
+                  <el-table-column prop="paramCode" label="参数code" min-width="110" show-overflow-tooltip />
+                  <el-table-column prop="paramName" label="名称" min-width="90" show-overflow-tooltip />
+                  <el-table-column prop="paramType" label="类型" width="80" />
+                  <el-table-column prop="paramPosition" label="位置" width="60" />
+                  <el-table-column label="必填" width="55" align="center">
                     <template #default="{ row: r }"><el-tag size="small" :type="r.required ? 'danger' : 'info'">{{ r.required ? '是' : '否' }}</el-tag></template>
                   </el-table-column>
-                  <el-table-column prop="description" label="说明" min-width="120" show-overflow-tooltip />
+                  <el-table-column prop="description" label="说明" min-width="100" show-overflow-tooltip />
                 </el-table>
               </div>
-              <div style="flex:1">
-                <div style="font-weight:600;margin-bottom:4px;font-size:12px">出参（{{ row.outputParams?.length || 0 }}）</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;margin-bottom:4px;font-size:12px">Header 配置（{{ row.headerParams?.length || 0 }}）</div>
+                <el-table :data="row.headerParams || []" size="small" border>
+                  <el-table-column prop="paramCode" label="Header名" min-width="110" show-overflow-tooltip />
+                  <el-table-column prop="paramName" label="名称" min-width="90" show-overflow-tooltip />
+                  <el-table-column prop="paramType" label="类型" width="80" />
+                  <el-table-column label="必填" width="55" align="center">
+                    <template #default="{ row: r }"><el-tag size="small" :type="r.required ? 'danger' : 'info'">{{ r.required ? '是' : '否' }}</el-tag></template>
+                  </el-table-column>
+                  <el-table-column prop="description" label="说明" min-width="100" show-overflow-tooltip />
+                </el-table>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;margin-bottom:4px;font-size:12px">出参配置（{{ row.outputParams?.length || 0 }}）</div>
                 <el-table :data="row.outputParams || []" size="small" border>
-                  <el-table-column prop="paramCode" label="参数code" min-width="130" show-overflow-tooltip />
-                  <el-table-column prop="paramName" label="名称" min-width="100" show-overflow-tooltip />
-                  <el-table-column prop="paramType" label="类型" width="90" />
-                  <el-table-column prop="description" label="说明" min-width="120" show-overflow-tooltip />
+                  <el-table-column prop="paramCode" label="参数code" min-width="110" show-overflow-tooltip />
+                  <el-table-column prop="paramName" label="名称" min-width="90" show-overflow-tooltip />
+                  <el-table-column prop="paramType" label="类型" width="80" />
+                  <el-table-column prop="description" label="说明" min-width="100" show-overflow-tooltip />
                 </el-table>
               </div>
             </div>
