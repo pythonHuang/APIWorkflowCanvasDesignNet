@@ -1,12 +1,16 @@
 using Juggle.Application.Models.Response;
+using Juggle.Application.Services;
 using Juggle.Application.Services.Impl;
+using Juggle.Domain.Entities;
+using Juggle.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Juggle.Api.Controllers.Api;
 
 /// <summary>
-/// AI 大模型控制器：模型配置 + 需求对话生成接口流程编排。
+/// AI 大模型控制器：供应商管理 + 需求对话生成接口流程编排 + 接口智能接入。
 /// 支持任意 OpenAI 兼容接口（DeepSeek / 通义千问 / Kimi / OpenAI 等）。
 /// </summary>
 [ApiController]
@@ -15,8 +19,76 @@ namespace Juggle.Api.Controllers.Api;
 public class AiController : ControllerBase
 {
     private readonly AiService _aiService;
+    private readonly JuggleDbContext _db;
+    private readonly ITenantAccessor _tenant;
 
-    public AiController(AiService aiService) => _aiService = aiService;
+    public AiController(AiService aiService, JuggleDbContext db, ITenantAccessor tenant)
+    {
+        _aiService = aiService;
+        _db = db;
+        _tenant = tenant;
+    }
+
+    // ==================== 供应商管理 ====================
+
+    /// <summary>供应商列表（含启停状态）</summary>
+    [HttpGet("providers")]
+    public async Task<ApiResult> Providers()
+        => ApiResult.Success(await _aiService.GetProvidersAsync());
+
+    /// <summary>启用的供应商（下拉选择用）</summary>
+    [HttpGet("providers/enabled")]
+    public async Task<ApiResult> EnabledProviders()
+        => ApiResult.Success(await _aiService.GetEnabledProvidersAsync());
+
+    /// <summary>新增/更新供应商</summary>
+    [HttpPost("provider/save")]
+    public async Task<ApiResult> SaveProvider([FromBody] AiProviderSaveRequest req)
+    {
+        AiProviderEntity entity;
+        if (req.Id > 0)
+        {
+            entity = await _db.AiProviders.FindAsync(req.Id) ?? throw new Exception("供应商不存在");
+        }
+        else
+        {
+            entity = new AiProviderEntity { CreatedAt = DateTime.Now.ToString("o"), TenantId = _tenant.TenantId };
+            _db.AiProviders.Add(entity);
+        }
+        entity.ProviderName = req.ProviderName;
+        entity.BaseUrl = req.BaseUrl;
+        entity.ApiKey = req.ApiKey;
+        entity.Model = req.Model;
+        entity.Models = req.Models;
+        entity.Enabled = req.Enabled ? 1 : 0;
+        entity.Remark = req.Remark;
+        entity.UpdatedAt = DateTime.Now.ToString("o");
+        await _db.SaveChangesAsync();
+        return ApiResult.Success(entity.Id);
+    }
+
+    /// <summary>删除供应商</summary>
+    [HttpDelete("provider/{id}")]
+    public async Task<ApiResult> DeleteProvider(long id)
+    {
+        var entity = await _db.AiProviders.FindAsync(id);
+        if (entity == null) return ApiResult.Fail("供应商不存在");
+        entity.Deleted = 1;
+        await _db.SaveChangesAsync();
+        return ApiResult.Success();
+    }
+
+    /// <summary>启用/禁用供应商</summary>
+    [HttpPost("provider/toggle")]
+    public async Task<ApiResult> ToggleProvider([FromBody] AiProviderToggleRequest req)
+    {
+        var entity = await _db.AiProviders.FindAsync(req.Id);
+        if (entity == null) return ApiResult.Fail("供应商不存在");
+        entity.Enabled = req.Enabled ? 1 : 0;
+        entity.UpdatedAt = DateTime.Now.ToString("o");
+        await _db.SaveChangesAsync();
+        return ApiResult.Success();
+    }
 
     /// <summary>读取 AI 模型配置</summary>
     [HttpGet("config")]
@@ -47,8 +119,44 @@ public class AiController : ControllerBase
     {
         try
         {
-            var flow = await _aiService.GenerateFlowAsync(req.Requirement, req.Apis, req.InputParams, req.OutputParams);
+            var flow = await _aiService.GenerateFlowAsync(req.Requirement, req.Apis, req.InputParams, req.OutputParams, req.ProviderId, req.Model);
             return ApiResult.Success(flow);
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
+    }
+
+    /// <summary>确认生成流程：创建流程定义并写入编排内容</summary>
+    [HttpPost("apply-flow")]
+    public async Task<ApiResult> ApplyFlow([FromBody] AiApplyFlowRequest req)
+    {
+        try
+        {
+            var result = await _aiService.ApplyFlowAsync(req.FlowName, req.FlowDesc, req.GroupName, req.Nodes);
+            return ApiResult.Success(result);
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
+    }
+
+    /// <summary>根据需求对话生成套件与接口（预览）</summary>
+    [HttpPost("generate-apis")]
+    public async Task<ApiResult> GenerateApis([FromBody] AiGenerateApisRequest req)
+    {
+        try
+        {
+            var result = await _aiService.GenerateApisAsync(req.Requirement, req.ExistingSuites, req.ProviderId, req.Model);
+            return ApiResult.Success(result);
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
+    }
+
+    /// <summary>确认接入：套件与接口写入数据库</summary>
+    [HttpPost("apply-apis")]
+    public async Task<ApiResult> ApplyApis([FromBody] AiApplyApisRequest req)
+    {
+        try
+        {
+            var result = await _aiService.ApplyApisAsync(req.Suites, req.Apis);
+            return ApiResult.Success(result);
         }
         catch (Exception ex) { return ApiResult.Fail(ex.Message); }
     }
@@ -64,7 +172,49 @@ public class AiConfigRequest
 public class AiGenerateFlowRequest
 {
     public string Requirement { get; set; } = "";
+    public long ProviderId { get; set; }
+    public string? Model { get; set; }
     public List<Dictionary<string, object?>>? Apis { get; set; }
     public List<Dictionary<string, object?>>? InputParams { get; set; }
     public List<Dictionary<string, object?>>? OutputParams { get; set; }
+}
+
+public class AiApplyFlowRequest
+{
+    public string FlowName { get; set; } = "";
+    public string? FlowDesc { get; set; }
+    public string? GroupName { get; set; }
+    public List<Dictionary<string, object?>>? Nodes { get; set; }
+}
+
+public class AiGenerateApisRequest
+{
+    public string Requirement { get; set; } = "";
+    public long ProviderId { get; set; }
+    public string? Model { get; set; }
+    public List<Dictionary<string, object?>>? ExistingSuites { get; set; }
+}
+
+public class AiApplyApisRequest
+{
+    public List<Dictionary<string, object?>>? Suites { get; set; }
+    public List<Dictionary<string, object?>>? Apis { get; set; }
+}
+
+public class AiProviderSaveRequest
+{
+    public long Id { get; set; }
+    public string ProviderName { get; set; } = "";
+    public string BaseUrl { get; set; } = "";
+    public string ApiKey { get; set; } = "";
+    public string Model { get; set; } = "";
+    public string Models { get; set; } = "";
+    public bool Enabled { get; set; } = true;
+    public string? Remark { get; set; }
+}
+
+public class AiProviderToggleRequest
+{
+    public long Id { get; set; }
+    public bool Enabled { get; set; }
 }

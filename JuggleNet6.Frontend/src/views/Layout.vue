@@ -54,6 +54,15 @@
           </template>
           <el-menu-item v-for="r in reportMenuList" :key="r.id" :index="`/report/view/${r.id}`">{{ r.name }}</el-menu-item>
         </el-sub-menu>
+        <el-sub-menu index="ai">
+          <template #title>
+            <el-icon><MagicStick /></el-icon>
+            <span>模型助手</span>
+          </template>
+          <el-menu-item index="/system/ai-provider">模型助手管理</el-menu-item>
+          <el-menu-item index="/ai/flow-assistant">流程智能编排助手</el-menu-item>
+          <el-menu-item index="/ai/api-assistant">接口智能接入助手</el-menu-item>
+        </el-sub-menu>
         <el-sub-menu index="system" v-if="hasMenu('/system/token')">
           <template #title>
             <el-icon><Setting /></el-icon>
@@ -68,6 +77,7 @@
           <el-menu-item index="/system/role" v-if="hasMenu('/system/role')">角色管理</el-menu-item>
           <el-menu-item index="/system/tenant" v-if="hasMenu('/system/tenant')">租户管理</el-menu-item>
           <el-menu-item index="/system/config" v-if="hasMenu('/system/config')">系统配置</el-menu-item>
+          <el-menu-item index="/system/ai-provider" v-if="hasMenu('/system/config')">大模型设置</el-menu-item>
           <el-menu-item index="/system/login-log" v-if="hasMenu('/system/login-log')">登录日志</el-menu-item>
           <el-menu-item index="/system/audit-log" v-if="hasMenu('/system/audit-log')">审计日志</el-menu-item>
         </el-sub-menu>
@@ -108,7 +118,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram, Document } from '@element-plus/icons-vue'
+import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram, Document, MagicStick } from '@element-plus/icons-vue'
 import request from '../utils/request'
 
 const route = useRoute()

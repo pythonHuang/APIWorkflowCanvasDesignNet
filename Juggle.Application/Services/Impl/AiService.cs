@@ -22,9 +22,9 @@ public class AiService
         _db = db;
     }
 
-    // ==================== 配置 ====================
+    // ==================== 配置（兼容旧版 ai.* 单配置） ====================
 
-    /// <summary>读取 AI 配置（系统配置表：ai.baseUrl / ai.apiKey / ai.model）。</summary>
+    /// <summary>读取旧版 AI 配置（系统配置表：ai.baseUrl / ai.apiKey / ai.model）。</summary>
     public async Task<AiConfig> GetConfigAsync()
     {
         var configs = await _db.SystemConfigs
@@ -39,7 +39,7 @@ public class AiService
         };
     }
 
-    /// <summary>保存 AI 配置（按 key upsert）。</summary>
+    /// <summary>保存旧版 AI 配置（按 key upsert）。</summary>
     public async Task SaveConfigAsync(string baseUrl, string apiKey, string model)
     {
         await UpsertAsync("ai.baseUrl", baseUrl?.Trim() ?? "", "AI接口地址");
@@ -66,14 +66,42 @@ public class AiService
         await _db.SaveChangesAsync();
     }
 
+    // ==================== 供应商管理 ====================
+
+    /// <summary>供应商列表（含启停状态）。</summary>
+    public async Task<List<AiProviderEntity>> GetProvidersAsync()
+        => await _db.AiProviders.Where(p => p.Deleted == 0).OrderByDescending(p => p.Id).ToListAsync();
+
+    /// <summary>启用的供应商列表。</summary>
+    public async Task<List<AiProviderEntity>> GetEnabledProvidersAsync()
+        => await _db.AiProviders.Where(p => p.Deleted == 0 && p.Enabled == 1).OrderBy(p => p.Id).ToListAsync();
+
+    /// <summary>按 ID 或第一个启用供应商解析对话配置。</summary>
+    private async Task<AiConfig> ResolveConfigAsync(long? providerId)
+    {
+        AiProviderEntity? provider = null;
+        if (providerId > 0)
+        {
+            provider = await _db.AiProviders.FirstOrDefaultAsync(p => p.Id == providerId && p.Deleted == 0);
+        }
+        provider ??= await _db.AiProviders.FirstOrDefaultAsync(p => p.Deleted == 0 && p.Enabled == 1);
+        if (provider != null)
+        {
+            return new AiConfig { BaseUrl = provider.BaseUrl ?? "", ApiKey = provider.ApiKey ?? "", Model = provider.Model ?? "" };
+        }
+        // 兼容旧版单配置
+        return await GetConfigAsync();
+    }
+
     // ==================== 对话 ====================
 
-    /// <summary>调用大模型对话（OpenAI 兼容接口）。</summary>
-    public async Task<string> ChatAsync(string systemPrompt, string userPrompt, AiConfig? config = null)
+    /// <summary>调用大模型对话（OpenAI 兼容接口）。providerId 指定供应商，0=第一个启用供应商；modelOverride 可在供应商可用模型内切换。</summary>
+    public async Task<string> ChatAsync(string systemPrompt, string userPrompt, long providerId = 0, AiConfig? config = null, string? modelOverride = null)
     {
-        var cfg = config ?? await GetConfigAsync();
+        var cfg = config ?? await ResolveConfigAsync(providerId > 0 ? providerId : null);
+        if (!string.IsNullOrEmpty(modelOverride)) cfg.Model = modelOverride;
         if (string.IsNullOrEmpty(cfg.BaseUrl) || string.IsNullOrEmpty(cfg.ApiKey))
-            throw new Exception("未配置 AI 大模型：请在流程设计器「AI 生成」对话框的模型设置中填写接口地址与密钥");
+            throw new Exception("未配置 AI 大模型：请在系统设置 → 大模型设置中添加并启用供应商");
 
         var url = cfg.BaseUrl.TrimEnd('/');
         if (!url.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
@@ -114,7 +142,7 @@ public class AiService
 
     /// <summary>根据自然语言需求生成接口流程编排。</summary>
     public async Task<object> GenerateFlowAsync(string requirement, List<Dictionary<string, object?>>? apis,
-        List<Dictionary<string, object?>>? inputParams, List<Dictionary<string, object?>>? outputParams)
+        List<Dictionary<string, object?>>? inputParams, List<Dictionary<string, object?>>? outputParams, long providerId = 0, string? model = null)
     {
         if (string.IsNullOrWhiteSpace(requirement))
             throw new Exception("请先描述编排需求");
@@ -139,10 +167,169 @@ public class AiService
             请只输出 JSON，不要输出任何解释文字。
             """;
 
-        var content = await ChatAsync(systemPrompt, userPrompt);
+        var content = await ChatAsync(systemPrompt, userPrompt, providerId, modelOverride: model);
         var flow = ExtractAndValidateFlow(content);
         return flow;
     }
+
+    /// <summary>根据需求生成套件与接口（JSON），供前端预览确认。</summary>
+    public async Task<object> GenerateApisAsync(string requirement, List<Dictionary<string, object?>>? existingSuites, long providerId = 0, string? model = null)
+    {
+        if (string.IsNullOrWhiteSpace(requirement))
+            throw new Exception("请先描述接口接入需求");
+
+        var suitesSummary = existingSuites is { Count: > 0 }
+            ? "已存在套件（尽量复用）:\n" + string.Join("\n", existingSuites.Select(s => $"- {s.GetValueOrDefault("suiteCode")}：{s.GetValueOrDefault("suiteName")}")) + "\n"
+            : "";
+        var systemPrompt = """
+            你是接口接入助手。根据用户需求，生成需要接入的套件与接口定义 JSON。
+            只输出 JSON（不要 markdown 围栏、不要解释），结构如下：
+            {
+              "suites": [
+                { "suiteCode": "user", "suiteName": "用户中心", "suiteDesc": "用户相关接口" }
+              ],
+              "apis": [
+                {
+                  "suiteCode": "user",                // 所属套件（必须与 suites 中一致）
+                  "methodCode": "getUserInfo",        // 接口 code（唯一）
+                  "methodName": "获取用户信息",
+                  "methodDesc": "根据用户id查询用户信息",
+                  "url": "/api/user/info",            // 接口路径
+                  "requestType": "POST"               // GET / POST
+                }
+              ]
+            }
+            规则：
+            1. suiteCode/methodCode 用英文小驼峰或下划线，全局唯一。
+            2. 每个接口必须有 methodCode、methodName、url、requestType。
+            3. 接口数量与需求匹配，不要遗漏也不要过度添加。
+            """;
+        var userPrompt = $"""
+            {suitesSummary}
+            接入需求：
+            {requirement.Trim()}
+            """;
+
+        var content = await ChatAsync(systemPrompt, userPrompt, providerId, modelOverride: model);
+        return ExtractAndValidateApis(content);
+    }
+
+    private static object ExtractAndValidateApis(string content)
+    {
+        var json = ExtractJson(content);
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        var suites = new List<object>();
+        var apis = new List<object>();
+
+        if (root.TryGetProperty("suites", out var sEl) && sEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var s in sEl.EnumerateArray())
+            {
+                if (s.ValueKind != JsonValueKind.Object) continue;
+                suites.Add(new
+                {
+                    suiteCode = GetStr(s, "suiteCode"),
+                    suiteName = GetStr(s, "suiteName"),
+                    suiteDesc = GetStr(s, "suiteDesc")
+                });
+            }
+        }
+        if (root.TryGetProperty("apis", out var aEl) && aEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var a in aEl.EnumerateArray())
+            {
+                if (a.ValueKind != JsonValueKind.Object) continue;
+                var code = GetStr(a, "methodCode");
+                if (string.IsNullOrEmpty(code)) continue;
+                apis.Add(new
+                {
+                    suiteCode = GetStr(a, "suiteCode"),
+                    methodCode = code,
+                    methodName = GetStr(a, "methodName"),
+                    methodDesc = GetStr(a, "methodDesc"),
+                    url = GetStr(a, "url"),
+                    requestType = GetStr(a, "requestType") == "GET" ? "GET" : "POST"
+                });
+            }
+        }
+        if (apis.Count == 0)
+            throw new Exception("AI 未生成有效接口，请调整需求描述后重试");
+        return new { suites, apis };
+    }
+
+    /// <summary>确认接入：将生成的套件与接口写入数据库（按 code 去重，已存在跳过）。</summary>
+    public async Task<object> ApplyApisAsync(List<Dictionary<string, object?>>? suites, List<Dictionary<string, object?>>? apis)
+    {
+        var createdSuites = 0;
+        var createdApis = 0;
+
+        foreach (var s in suites ?? new())
+        {
+            var code = s.GetValueOrDefault("suiteCode")?.ToString() ?? "";
+            if (string.IsNullOrEmpty(code)) continue;
+            var exists = await _db.Suites.AnyAsync(x => x.SuiteCode == code && x.Deleted == 0);
+            if (exists) continue;
+            _db.Suites.Add(new SuiteEntity
+            {
+                SuiteCode = code,
+                SuiteName = s.GetValueOrDefault("suiteName")?.ToString() ?? code,
+                SuiteDesc = s.GetValueOrDefault("suiteDesc")?.ToString() ?? "",
+                CreatedAt = DateTime.Now.ToString("o")
+            });
+            createdSuites++;
+        }
+        await _db.SaveChangesAsync();
+
+        foreach (var a in apis ?? new())
+        {
+            var code = a.GetValueOrDefault("methodCode")?.ToString() ?? "";
+            if (string.IsNullOrEmpty(code)) continue;
+            var exists = await _db.Apis.AnyAsync(x => x.MethodCode == code && x.Deleted == 0);
+            if (exists) continue;
+            _db.Apis.Add(new ApiEntity
+            {
+                SuiteCode   = a.GetValueOrDefault("suiteCode")?.ToString() ?? "",
+                MethodCode  = code,
+                MethodName  = a.GetValueOrDefault("methodName")?.ToString() ?? code,
+                MethodDesc  = a.GetValueOrDefault("methodDesc")?.ToString() ?? "",
+                Url         = a.GetValueOrDefault("url")?.ToString() ?? "",
+                RequestType = a.GetValueOrDefault("requestType")?.ToString() ?? "POST",
+                MethodType  = "HTTP",
+                Status      = 1,
+                CreatedAt   = DateTime.Now.ToString("o")
+            });
+            createdApis++;
+        }
+        await _db.SaveChangesAsync();
+        return new { createdSuites, createdApis };
+    }
+
+    /// <summary>确认生成流程：创建流程定义并写入编排内容。</summary>
+    public async Task<object> ApplyFlowAsync(string flowName, string? flowDesc, string? groupName, List<Dictionary<string, object?>>? nodes)
+    {
+        if (string.IsNullOrWhiteSpace(flowName)) throw new Exception("请填写流程名称");
+        if (nodes == null || nodes.Count == 0) throw new Exception("没有可生成的流程节点");
+
+        var entity = new Juggle.Domain.Entities.FlowDefinitionEntity
+        {
+            FlowKey     = $"flow_{Guid.NewGuid():N}",
+            FlowName    = flowName.Trim(),
+            FlowDesc    = flowDesc ?? "",
+            FlowType    = "sync",
+            GroupName   = groupName ?? "",
+            FlowContent = JsonSerializer.Serialize(nodes),
+            Status      = 0,
+            CreatedAt   = DateTime.Now.ToString("o")
+        };
+        _db.FlowDefinitions.Add(entity);
+        await _db.SaveChangesAsync();
+        return new { entity.Id, entity.FlowKey, entity.FlowName };
+    }
+
+    private static string GetStr(JsonElement el, string prop)
+        => el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
 
     /// <summary>流程生成的系统提示词：描述与设计器一致的节点格式。</summary>
     private static string BuildSystemPrompt()

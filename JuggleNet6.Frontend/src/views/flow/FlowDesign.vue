@@ -1264,26 +1264,22 @@ input_list[..3]                            <span class="ch-note">// 数组前 3 
       <div class="ch-note" style="margin-bottom:8px">
         当前已加载 <b>{{ apiOptions.length }}</b> 个套件的接口，AI 会从这些接口中选择并编排（入参自动映射流程入参、出参写入 env_ 变量）。生成结果将<b>替换当前画布</b>，建议先保存当前流程。
       </div>
-      <el-collapse>
-        <el-collapse-item title="模型设置（OpenAI 兼容接口，支持 DeepSeek/通义/Kimi 等）">
-          <div class="prop-item">
-            <label>接口地址</label>
-            <el-input v-model="aiConfig.baseUrl" size="small" placeholder="如 https://api.deepseek.com/v1" />
-          </div>
-          <div class="prop-item">
-            <label>API Key</label>
-            <el-input v-model="aiConfig.apiKey" size="small" type="password" show-password placeholder="sk-..." />
-          </div>
-          <div class="prop-item">
-            <label>模型名</label>
-            <el-input v-model="aiConfig.model" size="small" placeholder="如 deepseek-chat / qwen-plus / moonshot-v1-8k" />
-          </div>
-          <el-button size="small" @click="saveAiConfig" :loading="aiConfigSaving">保存配置</el-button>
-        </el-collapse-item>
-      </el-collapse>
+      <div class="prop-item">
+        <label>模型</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <el-select v-model="aiProviderId" size="small" style="flex:1" placeholder="选择供应商" @change="onAiProviderChange">
+            <el-option v-for="p in aiProviders" :key="p.id" :label="p.providerName" :value="p.id" />
+          </el-select>
+          <el-select v-model="aiModel" size="small" style="flex:1" placeholder="选择模型" filterable allow-create default-first-option>
+            <el-option v-for="m in aiModelOptions" :key="m" :label="m" :value="m" />
+          </el-select>
+          <el-button size="small" @click="$router.push('/system/ai-provider')">管理</el-button>
+        </div>
+        <div style="font-size:11px;color:#909399;margin-top:4px">供应商与模型在 系统设置 → 大模型设置 中维护（OpenAI 兼容接口，支持 DeepSeek/通义/Kimi 等）。</div>
+      </div>
       <div v-if="aiError" class="db-test-error">❌ {{ aiError }}</div>
       <div v-if="aiResult" style="margin-top:10px;color:#67c23a;font-size:13px">
-        ✅ 已生成 {{ aiResult.nodes.length }} 个节点（{{ aiResult.nodes.map((n: any) => nodeTypeName(n.elementType)).join(' → ') }}）
+        ✅ 已生成 {{ aiResult.nodes.length }} 个节点（{{ aiResultSummary }}）
       </div>
       <template #footer>
         <el-button @click="aiDialogVisible = false">取消</el-button>
@@ -1582,28 +1578,42 @@ const assignHelpVisible = ref(false)
 const aiDialogVisible = ref(false)
 const aiRequirement = ref('')
 const aiGenerating = ref(false)
-const aiConfigSaving = ref(false)
 const aiError = ref('')
 const aiResult = ref<any>(null)
-const aiConfig = ref<{ baseUrl: string; apiKey: string; model: string }>({ baseUrl: '', apiKey: '', model: '' })
+const aiProviders = ref<any[]>([])
+const aiProviderId = ref<number>(0)
+const aiModel = ref('')
+
+const aiModelOptions = computed(() => {
+  const p = aiProviders.value.find((x: any) => x.id === aiProviderId.value)
+  const list = String(p?.models || '').split(',').map((s: string) => s.trim()).filter(Boolean)
+  if (!list.includes(p?.model)) list.unshift(p?.model || '')
+  return list.filter(Boolean)
+})
 
 async function openAiDialog() {
   aiDialogVisible.value = true
   aiError.value = ''
   aiResult.value = null
   try {
-    const res: any = await request.get('/ai/config')
-    if (res.data) aiConfig.value = { baseUrl: res.data.baseUrl || '', apiKey: res.data.apiKey || '', model: res.data.model || '' }
-  } catch { /* 未配置时保持空 */ }
+    const res: any = await request.get('/ai/providers/enabled')
+    aiProviders.value = res.data || []
+    if (aiProviders.value.length > 0 && !aiProviderId.value) {
+      aiProviderId.value = aiProviders.value[0].id
+      aiModel.value = aiProviders.value[0].model || ''
+    }
+  } catch { /* 未配置供应商 */ }
 }
 
-async function saveAiConfig() {
-  aiConfigSaving.value = true
-  try {
-    await request.post('/ai/config', aiConfig.value)
-    ElMessage.success('AI 配置已保存')
-  } catch { /* 拦截器已提示 */ } finally { aiConfigSaving.value = false }
+function onAiProviderChange() {
+  const p = aiProviders.value.find((x: any) => x.id === aiProviderId.value)
+  aiModel.value = p?.model || ''
 }
+
+const aiResultSummary = computed(() => {
+  const nodes = aiResult.value?.nodes || []
+  return nodes.map((n: any) => nodeTypeName(n.elementType)).join(' → ')
+})
 
 /** 构建可用接口清单（供 AI 选择编排） */
 function buildAiApiContext(): any[] {
@@ -1626,12 +1636,15 @@ function buildAiApiContext(): any[] {
 
 async function generateAiFlow() {
   if (!aiRequirement.value.trim()) { ElMessage.warning('请先描述编排需求'); return }
+  if (!aiProviderId.value) { ElMessage.warning('请先在系统设置 → 大模型设置中启用供应商'); return }
   aiGenerating.value = true
   aiError.value = ''
   aiResult.value = null
   try {
     const res: any = await request.post('/ai/generate-flow', {
       requirement: aiRequirement.value,
+      providerId: aiProviderId.value,
+      model: aiModel.value || null,
       apis: buildAiApiContext(),
       inputParams: flowInputParams.value.map((p: any) => ({ code: p.paramCode, name: p.paramName })),
       outputParams: flowOutputParams.value.map((p: any) => ({ code: p.paramCode, name: p.paramName }))

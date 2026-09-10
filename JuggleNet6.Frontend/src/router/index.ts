@@ -39,7 +39,10 @@ const routes = [
       { path: 'report/dataview',  component: () => import('../views/report/DataViewList.vue') },
       { path: 'report/design',    component: () => import('../views/report/ReportList.vue') },
       { path: 'report/designer/:id', component: () => import('../views/report/ReportDesigner.vue') },
-      { path: 'report/view/:id',  component: () => import('../views/report/ReportView.vue') }
+      { path: 'report/view/:id',  component: () => import('../views/report/ReportView.vue') },
+      { path: 'system/ai-provider', component: () => import('../views/system/AiProviderList.vue') },
+      { path: 'ai/flow-assistant',  component: () => import('../views/ai/FlowAssistant.vue') },
+      { path: 'ai/api-assistant',   component: () => import('../views/ai/ApiAssistant.vue') }
     ]
   },
   {

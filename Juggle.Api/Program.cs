@@ -246,6 +246,8 @@ using (var scope = app.Services.CreateScope())
         try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_report(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, group_name TEXT, source_type TEXT, source_ref TEXT, custom_sql TEXT, params_config TEXT, layout_json TEXT, status INTEGER DEFAULT 1, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
         // 数据视图字段中文对照
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_data_view ADD COLUMN column_mapping TEXT DEFAULT NULL;"); } catch { }
+        // AI 大模型供应商表
+        try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_ai_provider(id INTEGER PRIMARY KEY AUTOINCREMENT, provider_name TEXT, base_url TEXT, api_key TEXT, model TEXT, models TEXT, enabled INTEGER DEFAULT 1, remark TEXT, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
         // 补建参数位置字段
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_parameter ADD COLUMN param_position TEXT DEFAULT NULL;"); } catch { }
     }
