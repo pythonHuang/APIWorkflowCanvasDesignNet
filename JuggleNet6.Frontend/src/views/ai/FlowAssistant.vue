@@ -191,7 +191,8 @@ async function doApply() {
 }
 
 function openDesigner(item: any) {
-  router.push(`/flow/design?flowKey=${item.flowKey}`)
+  // 设计器路由为 /design/:flowKey（与流程定义列表一致）
+  router.push(`/design/${item.flowKey}`)
 }
 
 const typeNames: Record<string, string> = {
