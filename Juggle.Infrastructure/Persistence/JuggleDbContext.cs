@@ -60,6 +60,7 @@ public class JuggleDbContext : DbContext
     public DbSet<LoginLogEntity> LoginLogs { get; set; } = null!;
     public DbSet<AiProviderEntity> AiProviders { get; set; } = null!;
     public DbSet<AiAssistantEntity> AiAssistants { get; set; } = null!;
+    public DbSet<AiConversationEntity> AiConversations { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -123,6 +124,27 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.OutputParams).HasColumnName("output_params");
             e.Property(p => p.QuickPrompts).HasColumnName("quick_prompts");
             e.Property(p => p.Enabled).HasColumnName("enabled");
+        });
+        modelBuilder.Entity<AiConversationEntity>().ToTable("t_ai_conversation");
+        modelBuilder.Entity<AiConversationEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.AssistantId).HasColumnName("assistant_id");
+            e.Property(p => p.AssistantName).HasColumnName("assistant_name");
+            e.Property(p => p.SystemPrompt).HasColumnName("system_prompt");
+            e.Property(p => p.InputParams).HasColumnName("input_params");
+            e.Property(p => p.OutputParams).HasColumnName("output_params");
+            e.Property(p => p.Messages).HasColumnName("messages");
+            e.Property(p => p.Outputs).HasColumnName("outputs");
+            e.Property(p => p.ProviderId).HasColumnName("provider_id");
+            e.Property(p => p.Model).HasColumnName("model");
+            e.Property(p => p.Title).HasColumnName("title");
+            e.Property(p => p.Status).HasColumnName("status");
         });
         modelBuilder.Entity<AlertRuleEntity>().ToTable("t_alert_rule");
         modelBuilder.Entity<AlertRecordEntity>().ToTable("t_alert_record");

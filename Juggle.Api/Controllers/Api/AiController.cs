@@ -275,6 +275,81 @@ public class AiController : ControllerBase
         }
         catch (Exception ex) { return ApiResult.Fail(ex.Message); }
     }
+
+    // ==================== 多轮对话 ====================
+
+    /// <summary>开启新对话（快照助手配置与输入参数）</summary>
+    [HttpPost("conversation/start")]
+    public async Task<ApiResult> StartConversation([FromBody] AiConversationStartRequest req)
+    {
+        try
+        {
+            var assistant = await _db.AiAssistants.FirstOrDefaultAsync(a => a.Id == req.AssistantId && a.Deleted == 0)
+                ?? throw new Exception("助手不存在");
+            var conv = await _aiService.StartConversationAsync(assistant, req.Inputs, req.ProviderId, req.Model);
+            return ApiResult.Success(new { conv.Id, conv.Title, conv.Status });
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
+    }
+
+    /// <summary>多轮对话：发送消息（携带完整历史）</summary>
+    [HttpPost("conversation/chat")]
+    public async Task<ApiResult> ConversationChat([FromBody] AiConversationChatRequest req)
+    {
+        try
+        {
+            var conv = await _db.AiConversations.FirstOrDefaultAsync(c => c.Id == req.ConversationId && c.Deleted == 0)
+                ?? throw new Exception("会话不存在");
+            if (conv.Status == 1) throw new Exception("会话已结束，请开启新对话");
+            var reply = await _aiService.ConversationChatAsync(conv, req.Content, req.ProviderId, req.Model);
+            return ApiResult.Success(new { reply });
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
+    }
+
+    /// <summary>结束对话：有输出参数时生成最终结果，会话标记已结束</summary>
+    [HttpPost("conversation/end")]
+    public async Task<ApiResult> EndConversation([FromBody] AiConversationEndRequest req)
+    {
+        try
+        {
+            var conv = await _db.AiConversations.FirstOrDefaultAsync(c => c.Id == req.ConversationId && c.Deleted == 0)
+                ?? throw new Exception("会话不存在");
+            var result = await _aiService.EndConversationAsync(conv, req.ProviderId, req.Model);
+            return ApiResult.Success(result);
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
+    }
+
+    /// <summary>会话历史列表（按助手）</summary>
+    [HttpGet("conversations/{assistantId}")]
+    public async Task<ApiResult> Conversations(long assistantId)
+        => ApiResult.Success(await _db.AiConversations
+            .Where(c => c.Deleted == 0 && c.AssistantId == assistantId)
+            .OrderByDescending(c => c.Id)
+            .Select(c => new { c.Id, c.Title, c.Status, c.Model, c.CreatedAt, c.UpdatedAt })
+            .Take(200)
+            .ToListAsync());
+
+    /// <summary>会话详情（消息历史/最终输出）</summary>
+    [HttpGet("conversation/{id}")]
+    public async Task<ApiResult> ConversationDetail(long id)
+    {
+        var conv = await _db.AiConversations.FirstOrDefaultAsync(c => c.Id == id && c.Deleted == 0);
+        if (conv == null) return ApiResult.Fail("会话不存在");
+        return ApiResult.Success(conv);
+    }
+
+    /// <summary>删除会话</summary>
+    [HttpDelete("conversation/{id}")]
+    public async Task<ApiResult> DeleteConversation(long id)
+    {
+        var conv = await _db.AiConversations.FindAsync(id);
+        if (conv == null) return ApiResult.Fail("会话不存在");
+        conv.Deleted = 1;
+        await _db.SaveChangesAsync();
+        return ApiResult.Success();
+    }
 }
 
 public class AiConfigRequest
@@ -365,4 +440,27 @@ public class AiAssistantRunRequest
     public string? Model { get; set; }
     public Dictionary<string, object?>? Inputs { get; set; }
     public string? ExtraText { get; set; }
+}
+
+public class AiConversationStartRequest
+{
+    public long AssistantId { get; set; }
+    public long ProviderId { get; set; }
+    public string? Model { get; set; }
+    public Dictionary<string, object?>? Inputs { get; set; }
+}
+
+public class AiConversationChatRequest
+{
+    public long ConversationId { get; set; }
+    public string Content { get; set; } = "";
+    public long ProviderId { get; set; }
+    public string? Model { get; set; }
+}
+
+public class AiConversationEndRequest
+{
+    public long ConversationId { get; set; }
+    public long ProviderId { get; set; }
+    public string? Model { get; set; }
 }

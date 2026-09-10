@@ -98,6 +98,17 @@ public class AiService
     /// <summary>调用大模型对话（OpenAI 兼容接口）。providerId 指定供应商，0=第一个启用供应商；modelOverride 可在供应商可用模型内切换。</summary>
     public async Task<string> ChatAsync(string systemPrompt, string userPrompt, long providerId = 0, AiConfig? config = null, string? modelOverride = null)
     {
+        var messages = new List<(string Role, string Content)>
+        {
+            ("system", systemPrompt),
+            ("user", userPrompt)
+        };
+        return await ChatMessagesAsync(messages, providerId, config, modelOverride);
+    }
+
+    /// <summary>多轮对话：完整消息列表（system + 历史消息）一次性发送。</summary>
+    public async Task<string> ChatMessagesAsync(List<(string Role, string Content)> messages, long providerId = 0, AiConfig? config = null, string? modelOverride = null)
+    {
         var cfg = config ?? await ResolveConfigAsync(providerId > 0 ? providerId : null);
         if (!string.IsNullOrEmpty(modelOverride)) cfg.Model = modelOverride;
         if (string.IsNullOrEmpty(cfg.BaseUrl) || string.IsNullOrEmpty(cfg.ApiKey))
@@ -114,11 +125,7 @@ public class AiService
         reqMsg.Content = new StringContent(JsonSerializer.Serialize(new
         {
             model = cfg.Model,
-            messages = new object[]
-            {
-                new { role = "system", content = systemPrompt },
-                new { role = "user", content = userPrompt }
-            },
+            messages = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
             temperature = 0.2
         }), Encoding.UTF8, "application/json");
 
@@ -402,6 +409,114 @@ public class AiService
                 .ToList();
         }
         catch { return new List<Dictionary<string, object?>>(); }
+    }
+
+    // ==================== 多轮对话会话 ====================
+
+    /// <summary>开启新对话：快照助手配置，输入参数并入系统上下文。</summary>
+    public async Task<AiConversationEntity> StartConversationAsync(AiAssistantEntity assistant,
+        Dictionary<string, object?>? inputs, long providerId, string? model)
+    {
+        var conv = new AiConversationEntity
+        {
+            AssistantId   = assistant.Id,
+            AssistantName = assistant.AssistantName,
+            SystemPrompt  = assistant.SystemPrompt,
+            InputParams   = assistant.InputParams,
+            OutputParams  = assistant.OutputParams,
+            ProviderId    = providerId,
+            Model         = model,
+            Messages      = "[]",
+            Status        = 0,
+            CreatedAt     = DateTime.Now.ToString("o")
+        };
+        // 输入参数并入系统上下文（每轮对话可见）
+        var inputParams = ParseParamList(assistant.InputParams);
+        if (inputParams.Count > 0)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("## 输入参数");
+            foreach (var p in inputParams)
+            {
+                var name  = p.GetValueOrDefault("name")?.ToString() ?? "";
+                var label = p.GetValueOrDefault("label")?.ToString() ?? name;
+                sb.AppendLine($"- {label}：{inputs?.GetValueOrDefault(name) ?? ""}");
+            }
+            conv.SystemPrompt = (conv.SystemPrompt ?? "") + "\n" + sb;
+        }
+        _db.AiConversations.Add(conv);
+        await _db.SaveChangesAsync();
+        return conv;
+    }
+
+    /// <summary>多轮对话：用户消息入历史，携带完整历史调用模型，回复回写历史。</summary>
+    public async Task<string> ConversationChatAsync(AiConversationEntity conv, string userContent, long providerId = 0, string? model = null)
+    {
+        var history = ParseMessages(conv.Messages);
+        history.Add(("user", userContent));
+        var messages = new List<(string, string)> { ("system", conv.SystemPrompt ?? "") };
+        messages.AddRange(history);
+        var reply = await ChatMessagesAsync(messages, providerId, null, model);
+        history.Add(("assistant", reply));
+        conv.Messages = JsonSerializer.Serialize(history.Select(m => new { role = m.Role, content = m.Content }));
+        if (string.IsNullOrEmpty(conv.Title))
+            conv.Title = userContent.Length > 30 ? userContent[..30] : userContent;
+        conv.UpdatedAt = DateTime.Now.ToString("o");
+        await _db.SaveChangesAsync();
+        return reply;
+    }
+
+    /// <summary>结束对话：有输出参数时要求模型基于对话生成最终 JSON 结果并解析，会话标记已结束。</summary>
+    public async Task<object> EndConversationAsync(AiConversationEntity conv, long providerId = 0, string? model = null)
+    {
+        var outputParams = ParseParamList(conv.OutputParams);
+        var finalReply = "";
+        var outputs = new Dictionary<string, object?>();
+        if (outputParams.Count > 0)
+        {
+            var names = string.Join(", ", outputParams.Select(p => $"\"{p.GetValueOrDefault("name")}\""));
+            var descs = string.Join("、", outputParams.Select(p =>
+                $"\"{p.GetValueOrDefault("name")}\" 表示{p.GetValueOrDefault("label") ?? p.GetValueOrDefault("name")}"));
+            var messages = new List<(string, string)> { ("system", conv.SystemPrompt ?? "") };
+            messages.AddRange(ParseMessages(conv.Messages));
+            messages.Add(("user", $"请根据以上对话生成最终结果，只输出 JSON（不要解释、不要 markdown 围栏），字段：{names}，其中 {descs}。"));
+            finalReply = await ChatMessagesAsync(messages, providerId, null, model);
+            try
+            {
+                var json = ExtractJson(finalReply);
+                using var doc = JsonDocument.Parse(json);
+                foreach (var p in outputParams)
+                {
+                    var name = p.GetValueOrDefault("name")?.ToString() ?? "";
+                    if (name.Length > 0 && doc.RootElement.TryGetProperty(name, out var v))
+                        outputs[name] = CloneToObject(v);
+                }
+            }
+            catch { /* 模型未按 JSON 输出时保留原文 */ }
+        }
+        conv.Status = 1;
+        conv.Outputs = JsonSerializer.Serialize(outputs);
+        conv.UpdatedAt = DateTime.Now.ToString("o");
+        await _db.SaveChangesAsync();
+        return new { reply = finalReply, outputs };
+    }
+
+    private static List<(string Role, string Content)> ParseMessages(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new List<(string, string)>();
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var list = new List<(string, string)>();
+            foreach (var m in doc.RootElement.EnumerateArray())
+            {
+                var role = m.TryGetProperty("role", out var r) ? r.GetString() ?? "" : "";
+                var content = m.TryGetProperty("content", out var c) ? c.GetString() ?? "" : "";
+                if (role.Length > 0) list.Add((role, content));
+            }
+            return list;
+        }
+        catch { return new List<(string, string)>(); }
     }
 
     /// <summary>流程生成的系统提示词：描述与设计器一致的节点格式。</summary>
