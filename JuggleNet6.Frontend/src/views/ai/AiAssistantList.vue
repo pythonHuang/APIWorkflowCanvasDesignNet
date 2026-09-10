@@ -71,6 +71,16 @@
             <div style="font-size:11px;color:#909399;margin-top:4px">配置输出参数后，运行时会要求模型按 JSON 返回并在结果区按参数展示。</div>
           </div>
         </el-form-item>
+        <el-form-item label="辅助提问词">
+          <div style="width:100%">
+            <div v-for="(_q, i) in quickPrompts" :key="i" style="display:flex;gap:4px;margin-bottom:4px">
+              <el-input v-model="quickPrompts[i]" :placeholder="i === 0 ? '如 帮我写一篇本周工作总结' : '提问词'" size="small" style="flex:1" />
+              <el-button size="small" type="danger" link @click="quickPrompts.splice(i,1)">删</el-button>
+            </div>
+            <el-button size="small" @click="quickPrompts.push('')">+添加提问词</el-button>
+            <div style="font-size:11px;color:#909399;margin-top:4px">运行页中显示为快捷按钮，点击即填入补充说明，方便常用提问一键发起。</div>
+          </div>
+        </el-form-item>
         <el-form-item label="启用"><el-switch v-model="form.enabled" /></el-form-item>
       </el-form>
       <template #footer>
@@ -92,6 +102,7 @@ const dialogVisible = ref(false)
 const form = ref<any>({ id: 0, assistantName: '', description: '', systemPrompt: '', enabled: true })
 const inputParams = ref<any[]>([])
 const outputParams = ref<any[]>([])
+const quickPrompts = ref<string[]>([])
 
 onMounted(loadData)
 
@@ -111,19 +122,22 @@ function openAdd() {
   form.value = { id: 0, assistantName: '', description: '', systemPrompt: '', enabled: true }
   inputParams.value = []
   outputParams.value = []
+  quickPrompts.value = []
   dialogVisible.value = true
 }
 function openEdit(row: any) {
   form.value = { ...row, enabled: row.enabled === 1 }
   try { inputParams.value = JSON.parse(row.inputParams || '[]') } catch { inputParams.value = [] }
   try { outputParams.value = JSON.parse(row.outputParams || '[]') } catch { outputParams.value = [] }
+  try { quickPrompts.value = JSON.parse(row.quickPrompts || '[]') } catch { quickPrompts.value = [] }
   dialogVisible.value = true
 }
 async function doSave() {
   await request.post('/ai/assistant/save', {
     ...form.value,
     inputParams: JSON.stringify(inputParams.value),
-    outputParams: JSON.stringify(outputParams.value)
+    outputParams: JSON.stringify(outputParams.value),
+    quickPrompts: JSON.stringify(quickPrompts.value.filter((q: string) => q.trim()))
   })
   ElMessage.success('保存成功')
   dialogVisible.value = false

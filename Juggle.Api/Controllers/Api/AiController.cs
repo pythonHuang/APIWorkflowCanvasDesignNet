@@ -232,6 +232,7 @@ public class AiController : ControllerBase
         entity.SystemPrompt = req.SystemPrompt;
         entity.InputParams = req.InputParams;
         entity.OutputParams = req.OutputParams;
+        entity.QuickPrompts = req.QuickPrompts;
         entity.Enabled = req.Enabled ? 1 : 0;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
@@ -347,6 +348,7 @@ public class AiAssistantSaveRequest
     public string? SystemPrompt { get; set; }
     public string? InputParams { get; set; }
     public string? OutputParams { get; set; }
+    public string? QuickPrompts { get; set; }
     public bool Enabled { get; set; } = true;
 }
 

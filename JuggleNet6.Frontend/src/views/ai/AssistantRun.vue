@@ -30,6 +30,9 @@
         </div>
       </div>
       <el-input v-model="extraText" type="textarea" :rows="3" style="margin-top:10px" placeholder="补充说明（可选，如：语气轻松一点）" />
+      <div v-if="quickPrompts.length > 0" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+        <el-button v-for="(q, i) in quickPrompts" :key="i" size="small" round @click="fillPrompt(q)">{{ q }}</el-button>
+      </div>
       <div style="margin-top:10px">
         <el-button type="primary" icon="Promotion" :loading="running" @click="doRun">运行</el-button>
       </div>
@@ -64,6 +67,7 @@ const assistantId = Number(route.params.id) || 0
 const assistant = ref<any>(null)
 const inputParams = ref<any[]>([])
 const outputParams = ref<any[]>([])
+const quickPrompts = ref<string[]>([])
 const inputs = ref<Record<string, any>>({})
 const extraText = ref('')
 const providers = ref<any[]>([])
@@ -90,6 +94,7 @@ onMounted(async () => {
     document.title = assistant.value.assistantName
     try { inputParams.value = JSON.parse(assistant.value.inputParams || '[]') } catch { inputParams.value = [] }
     try { outputParams.value = JSON.parse(assistant.value.outputParams || '[]') } catch { outputParams.value = [] }
+    try { quickPrompts.value = JSON.parse(assistant.value.quickPrompts || '[]') } catch { quickPrompts.value = [] }
     for (const p of inputParams.value) {
       inputs.value[p.name] = p.type === 'switch' ? (p.default === true || p.default === 'true') : (p.default || '')
     }
@@ -111,6 +116,11 @@ function onProviderChange() {
 
 function selectOptions(p: any): string[] {
   return String(p.options || '').split(/[,，\n]/).map((s: string) => s.trim()).filter(Boolean)
+}
+
+/** 点击辅助提问词按钮 → 填入补充说明（已有内容时换行追加） */
+function fillPrompt(q: string) {
+  extraText.value = extraText.value.trim() ? extraText.value.trim() + '\n' + q : q
 }
 
 async function doRun() {
