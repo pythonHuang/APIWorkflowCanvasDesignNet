@@ -39,13 +39,41 @@
         <el-table-column prop="suiteDesc" label="描述" min-width="200" show-overflow-tooltip />
       </el-table>
       <div style="font-weight:600;margin:0 0 6px;font-size:13px">接口</div>
-      <el-table :data="preview.apis" size="small" border max-height="320">
-        <el-table-column prop="suiteCode" label="套件" width="140" />
-        <el-table-column prop="methodCode" label="接口code" width="170" />
-        <el-table-column prop="methodName" label="名称" min-width="150" />
-        <el-table-column prop="methodDesc" label="描述" min-width="180" show-overflow-tooltip />
+      <el-table :data="preview.apis" size="small" border max-height="320" row-key="methodCode">
+        <el-table-column type="expand">
+          <template #default="{ row }">
+            <div style="display:flex;gap:16px;padding:8px 16px">
+              <div style="flex:1">
+                <div style="font-weight:600;margin-bottom:4px;font-size:12px">入参（{{ row.inputParams?.length || 0 }}）</div>
+                <el-table :data="row.inputParams || []" size="small" border>
+                  <el-table-column prop="paramCode" label="参数code" min-width="130" show-overflow-tooltip />
+                  <el-table-column prop="paramName" label="名称" min-width="100" show-overflow-tooltip />
+                  <el-table-column prop="paramType" label="类型" width="90" />
+                  <el-table-column prop="paramPosition" label="位置" width="70" />
+                  <el-table-column label="必填" width="60" align="center">
+                    <template #default="{ row: r }"><el-tag size="small" :type="r.required ? 'danger' : 'info'">{{ r.required ? '是' : '否' }}</el-tag></template>
+                  </el-table-column>
+                  <el-table-column prop="description" label="说明" min-width="120" show-overflow-tooltip />
+                </el-table>
+              </div>
+              <div style="flex:1">
+                <div style="font-weight:600;margin-bottom:4px;font-size:12px">出参（{{ row.outputParams?.length || 0 }}）</div>
+                <el-table :data="row.outputParams || []" size="small" border>
+                  <el-table-column prop="paramCode" label="参数code" min-width="130" show-overflow-tooltip />
+                  <el-table-column prop="paramName" label="名称" min-width="100" show-overflow-tooltip />
+                  <el-table-column prop="paramType" label="类型" width="90" />
+                  <el-table-column prop="description" label="说明" min-width="120" show-overflow-tooltip />
+                </el-table>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="suiteCode" label="套件" width="110" />
+        <el-table-column prop="methodCode" label="接口code" width="160" />
+        <el-table-column prop="methodName" label="名称" min-width="130" />
+        <el-table-column prop="methodDesc" label="描述" min-width="150" show-overflow-tooltip />
         <el-table-column prop="requestType" label="方式" width="70" />
-        <el-table-column prop="url" label="路径" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="url" label="路径" min-width="140" show-overflow-tooltip />
       </el-table>
       <div v-if="applied" style="margin-top:10px;color:#67c23a;font-size:13px">
         ✅ 已接入：新增 {{ applied.createdSuites }} 个套件、{{ applied.createdApis }} 个接口（已存在的自动跳过）

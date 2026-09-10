@@ -53,6 +53,32 @@
           <template #default="{ row }">{{ nodeDetail(row) }}</template>
         </el-table-column>
       </el-table>
+
+      <!-- 流程入参/出参 -->
+      <div style="display:flex;gap:16px;margin-top:12px">
+        <div style="flex:1">
+          <div style="font-weight:600;margin:0 0 6px;font-size:13px">流程入参（{{ preview.inputParams?.length || 0 }}）</div>
+          <el-table :data="preview.inputParams || []" size="small" border>
+            <el-table-column prop="paramCode" label="参数code" min-width="130" show-overflow-tooltip />
+            <el-table-column prop="paramName" label="名称" min-width="100" show-overflow-tooltip />
+            <el-table-column prop="paramType" label="类型" width="90" />
+            <el-table-column label="必填" width="60" align="center">
+              <template #default="{ row }"><el-tag size="small" :type="row.required ? 'danger' : 'info'">{{ row.required ? '是' : '否' }}</el-tag></template>
+            </el-table-column>
+            <el-table-column prop="description" label="说明" min-width="120" show-overflow-tooltip />
+          </el-table>
+        </div>
+        <div style="flex:1">
+          <div style="font-weight:600;margin:0 0 6px;font-size:13px">流程出参（{{ preview.outputParams?.length || 0 }}）</div>
+          <el-table :data="preview.outputParams || []" size="small" border>
+            <el-table-column prop="paramCode" label="参数code" min-width="130" show-overflow-tooltip />
+            <el-table-column prop="paramName" label="名称" min-width="100" show-overflow-tooltip />
+            <el-table-column prop="paramType" label="类型" width="90" />
+            <el-table-column prop="description" label="说明" min-width="120" show-overflow-tooltip />
+          </el-table>
+        </div>
+      </div>
+
       <div v-if="applied" style="margin-top:10px;color:#67c23a;font-size:13px">
         ✅ 流程已创建：{{ applied.flowName }}（key: {{ applied.flowKey }}）
         <el-button size="small" link type="primary" @click="openDesigner(applied)">去设计器查看</el-button>
@@ -153,7 +179,9 @@ async function doApply() {
   try {
     const res: any = await request.post('/ai/apply-flow', {
       flowName: flowName.value, flowDesc: requirement.value.slice(0, 200), groupName: groupName.value,
-      nodes: preview.value.nodes
+      nodes: preview.value.nodes,
+      inputParams: preview.value.inputParams || [],
+      outputParams: preview.value.outputParams || []
     })
     applied.value = res.data
     ElMessage.success('流程已生成')

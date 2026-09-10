@@ -202,14 +202,21 @@ public class AiService
                   "methodName": "获取用户信息",
                   "methodDesc": "根据用户id查询用户信息",
                   "url": "/api/user/info",            // 接口路径
-                  "requestType": "POST"               // GET / POST
+                  "requestType": "POST",              // GET / POST
+                  "inputParams": [                    // 接口入参
+                    { "paramCode": "userId", "paramName": "用户id", "paramType": "string", "paramPosition": "body", "required": 1, "description": "用户唯一标识" }
+                  ],
+                  "outputParams": [                   // 接口出参（响应字段）
+                    { "paramCode": "name", "paramName": "姓名", "paramType": "string", "required": 0, "description": "用户姓名" }
+                  ]
                 }
               ]
             }
             规则：
             1. suiteCode/methodCode 用英文小驼峰或下划线，全局唯一。
             2. 每个接口必须有 methodCode、methodName、url、requestType。
-            3. 接口数量与需求匹配，不要遗漏也不要过度添加。
+            3. 根据接口功能合理设计 inputParams（POST 多为 body、GET 多为 query）与 outputParams（响应字段），paramType 取 string/integer/double/boolean/object/array。
+            4. 接口数量与需求匹配，不要遗漏也不要过度添加。
             """;
         var userPrompt = $"""
             {suitesSummary}
@@ -257,7 +264,9 @@ public class AiService
                     methodName = GetStr(a, "methodName"),
                     methodDesc = GetStr(a, "methodDesc"),
                     url = GetStr(a, "url"),
-                    requestType = GetStr(a, "requestType") == "GET" ? "GET" : "POST"
+                    requestType = GetStr(a, "requestType") == "GET" ? "GET" : "POST",
+                    inputParams = ExtractParamArray(a, "inputParams"),
+                    outputParams = ExtractParamArray(a, "outputParams")
                 });
             }
         }
@@ -289,13 +298,14 @@ public class AiService
         }
         await _db.SaveChangesAsync();
 
+        var createdParams = 0;
         foreach (var a in apis ?? new())
         {
             var code = a.GetValueOrDefault("methodCode")?.ToString() ?? "";
             if (string.IsNullOrEmpty(code)) continue;
             var exists = await _db.Apis.AnyAsync(x => x.MethodCode == code && x.Deleted == 0);
             if (exists) continue;
-            _db.Apis.Add(new ApiEntity
+            var apiEntity = new ApiEntity
             {
                 SuiteCode   = a.GetValueOrDefault("suiteCode")?.ToString() ?? "",
                 MethodCode  = code,
@@ -306,15 +316,77 @@ public class AiService
                 MethodType  = "HTTP",
                 Status      = 1,
                 CreatedAt   = DateTime.Now.ToString("o")
-            });
+            };
+            _db.Apis.Add(apiEntity);
+            await _db.SaveChangesAsync();
             createdApis++;
+
+            // 写入接口入参/出参（paramType: 1=入参 2=出参）
+            createdParams += await SaveApiParamsAsync(apiEntity.Id, code, 1, ToParamList(a.GetValueOrDefault("inputParams")));
+            createdParams += await SaveApiParamsAsync(apiEntity.Id, code, 2, ToParamList(a.GetValueOrDefault("outputParams")));
         }
-        await _db.SaveChangesAsync();
-        return new { createdSuites, createdApis };
+        return new { createdSuites, createdApis, createdParams };
     }
 
-    /// <summary>确认生成流程：创建流程定义并写入编排内容。</summary>
-    public async Task<object> ApplyFlowAsync(string flowName, string? flowDesc, string? groupName, List<Dictionary<string, object?>>? nodes)
+    /// <summary>参数列表形态转换：兼容 Dictionary 列表与 JsonElement 数组（前端传回与模型输出的两种形态）。</summary>
+    private static List<Dictionary<string, object?>>? ToParamList(object? v)
+    {
+        if (v == null) return null;
+        if (v is List<Dictionary<string, object?>> dicts) return dicts;
+        if (v is JsonElement el && el.ValueKind == JsonValueKind.Array)
+        {
+            return el.EnumerateArray()
+                .Where(e => e.ValueKind == JsonValueKind.Object)
+                .Select(e => e.EnumerateObject().ToDictionary(p => p.Name, p => CloneToObject(p.Value)))
+                .ToList();
+        }
+        if (v is System.Collections.IEnumerable en)
+        {
+            var list = new List<Dictionary<string, object?>>();
+            foreach (var item in en)
+            {
+                if (item is Dictionary<string, object?> d) list.Add(d);
+                else if (item is JsonElement je && je.ValueKind == JsonValueKind.Object)
+                    list.Add(je.EnumerateObject().ToDictionary(p => p.Name, p => CloneToObject(p.Value)));
+            }
+            return list;
+        }
+        return null;
+    }
+
+    private async Task<int> SaveApiParamsAsync(long ownerId, string ownerCode, int paramType, List<Dictionary<string, object?>>? @params)
+    {
+        var count = 0;
+        var sort = 0;
+        foreach (var p in @params ?? new())
+        {
+            var code = p.GetValueOrDefault("paramCode")?.ToString() ?? "";
+            if (string.IsNullOrEmpty(code)) continue;
+            _db.Parameters.Add(new ParameterEntity
+            {
+                OwnerId       = ownerId,
+                OwnerCode     = ownerCode,
+                ParamType     = paramType,
+                ParamCode     = code,
+                ParamName     = p.GetValueOrDefault("paramName")?.ToString() ?? code,
+                DataType      = p.GetValueOrDefault("paramType")?.ToString() ?? "string",
+                Required      = p.GetValueOrDefault("required") is int r ? r : 0,
+                DefaultValue  = p.GetValueOrDefault("defaultValue")?.ToString(),
+                Description   = p.GetValueOrDefault("description")?.ToString(),
+                ParamPosition = p.GetValueOrDefault("paramPosition")?.ToString(),
+                SortNum       = sort++,
+                CreatedAt     = DateTime.Now.ToString("o")
+            });
+            count++;
+        }
+        if (count > 0) await _db.SaveChangesAsync();
+        return count;
+    }
+
+    /// <summary>确认生成流程：创建流程定义、写入编排内容与流程入参/出参。</summary>
+    public async Task<object> ApplyFlowAsync(string flowName, string? flowDesc, string? groupName,
+        List<Dictionary<string, object?>>? nodes, List<Dictionary<string, object?>>? inputParams = null,
+        List<Dictionary<string, object?>>? outputParams = null)
     {
         if (string.IsNullOrWhiteSpace(flowName)) throw new Exception("请填写流程名称");
         if (nodes == null || nodes.Count == 0) throw new Exception("没有可生成的流程节点");
@@ -332,7 +404,42 @@ public class AiService
         };
         _db.FlowDefinitions.Add(entity);
         await _db.SaveChangesAsync();
-        return new { entity.Id, entity.FlowKey, entity.FlowName };
+
+        // 写入流程入参/出参（paramType: 5=入参 6=出参）
+        var createdParams = 0;
+        createdParams += await SaveParamsAsync(entity.Id, entity.FlowKey, 5, inputParams);
+        createdParams += await SaveParamsAsync(entity.Id, entity.FlowKey, 6, outputParams);
+
+        return new { entity.Id, entity.FlowKey, entity.FlowName, createdParams };
+    }
+
+    private async Task<int> SaveParamsAsync(long ownerId, string ownerCode, int paramType, List<Dictionary<string, object?>>? @params)
+    {
+        var count = 0;
+        var sort = 0;
+        foreach (var p in @params ?? new())
+        {
+            var code = p.GetValueOrDefault("paramCode")?.ToString() ?? "";
+            if (string.IsNullOrEmpty(code)) continue;
+            _db.Parameters.Add(new ParameterEntity
+            {
+                OwnerId       = ownerId,
+                OwnerCode     = ownerCode,
+                ParamType     = paramType,
+                ParamCode     = code,
+                ParamName     = p.GetValueOrDefault("paramName")?.ToString() ?? code,
+                DataType      = p.GetValueOrDefault("paramType")?.ToString() ?? "string",
+                Required      = p.GetValueOrDefault("required") is int r ? r : 0,
+                DefaultValue  = p.GetValueOrDefault("defaultValue")?.ToString(),
+                Description   = p.GetValueOrDefault("description")?.ToString(),
+                ParamPosition = p.GetValueOrDefault("paramPosition")?.ToString(),
+                SortNum       = sort++,
+                CreatedAt     = DateTime.Now.ToString("o")
+            });
+            count++;
+        }
+        if (count > 0) await _db.SaveChangesAsync();
+        return count;
     }
 
     private static string GetStr(JsonElement el, string prop)
@@ -525,65 +632,75 @@ public class AiService
         return """
             你是接口编排平台的智能编排助手。根据用户需求与可用接口清单，生成接口流程编排 JSON。
 
-            输出 JSON 结构（nodes 数组，节点间通过 outgoings 数组连线）：
+            输出 JSON 结构（nodes 数组，节点间通过 outgoings 数组连线；inputParams/outputParams 为流程入参/出参定义）：
             {
-              "nodes": [
-                {
-                  "key": "n1",                       // 唯一节点 key（n1、n2、n3...）
-                  "elementType": "START",            // 节点类型
-                  "label": "开始",
-                  "x": 100, "y": 100,                // 画布坐标
-                  "outgoings": ["n2"]                // 下一节点 key 列表
-                },
-                {
-                  "key": "n2",
-                  "elementType": "METHOD",           // 调用接口
-                  "label": "获取用户信息",
-                  "x": 320, "y": 100,
-                  "method": {
-                    "suiteCode": "user",             // 接口所属套件 code（必须来自可用接口清单）
-                    "methodCode": "getUserInfo",     // 接口 code（必须来自可用接口清单）
-                    "url": "/api/user/info",
-                    "method": "POST"
-                  },
-                  "inputFillRules": [                // 入参填充：来源 → 接口入参
-                    { "sourceType": "INPUT", "source": "userId", "target": "userId" }
-                  ],
-                  "outputFillRules": [               // 输出映射：接口响应字段 → 变量
-                    { "source": "data.name", "targetType": "VARIABLE", "target": "env_user_name" }
-                  ],
-                  "outgoings": ["n3"]
-                },
-                {
-                  "key": "n3",
-                  "elementType": "CONDITION",        // 条件分支
-                  "label": "判断",
-                  "x": 540, "y": 100,
-                  "conditions": [
-                    { "conditionName": "分支1", "conditionType": "CUSTOM", "expression": "env_user_name == '张三'", "outgoing": "n4" },
-                    { "conditionName": "默认", "conditionType": "DEFAULT", "outgoing": "n5" }
-                  ]
-                },
-                {
-                  "key": "n4",
-                  "elementType": "END",
-                  "label": "结束",
-                  "x": 760, "y": 40,
-                  "outgoings": []
-                }
+              "nodes": [ ... ],
+              "inputParams": [
+                { "paramCode": "userId", "paramName": "用户id", "paramType": "string", "required": 1, "description": "用户唯一标识" }
+              ],
+              "outputParams": [
+                { "paramCode": "userName", "paramName": "用户名称", "paramType": "string", "required": 0, "description": "返回的用户名称" }
               ]
             }
+
+            nodes 结构：
+            [
+              {
+                "key": "n1",                       // 唯一节点 key（n1、n2、n3...）
+                "elementType": "START",            // 节点类型
+                "label": "开始",
+                "x": 100, "y": 100,                // 画布坐标
+                "outgoings": ["n2"]                // 下一节点 key 列表
+              },
+              {
+                "key": "n2",
+                "elementType": "METHOD",           // 调用接口
+                "label": "获取用户信息",
+                "x": 320, "y": 100,
+                "method": {
+                  "suiteCode": "user",             // 接口所属套件 code（必须来自可用接口清单）
+                  "methodCode": "getUserInfo",     // 接口 code（必须来自可用接口清单）
+                  "url": "/api/user/info",
+                  "method": "POST"
+                },
+                "inputFillRules": [                // 入参填充：来源 → 接口入参
+                  { "sourceType": "INPUT", "source": "userId", "target": "userId" }
+                ],
+                "outputFillRules": [               // 输出映射：接口响应字段 → 变量
+                  { "source": "data.name", "targetType": "VARIABLE", "target": "env_user_name" }
+                ],
+                "outgoings": ["n3"]
+              },
+              {
+                "key": "n3",
+                "elementType": "CONDITION",        // 条件分支
+                "label": "判断",
+                "x": 540, "y": 100,
+                "conditions": [
+                  { "conditionName": "分支1", "conditionType": "CUSTOM", "expression": "env_user_name == '张三'", "outgoing": "n4" },
+                  { "conditionName": "默认", "conditionType": "DEFAULT", "outgoing": "n5" }
+                ]
+              },
+              {
+                "key": "n4",
+                "elementType": "END",
+                "label": "结束",
+                "x": 760, "y": 40,
+                "outgoings": []
+              }
+            ]
 
             规则：
             1. elementType 只能使用：START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / MYSQL / LOOP / DELAY / PARALLEL / NOTIFY。
             2. 每个流程必须有且只有一个 START 和一个 END；节点 key 从 n1 开始递增，连线必须能从头走到 END。
             3. METHOD 节点的 suiteCode 与 methodCode 必须严格取自可用接口清单，不得编造；method.url 与 method.method 与清单一致。
-            4. 入参来源 sourceType 用 INPUT（流程入参 input_xxx）或 CONSTANT（常量）或 VARIABLE（前面节点产出的 env_xxx 变量）；target 填接口真实入参名。
+            4. 入参来源 sourceType 用 INPUT（流程入参，对应 inputParams 中的 paramCode）或 CONSTANT（常量）或 VARIABLE（前面节点产出的 env_xxx 变量）；target 填接口真实入参名。
             5. 输出映射 source 填接口响应 JSON 字段路径，targetType 用 VARIABLE 且 target 以 env_ 开头（如 env_user_name），或 OUTPUT 对应流程出参。
-            6. 需要分支判断时用 CONDITION 节点（conditions 数组，含一个 DEFAULT 分支）；多分支汇聚用 MERGE 节点。
-            7. 涉及数据库操作时用 MYSQL 节点：{ "elementType":"MYSQL", "mysqlConfig": { "dataSourceName":"数据源名", "sql":"SELECT ...", "operationType":"QUERY", "outputVariable":"env_xxx", "outputTargetType":"VARIABLE" } }，SQL 参数用 ${变量}。
-            8. 坐标 x 从 100 开始、每层 +220，y 从 100 开始、分支 +150，保证画布整齐不重叠。
-            9. 只输出 JSON 本体，不要 markdown 代码块，不要解释。
+            6. inputParams 必须覆盖所有 METHOD 节点引用的 INPUT 来源；outputParams 必须覆盖所有 targetType=OUTPUT 的映射；paramCode 用英文小驼峰，paramType 取 string/integer/double/boolean/object/array。
+            7. 需要分支判断时用 CONDITION 节点（conditions 数组，含一个 DEFAULT 分支）；多分支汇聚用 MERGE 节点。
+            8. 涉及数据库操作时用 MYSQL 节点：{ "elementType":"MYSQL", "mysqlConfig": { "dataSourceName":"数据源名", "sql":"SELECT ...", "operationType":"QUERY", "outputVariable":"env_xxx", "outputTargetType":"VARIABLE" } }，SQL 参数用 ${变量}。
+            9. 坐标 x 从 100 开始、每层 +220，y 从 100 开始、分支 +150，保证画布整齐不重叠。
+            10. 只输出 JSON 本体，不要 markdown 代码块，不要解释。
             """;
     }
 
@@ -621,8 +738,38 @@ public class AiService
         foreach (var node in nodesEl.EnumerateArray())
             result.Add(node);
 
+        // 提取流程入参/出参定义
+        var inputParams = ExtractParamArray(root, "inputParams");
+        var outputParams = ExtractParamArray(root, "outputParams");
+
         // 归一化：保证有 START 与 END、节点 key 唯一、坐标兜底
-        return NormalizeFlow(result);
+        var normalized = (Dictionary<string, object?>)NormalizeFlow(result);
+        normalized["inputParams"] = inputParams;
+        normalized["outputParams"] = outputParams;
+        return normalized;
+    }
+
+    /// <summary>提取参数数组（paramCode/paramName/paramType/required/description），兼容缺省。</summary>
+    private static List<Dictionary<string, object?>> ExtractParamArray(JsonElement root, string prop)
+    {
+        var list = new List<Dictionary<string, object?>>();
+        if (!root.TryGetProperty(prop, out var arr) || arr.ValueKind != JsonValueKind.Array) return list;
+        foreach (var p in arr.EnumerateArray())
+        {
+            if (p.ValueKind != JsonValueKind.Object) continue;
+            var code = GetStr(p, "paramCode");
+            if (string.IsNullOrEmpty(code)) continue;
+            list.Add(new Dictionary<string, object?>
+            {
+                ["paramCode"] = code,
+                ["paramName"] = GetStr(p, "paramName") is { Length: > 0 } n ? n : code,
+                ["paramType"] = GetStr(p, "paramType") is { Length: > 0 } t ? t : "string",
+                ["required"] = p.TryGetProperty("required", out var re) && re.ValueKind == JsonValueKind.Number ? re.GetInt32() : 0,
+                ["description"] = GetStr(p, "description"),
+                ["paramPosition"] = GetStr(p, "paramPosition")
+            });
+        }
+        return list;
     }
 
     private static string ExtractJson(string content)
@@ -644,7 +791,7 @@ public class AiService
     }
 
     /// <summary>节点归一化：key 唯一化、坐标兜底、outgoings/conditions 结构补全。</summary>
-    private static object NormalizeFlow(List<JsonElement> nodes)
+    private static Dictionary<string, object?> NormalizeFlow(List<JsonElement> nodes)
     {
         var seenKeys = new HashSet<string>();
         var outputs = new List<Dictionary<string, object?>>();
@@ -721,7 +868,12 @@ public class AiService
             });
         }
 
-        return new { nodes = outputs };
+        return new Dictionary<string, object?>
+        {
+            ["nodes"] = outputs,
+            ["inputParams"] = new List<Dictionary<string, object?>>(),
+            ["outputParams"] = new List<Dictionary<string, object?>>()
+        };
     }
 
     /// <summary>JsonElement → 可序列化对象（Dictionary / List / 原生值）。</summary>

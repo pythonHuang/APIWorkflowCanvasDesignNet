@@ -171,7 +171,7 @@ public class AiController : ControllerBase
     {
         try
         {
-            var result = await _aiService.ApplyFlowAsync(req.FlowName, req.FlowDesc, req.GroupName, req.Nodes);
+            var result = await _aiService.ApplyFlowAsync(req.FlowName, req.FlowDesc, req.GroupName, req.Nodes, req.InputParams, req.OutputParams);
             return ApiResult.Success(result);
         }
         catch (Exception ex) { return ApiResult.Fail(ex.Message); }
@@ -375,6 +375,8 @@ public class AiApplyFlowRequest
     public string? FlowDesc { get; set; }
     public string? GroupName { get; set; }
     public List<Dictionary<string, object?>>? Nodes { get; set; }
+    public List<Dictionary<string, object?>>? InputParams { get; set; }
+    public List<Dictionary<string, object?>>? OutputParams { get; set; }
 }
 
 public class AiGenerateApisRequest
