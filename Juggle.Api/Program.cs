@@ -165,6 +165,7 @@ builder.Services.AddScoped<DataSourceService>();     // 数据源连接字符串
 builder.Services.AddScoped<JwtService>();            // JWT Token 签发
 builder.Services.AddScoped<ReportExecutionService>(); // 报表数据执行 + 渲染
 builder.Services.AddScoped<ITenantAccessor, TenantAccessor>();  // 多租户上下文
+builder.Services.AddScoped<AiService>();            // AiService
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -248,6 +249,8 @@ using (var scope = app.Services.CreateScope())
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_data_view ADD COLUMN column_mapping TEXT DEFAULT NULL;"); } catch { }
         // AI 大模型供应商表
         try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_ai_provider(id INTEGER PRIMARY KEY AUTOINCREMENT, provider_name TEXT, base_url TEXT, api_key TEXT, model TEXT, models TEXT, enabled INTEGER DEFAULT 1, remark TEXT, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
+        // AI 自定义助手表
+        try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_ai_assistant(id INTEGER PRIMARY KEY AUTOINCREMENT, assistant_name TEXT, description TEXT, system_prompt TEXT, input_params TEXT, output_params TEXT, enabled INTEGER DEFAULT 1, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
         // 补建参数位置字段
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_parameter ADD COLUMN param_position TEXT DEFAULT NULL;"); } catch { }
     }

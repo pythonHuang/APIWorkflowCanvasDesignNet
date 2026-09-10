@@ -331,6 +331,79 @@ public class AiService
     private static string GetStr(JsonElement el, string prop)
         => el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
 
+    // ==================== 自定义助手 ====================
+
+    /// <summary>
+    /// 运行自定义助手：系统提示词 + 输入参数（+补充说明）→ 大模型。
+    /// 配置了输出参数时要求模型返回 JSON 并按参数名解析，解析失败保留原文。
+    /// </summary>
+    public async Task<object> RunAssistantAsync(AiAssistantEntity assistant, Dictionary<string, object?>? inputs,
+        string? extraText, long providerId = 0, string? model = null)
+    {
+        var inputParams = ParseParamList(assistant.InputParams);
+        var outputParams = ParseParamList(assistant.OutputParams);
+
+        var sb = new StringBuilder();
+        if (inputParams.Count > 0)
+        {
+            sb.AppendLine("## 输入参数");
+            foreach (var p in inputParams)
+            {
+                var name = p.GetValueOrDefault("name")?.ToString() ?? "";
+                var label = p.GetValueOrDefault("label")?.ToString() ?? name;
+                sb.AppendLine($"- {label}：{inputs?.GetValueOrDefault(name) ?? ""}");
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(extraText))
+        {
+            sb.AppendLine("## 补充说明");
+            sb.AppendLine(extraText.Trim());
+        }
+        if (outputParams.Count > 0)
+        {
+            var names = string.Join(", ", outputParams.Select(p => $"\"{p.GetValueOrDefault("name")}\""));
+            var descs = string.Join("、", outputParams.Select(p =>
+                $"\"{p.GetValueOrDefault("name")}\" 表示{p.GetValueOrDefault("label") ?? p.GetValueOrDefault("name")}"));
+            sb.AppendLine("## 输出要求");
+            sb.AppendLine($"请只输出 JSON（不要解释、不要 markdown 围栏），字段：{names}，其中 {descs}。");
+        }
+
+        var content = await ChatAsync(assistant.SystemPrompt ?? "你是一个智能助手。", sb.ToString(), providerId, modelOverride: model);
+
+        var outputs = new Dictionary<string, object?>();
+        if (outputParams.Count > 0)
+        {
+            try
+            {
+                var json = ExtractJson(content);
+                using var doc = JsonDocument.Parse(json);
+                foreach (var p in outputParams)
+                {
+                    var name = p.GetValueOrDefault("name")?.ToString() ?? "";
+                    if (name.Length > 0 && doc.RootElement.TryGetProperty(name, out var v))
+                        outputs[name] = CloneToObject(v);
+                }
+            }
+            catch { /* 模型未按 JSON 输出时保留原文 */ }
+        }
+        return new { reply = content, outputs };
+    }
+
+    private static List<Dictionary<string, object?>> ParseParamList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new List<Dictionary<string, object?>>();
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return new List<Dictionary<string, object?>>();
+            return doc.RootElement.EnumerateArray()
+                .Where(e => e.ValueKind == JsonValueKind.Object)
+                .Select(e => e.EnumerateObject().ToDictionary(p => p.Name, p => CloneToObject(p.Value)))
+                .ToList();
+        }
+        catch { return new List<Dictionary<string, object?>>(); }
+    }
+
     /// <summary>流程生成的系统提示词：描述与设计器一致的节点格式。</summary>
     private static string BuildSystemPrompt()
     {

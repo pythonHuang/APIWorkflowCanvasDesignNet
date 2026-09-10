@@ -59,9 +59,10 @@
             <el-icon><MagicStick /></el-icon>
             <span>模型助手</span>
           </template>
-          <el-menu-item index="/system/ai-provider">模型助手管理</el-menu-item>
+          <el-menu-item index="/ai/assistants">模型助手管理</el-menu-item>
           <el-menu-item index="/ai/flow-assistant">流程智能编排助手</el-menu-item>
           <el-menu-item index="/ai/api-assistant">接口智能接入助手</el-menu-item>
+          <el-menu-item v-for="a in assistantMenuList" :key="a.id" :index="`/ai/assistant/${a.id}`">{{ a.assistantName }}</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="system" v-if="hasMenu('/system/token')">
           <template #title>
@@ -128,11 +129,17 @@ const activeMenu = computed(() => route.path)
 
 // 报表查询菜单：每个启用报表一个子菜单
 const reportMenuList = ref<any[]>([])
+// 模型助手菜单：每个启用的自定义助手一个子菜单
+const assistantMenuList = ref<any[]>([])
 onMounted(async () => {
   try {
     const res = await request.post('/report/page', { pageNum: 1, pageSize: 200 })
     reportMenuList.value = (res.data?.list || []).filter((r: any) => r.status === 1)
   } catch { /* 忽略菜单加载失败 */ }
+  try {
+    const res2 = await request.get('/ai/assistants/enabled')
+    assistantMenuList.value = res2.data || []
+  } catch { /* 未配置助手时忽略 */ }
 })
 
 // 权限菜单列表

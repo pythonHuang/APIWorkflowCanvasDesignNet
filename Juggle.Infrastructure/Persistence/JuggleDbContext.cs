@@ -59,6 +59,7 @@ public class JuggleDbContext : DbContext
     public DbSet<AuditLogEntity> AuditLogs { get; set; } = null!;
     public DbSet<LoginLogEntity> LoginLogs { get; set; } = null!;
     public DbSet<AiProviderEntity> AiProviders { get; set; } = null!;
+    public DbSet<AiAssistantEntity> AiAssistants { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -105,6 +106,22 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Models).HasColumnName("models");
             e.Property(p => p.Enabled).HasColumnName("enabled");
             e.Property(p => p.Remark).HasColumnName("remark");
+        });
+        modelBuilder.Entity<AiAssistantEntity>().ToTable("t_ai_assistant");
+        modelBuilder.Entity<AiAssistantEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.AssistantName).HasColumnName("assistant_name");
+            e.Property(p => p.Description).HasColumnName("description");
+            e.Property(p => p.SystemPrompt).HasColumnName("system_prompt");
+            e.Property(p => p.InputParams).HasColumnName("input_params");
+            e.Property(p => p.OutputParams).HasColumnName("output_params");
+            e.Property(p => p.Enabled).HasColumnName("enabled");
         });
         modelBuilder.Entity<AlertRuleEntity>().ToTable("t_alert_rule");
         modelBuilder.Entity<AlertRecordEntity>().ToTable("t_alert_record");

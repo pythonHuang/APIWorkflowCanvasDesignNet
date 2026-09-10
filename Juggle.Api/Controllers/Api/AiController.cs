@@ -200,6 +200,80 @@ public class AiController : ControllerBase
         }
         catch (Exception ex) { return ApiResult.Fail(ex.Message); }
     }
+
+    // ==================== 自定义助手 ====================
+
+    /// <summary>助手列表（管理页）</summary>
+    [HttpGet("assistants")]
+    public async Task<ApiResult> Assistants()
+        => ApiResult.Success(await _db.AiAssistants.Where(a => a.Deleted == 0).OrderByDescending(a => a.Id).ToListAsync());
+
+    /// <summary>启用的助手（菜单用）</summary>
+    [HttpGet("assistants/enabled")]
+    public async Task<ApiResult> EnabledAssistants()
+        => ApiResult.Success(await _db.AiAssistants.Where(a => a.Deleted == 0 && a.Enabled == 1).OrderBy(a => a.Id).ToListAsync());
+
+    /// <summary>新增/更新助手</summary>
+    [HttpPost("assistant/save")]
+    public async Task<ApiResult> SaveAssistant([FromBody] AiAssistantSaveRequest req)
+    {
+        AiAssistantEntity entity;
+        if (req.Id > 0)
+        {
+            entity = await _db.AiAssistants.FindAsync(req.Id) ?? throw new Exception("助手不存在");
+        }
+        else
+        {
+            entity = new AiAssistantEntity { CreatedAt = DateTime.Now.ToString("o"), TenantId = _tenant.TenantId };
+            _db.AiAssistants.Add(entity);
+        }
+        entity.AssistantName = req.AssistantName;
+        entity.Description = req.Description;
+        entity.SystemPrompt = req.SystemPrompt;
+        entity.InputParams = req.InputParams;
+        entity.OutputParams = req.OutputParams;
+        entity.Enabled = req.Enabled ? 1 : 0;
+        entity.UpdatedAt = DateTime.Now.ToString("o");
+        await _db.SaveChangesAsync();
+        return ApiResult.Success(entity.Id);
+    }
+
+    /// <summary>删除助手</summary>
+    [HttpDelete("assistant/{id}")]
+    public async Task<ApiResult> DeleteAssistant(long id)
+    {
+        var entity = await _db.AiAssistants.FindAsync(id);
+        if (entity == null) return ApiResult.Fail("助手不存在");
+        entity.Deleted = 1;
+        await _db.SaveChangesAsync();
+        return ApiResult.Success();
+    }
+
+    /// <summary>启用/禁用助手</summary>
+    [HttpPost("assistant/toggle")]
+    public async Task<ApiResult> ToggleAssistant([FromBody] AiAssistantToggleRequest req)
+    {
+        var entity = await _db.AiAssistants.FindAsync(req.Id);
+        if (entity == null) return ApiResult.Fail("助手不存在");
+        entity.Enabled = req.Enabled ? 1 : 0;
+        entity.UpdatedAt = DateTime.Now.ToString("o");
+        await _db.SaveChangesAsync();
+        return ApiResult.Success();
+    }
+
+    /// <summary>运行助手：输入参数 + 补充说明 → 大模型 → 输出参数(JSON)与原文</summary>
+    [HttpPost("assistant-run")]
+    public async Task<ApiResult> RunAssistant([FromBody] AiAssistantRunRequest req)
+    {
+        try
+        {
+            var assistant = await _db.AiAssistants.FirstOrDefaultAsync(a => a.Id == req.AssistantId && a.Deleted == 0)
+                ?? throw new Exception("助手不存在");
+            var result = await _aiService.RunAssistantAsync(assistant, req.Inputs, req.ExtraText, req.ProviderId, req.Model);
+            return ApiResult.Success(result);
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
+    }
 }
 
 public class AiConfigRequest
@@ -263,4 +337,30 @@ public class AiFetchModelsRequest
 {
     public string BaseUrl { get; set; } = "";
     public string ApiKey { get; set; } = "";
+}
+
+public class AiAssistantSaveRequest
+{
+    public long Id { get; set; }
+    public string AssistantName { get; set; } = "";
+    public string? Description { get; set; }
+    public string? SystemPrompt { get; set; }
+    public string? InputParams { get; set; }
+    public string? OutputParams { get; set; }
+    public bool Enabled { get; set; } = true;
+}
+
+public class AiAssistantToggleRequest
+{
+    public long Id { get; set; }
+    public bool Enabled { get; set; }
+}
+
+public class AiAssistantRunRequest
+{
+    public long AssistantId { get; set; }
+    public long ProviderId { get; set; }
+    public string? Model { get; set; }
+    public Dictionary<string, object?>? Inputs { get; set; }
+    public string? ExtraText { get; set; }
 }

@@ -1,0 +1,149 @@
+<template>
+  <div class="page-container">
+    <div class="page-header">
+      <h2>🤖 模型助手管理</h2>
+      <el-button type="primary" size="small" @click="openAdd">添加助手</el-button>
+    </div>
+    <el-card>
+      <el-table :data="tableData" v-loading="loading">
+        <el-table-column prop="assistantName" label="助手名称" width="180" />
+        <el-table-column prop="description" label="描述" min-width="220" show-overflow-tooltip />
+        <el-table-column label="输入参数" width="140">
+          <template #default="{ row }">{{ countParams(row.inputParams) }} 个</template>
+        </el-table-column>
+        <el-table-column label="输出参数" width="140">
+          <template #default="{ row }">{{ countParams(row.outputParams) }} 个</template>
+        </el-table-column>
+        <el-table-column label="状态" width="90" align="center">
+          <template #default="{ row }">
+            <el-switch :model-value="row.enabled === 1" @change="(v: boolean) => toggleEnabled(row, v)" size="small"
+              active-text="启用" inactive-text="禁用" inline-prompt style="--el-switch-on-color:#67c23a" />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="140">
+          <template #default="{ row }">
+            <el-button size="small" link type="primary" @click="$router.push(`/ai/assistant/${row.id}`)">运行</el-button>
+            <el-button size="small" link @click="openEdit(row)">编辑</el-button>
+            <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div style="margin-top:10px;color:#909399;font-size:12px">
+        每个助手配置名称、系统提示词、输入/输出参数列表；启用后自动出现在「模型助手」菜单中，运行页按输入参数表单填写并调用大模型，输出参数要求模型按 JSON 返回。
+      </div>
+    </el-card>
+
+    <el-dialog v-model="dialogVisible" :title="form.id ? '编辑助手' : '添加助手'" width="720px">
+      <el-form :model="form" label-width="90px">
+        <el-form-item label="助手名称"><el-input v-model="form.assistantName" placeholder="如 周报生成助手" /></el-form-item>
+        <el-form-item label="描述"><el-input v-model="form.description" placeholder="助手用途说明（菜单提示）" /></el-form-item>
+        <el-form-item label="系统提示词">
+          <el-input v-model="form.systemPrompt" type="textarea" :rows="4"
+            placeholder="如：你是一名专业的文案专家，根据用户输入生成简洁有力的文案。" />
+        </el-form-item>
+        <el-form-item label="输入参数">
+          <div style="width:100%">
+            <div v-for="(p, i) in inputParams" :key="i" style="display:flex;gap:4px;margin-bottom:4px">
+              <el-input v-model="p.name" placeholder="参数名" size="small" style="width:130px;flex-shrink:0" />
+              <el-input v-model="p.label" placeholder="显示名" size="small" style="width:110px;flex-shrink:0" />
+              <el-select v-model="p.type" size="small" style="width:90px;flex-shrink:0">
+                <el-option value="text" label="文本" />
+                <el-option value="number" label="数字" />
+                <el-option value="date" label="日期" />
+                <el-option value="switch" label="开关" />
+                <el-option value="select" label="下拉" />
+              </el-select>
+              <el-input v-if="p.type==='select'" v-model="p.options" placeholder="选项,逗号分隔" size="small" style="width:170px;flex-shrink:0" />
+              <el-input v-else-if="p.type!=='switch'" v-model="p.default" placeholder="默认值" size="small" style="width:100px;flex-shrink:0" />
+              <el-button size="small" type="danger" link @click="inputParams.splice(i,1)">删</el-button>
+            </div>
+            <el-button size="small" @click="inputParams.push({name:'',label:'',type:'text',default:''})">+添加输入参数</el-button>
+          </div>
+        </el-form-item>
+        <el-form-item label="输出参数">
+          <div style="width:100%">
+            <div v-for="(p, i) in outputParams" :key="i" style="display:flex;gap:4px;margin-bottom:4px">
+              <el-input v-model="p.name" placeholder="参数名" size="small" style="width:150px;flex-shrink:0" />
+              <el-input v-model="p.label" placeholder="显示名" size="small" style="width:150px;flex-shrink:0" />
+              <el-button size="small" type="danger" link @click="outputParams.splice(i,1)">删</el-button>
+            </div>
+            <el-button size="small" @click="outputParams.push({name:'',label:''})">+添加输出参数</el-button>
+            <div style="font-size:11px;color:#909399;margin-top:4px">配置输出参数后，运行时会要求模型按 JSON 返回并在结果区按参数展示。</div>
+          </div>
+        </el-form-item>
+        <el-form-item label="启用"><el-switch v-model="form.enabled" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible=false">取消</el-button>
+        <el-button type="primary" @click="doSave">保存</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import request from '../../utils/request'
+
+const loading = ref(false)
+const tableData = ref<any[]>([])
+const dialogVisible = ref(false)
+const form = ref<any>({ id: 0, assistantName: '', description: '', systemPrompt: '', enabled: true })
+const inputParams = ref<any[]>([])
+const outputParams = ref<any[]>([])
+
+onMounted(loadData)
+
+async function loadData() {
+  loading.value = true
+  try {
+    const res: any = await request.get('/ai/assistants')
+    tableData.value = res.data || []
+  } finally { loading.value = false }
+}
+
+function countParams(json: string): number {
+  try { return JSON.parse(json || '[]').length } catch { return 0 }
+}
+
+function openAdd() {
+  form.value = { id: 0, assistantName: '', description: '', systemPrompt: '', enabled: true }
+  inputParams.value = []
+  outputParams.value = []
+  dialogVisible.value = true
+}
+function openEdit(row: any) {
+  form.value = { ...row, enabled: row.enabled === 1 }
+  try { inputParams.value = JSON.parse(row.inputParams || '[]') } catch { inputParams.value = [] }
+  try { outputParams.value = JSON.parse(row.outputParams || '[]') } catch { outputParams.value = [] }
+  dialogVisible.value = true
+}
+async function doSave() {
+  await request.post('/ai/assistant/save', {
+    ...form.value,
+    inputParams: JSON.stringify(inputParams.value),
+    outputParams: JSON.stringify(outputParams.value)
+  })
+  ElMessage.success('保存成功')
+  dialogVisible.value = false
+  loadData()
+}
+async function toggleEnabled(row: any, v: boolean) {
+  await request.post('/ai/assistant/toggle', { id: row.id, enabled: v })
+  row.enabled = v ? 1 : 0
+  ElMessage.success(v ? '已启用' : '已禁用')
+}
+async function doDelete(row: any) {
+  await ElMessageBox.confirm(`确认删除助手「${row.assistantName}」？`, '提示', { type: 'warning' })
+  await request.delete(`/ai/assistant/${row.id}`)
+  ElMessage.success('已删除')
+  loadData()
+}
+</script>
+
+<style scoped>
+.page-container { padding:16px;height:100%;display:flex;flex-direction:column;box-sizing:border-box }
+.page-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-shrink:0 }
+.page-header h2 { margin:0 }
+</style>
