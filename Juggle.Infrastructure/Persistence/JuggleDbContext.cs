@@ -61,6 +61,10 @@ public class JuggleDbContext : DbContext
     public DbSet<AiProviderEntity> AiProviders { get; set; } = null!;
     public DbSet<AiAssistantEntity> AiAssistants { get; set; } = null!;
     public DbSet<AiConversationEntity> AiConversations { get; set; } = null!;
+    public DbSet<KnowledgeBaseEntity> KnowledgeBases { get; set; } = null!;
+    public DbSet<KnowledgeDocumentEntity> KnowledgeDocuments { get; set; } = null!;
+    public DbSet<KnowledgeChunkEntity> KnowledgeChunks { get; set; } = null!;
+    public DbSet<KnowledgeMatchLogEntity> KnowledgeMatchLogs { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -146,6 +150,69 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Model).HasColumnName("model");
             e.Property(p => p.Title).HasColumnName("title");
             e.Property(p => p.Status).HasColumnName("status");
+        });
+        // 知识库 4 表
+        modelBuilder.Entity<KnowledgeBaseEntity>().ToTable("t_kb");
+        modelBuilder.Entity<KnowledgeBaseEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.KbName).HasColumnName("kb_name");
+            e.Property(p => p.Description).HasColumnName("description");
+            e.Property(p => p.ChunkSize).HasColumnName("chunk_size");
+            e.Property(p => p.ChunkOverlap).HasColumnName("chunk_overlap");
+            e.Property(p => p.RetrieveType).HasColumnName("retrieve_type");
+            e.Property(p => p.VectorModel).HasColumnName("vector_model");
+            e.Property(p => p.Enabled).HasColumnName("enabled");
+            e.Property(p => p.ChunkCount).HasColumnName("chunk_count");
+        });
+        modelBuilder.Entity<KnowledgeDocumentEntity>().ToTable("t_kb_document");
+        modelBuilder.Entity<KnowledgeDocumentEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.KbId).HasColumnName("kb_id");
+            e.Property(p => p.DocName).HasColumnName("doc_name");
+            e.Property(p => p.DocType).HasColumnName("doc_type");
+            e.Property(p => p.Content).HasColumnName("content");
+            e.Property(p => p.Status).HasColumnName("status");
+        });
+        modelBuilder.Entity<KnowledgeChunkEntity>().ToTable("t_kb_chunk");
+        modelBuilder.Entity<KnowledgeChunkEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.KbId).HasColumnName("kb_id");
+            e.Property(p => p.DocId).HasColumnName("doc_id");
+            e.Property(p => p.Content).HasColumnName("content");
+            e.Property(p => p.SeqNo).HasColumnName("seq_no");
+            e.Property(p => p.VectorJson).HasColumnName("vector_json");
+        });
+        modelBuilder.Entity<KnowledgeMatchLogEntity>().ToTable("t_kb_match_log");
+        modelBuilder.Entity<KnowledgeMatchLogEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.KbId).HasColumnName("kb_id");
+            e.Property(p => p.Query).HasColumnName("query");
+            e.Property(p => p.ResultsJson).HasColumnName("results_json");
+            e.Property(p => p.Score).HasColumnName("score");
         });
         modelBuilder.Entity<AlertRuleEntity>().ToTable("t_alert_rule");
         modelBuilder.Entity<AlertRecordEntity>().ToTable("t_alert_record");

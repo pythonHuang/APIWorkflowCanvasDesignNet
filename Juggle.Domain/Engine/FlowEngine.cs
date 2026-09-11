@@ -21,13 +21,16 @@ public class FlowEngine
     private readonly Func<string, string, Task<string>>? _aiChatFunc;
     /// <summary>Redis 连接串（供 REDIS_GET/REDIS_SET 节点使用），可为 null（未配置 Redis）</summary>
     private readonly string? _redisConnStr;
+    /// <summary>知识库检索函数（kbId, query, topK → 上下文文本），供 KB_SEARCH 节点使用</summary>
+    private readonly Func<long, string, int, Task<string>>? _kbSearchFunc;
 
     public FlowEngine(IHttpClientFactory httpClientFactory,
                       Dictionary<string, DataSourceInfo>? dataSources = null,
                       Dictionary<string, string?>? staticVariables = null,
                       Func<string, Task<string?>>? flowContentLoader = null,
                       Func<string, string, Task<string>>? aiChatFunc = null,
-                      string? redisConnStr = null)
+                      string? redisConnStr = null,
+                      Func<long, string, int, Task<string>>? kbSearchFunc = null)
     {
         _httpClientFactory  = httpClientFactory;
         _dataSources        = dataSources ?? new();
@@ -35,6 +38,7 @@ public class FlowEngine
         _flowContentLoader  = flowContentLoader;
         _aiChatFunc         = aiChatFunc;
         _redisConnStr       = redisConnStr;
+        _kbSearchFunc       = kbSearchFunc;
     }
 
     public async Task<FlowResult> ExecuteAsync(
@@ -165,6 +169,8 @@ public class FlowEngine
                     _redisConnStr ?? throw new InvalidOperationException("未配置 Redis（系统设置 → Redis 配置），无法执行 Redis 查询节点")),
                 "REDIS_SET"     => new RedisSetNodeExecutor(
                     _redisConnStr ?? throw new InvalidOperationException("未配置 Redis（系统设置 → Redis 配置），无法执行 Redis 设置节点")),
+                "KB_SEARCH"     => new KbSearchNodeExecutor(
+                    _kbSearchFunc ?? throw new InvalidOperationException("流程引擎未接入知识库检索能力，无法执行知识库检索节点")),
                 _ => throw new InvalidOperationException($"未知节点类型: {currentNode.ElementType}")
             };
 

@@ -166,6 +166,7 @@ builder.Services.AddScoped<JwtService>();            // JWT Token 签发
 builder.Services.AddScoped<ReportExecutionService>(); // 报表数据执行 + 渲染
 builder.Services.AddScoped<ITenantAccessor, TenantAccessor>();  // 多租户上下文
 builder.Services.AddScoped<AiService>();            // AiService
+builder.Services.AddScoped<KnowledgeService>();     // 知识库（文档解析/切片/检索）
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -255,6 +256,11 @@ using (var scope = app.Services.CreateScope())
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_assistant ADD COLUMN icon TEXT DEFAULT NULL;"); } catch { }
         // AI 助手对话会话表
         try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_ai_conversation(id INTEGER PRIMARY KEY AUTOINCREMENT, assistant_id INTEGER, assistant_name TEXT, system_prompt TEXT, input_params TEXT, output_params TEXT, messages TEXT, outputs TEXT, provider_id INTEGER, model TEXT, title TEXT, status INTEGER DEFAULT 0, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
+        // 知识库 4 表
+        try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_kb(id INTEGER PRIMARY KEY AUTOINCREMENT, kb_name TEXT, description TEXT, chunk_size INTEGER DEFAULT 500, chunk_overlap INTEGER DEFAULT 50, retrieve_type TEXT DEFAULT 'text', vector_model TEXT, enabled INTEGER DEFAULT 1, chunk_count INTEGER DEFAULT 0, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
+        try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_kb_document(id INTEGER PRIMARY KEY AUTOINCREMENT, kb_id INTEGER, doc_name TEXT, doc_type TEXT, content TEXT, status INTEGER DEFAULT 0, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
+        try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_kb_chunk(id INTEGER PRIMARY KEY AUTOINCREMENT, kb_id INTEGER, doc_id INTEGER, content TEXT, seq_no INTEGER DEFAULT 0, vector_json TEXT, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
+        try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_kb_match_log(id INTEGER PRIMARY KEY AUTOINCREMENT, kb_id INTEGER, query TEXT, results_json TEXT, score REAL DEFAULT 0, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
         // 补建参数位置字段
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_parameter ADD COLUMN param_position TEXT DEFAULT NULL;"); } catch { }
     }

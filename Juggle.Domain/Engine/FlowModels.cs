@@ -50,6 +50,9 @@ public class FlowNode
     [JsonPropertyName("redisGetConfig")]
     public RedisGetConfig? RedisGetConfig { get; set; }
 
+    [JsonPropertyName("kbSearchConfig")]
+    public KbSearchConfig? KbSearchConfig { get; set; }
+
     [JsonPropertyName("redisSetConfig")]
     public RedisSetConfig? RedisSetConfig { get; set; }
 
@@ -360,6 +363,26 @@ public class RedisSetConfig
     public int ExpireSeconds { get; set; } = 0;
 
     /// <summary>输出变量（写入是否成功 true/false）</summary>
+    [JsonPropertyName("output")]
+    public string Output { get; set; } = "";
+}
+
+/// <summary>知识库检索节点配置（KB_SEARCH 节点）</summary>
+public class KbSearchConfig
+{
+    /// <summary>知识库 ID（知识库管理中创建）</summary>
+    [JsonPropertyName("kbId")]
+    public long KbId { get; set; }
+
+    /// <summary>查询内容（支持 ${变量} 模板）</summary>
+    [JsonPropertyName("query")]
+    public string Query { get; set; } = "";
+
+    /// <summary>返回片段数（默认 5）</summary>
+    [JsonPropertyName("topK")]
+    public int TopK { get; set; } = 5;
+
+    /// <summary>输出变量（检索片段拼接的上下文文本）</summary>
     [JsonPropertyName("output")]
     public string Output { get; set; } = "";
 }

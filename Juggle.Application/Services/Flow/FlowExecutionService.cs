@@ -19,13 +19,16 @@ public class FlowExecutionService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ITenantAccessor? _tenant;
     private readonly AiService _aiService;
+    private readonly KnowledgeService _kbService;
 
-    public FlowExecutionService(JuggleDbContext db, IHttpClientFactory httpClientFactory, AiService aiService, ITenantAccessor? tenant = null)
+    public FlowExecutionService(JuggleDbContext db, IHttpClientFactory httpClientFactory, AiService aiService,
+        KnowledgeService kbService, ITenantAccessor? tenant = null)
     {
         _db = db;
         _httpClientFactory = httpClientFactory;
         _tenant = tenant;
         _aiService = aiService;
+        _kbService = kbService;
     }
 
     /// <summary>读取 Redis 连接配置（系统配置表），未配置返回 null。</summary>
@@ -42,12 +45,13 @@ public class FlowExecutionService
         return $"{host}:{port},password={password},defaultDatabase={dbIndex},abortConnect=false,connectTimeout=5000";
     }
 
-    /// <summary>构建引擎（注入大模型对话函数与 Redis 连接，供 AI/Redis 节点使用）。</summary>
+    /// <summary>构建引擎（注入大模型对话函数、Redis 连接与知识库检索，供 AI/Redis/KB_SEARCH 节点使用）。</summary>
     private async Task<FlowEngine> BuildEngineAsync(Dictionary<string, DataSourceInfo> dsInfos,
         Dictionary<string, string?> staticVars, Func<string, Task<string?>> flowContentLoader)
         => new FlowEngine(_httpClientFactory, dsInfos, staticVars, flowContentLoader,
             aiChatFunc: (systemPrompt, userInput) => _aiService.ChatAsync(systemPrompt, userInput),
-            redisConnStr: await GetRedisConnStrAsync());
+            redisConnStr: await GetRedisConnStrAsync(),
+            kbSearchFunc: (kbId, query, topK) => _kbService.SearchAsContextAsync(kbId, query, topK));
 
     // ────────────────────────────────────────────────────────────────
     // 数据源
