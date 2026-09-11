@@ -28,11 +28,26 @@ public class FlowExecutionService
         _aiService = aiService;
     }
 
-    /// <summary>构建引擎（注入大模型对话函数，供 AI 节点使用）。</summary>
-    private FlowEngine BuildEngine(Dictionary<string, DataSourceInfo> dsInfos,
+    /// <summary>读取 Redis 连接配置（系统配置表），未配置返回 null。</summary>
+    private async Task<string?> GetRedisConnStrAsync()
+    {
+        var configs = await _db.SystemConfigs
+            .Where(c => c.Deleted == 0 && c.ConfigKey!.StartsWith("redis."))
+            .ToListAsync();
+        var host = configs.FirstOrDefault(c => c.ConfigKey == "redis.host")?.ConfigValue;
+        if (string.IsNullOrWhiteSpace(host)) return null;
+        var port = configs.FirstOrDefault(c => c.ConfigKey == "redis.port")?.ConfigValue ?? "6379";
+        var password = configs.FirstOrDefault(c => c.ConfigKey == "redis.password")?.ConfigValue ?? "";
+        var dbIndex = configs.FirstOrDefault(c => c.ConfigKey == "redis.db")?.ConfigValue ?? "0";
+        return $"{host}:{port},password={password},defaultDatabase={dbIndex},abortConnect=false,connectTimeout=5000";
+    }
+
+    /// <summary>构建引擎（注入大模型对话函数与 Redis 连接，供 AI/Redis 节点使用）。</summary>
+    private async Task<FlowEngine> BuildEngineAsync(Dictionary<string, DataSourceInfo> dsInfos,
         Dictionary<string, string?> staticVars, Func<string, Task<string?>> flowContentLoader)
         => new FlowEngine(_httpClientFactory, dsInfos, staticVars, flowContentLoader,
-            aiChatFunc: (systemPrompt, userInput) => _aiService.ChatAsync(systemPrompt, userInput));
+            aiChatFunc: (systemPrompt, userInput) => _aiService.ChatAsync(systemPrompt, userInput),
+            redisConnStr: await GetRedisConnStrAsync());
 
     // ────────────────────────────────────────────────────────────────
     // 数据源
@@ -202,7 +217,7 @@ public class FlowExecutionService
             return ver?.FlowContent;
         }
 
-        var engine      = BuildEngine(dsInfos, staticVars, FlowContentLoader);
+        var engine      = await BuildEngineAsync(dsInfos, staticVars, FlowContentLoader);
 
         var inputJson  = JsonSerializer.Serialize(inputParams);
         var startTime  = DateTime.Now;
@@ -372,7 +387,7 @@ public class FlowExecutionService
             return ver?.FlowContent;
         }
 
-        var engine    = BuildEngine(dsInfos, staticVars, FlowContentLoader);
+        var engine    = await BuildEngineAsync(dsInfos, staticVars, FlowContentLoader);
         var startTime = DateTime.Now;
         FlowResult result;
         try

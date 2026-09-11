@@ -47,6 +47,12 @@ public class FlowNode
     [JsonPropertyName("fileWriteConfig")]
     public FileWriteConfig? FileWriteConfig { get; set; }
 
+    [JsonPropertyName("redisGetConfig")]
+    public RedisGetConfig? RedisGetConfig { get; set; }
+
+    [JsonPropertyName("redisSetConfig")]
+    public RedisSetConfig? RedisSetConfig { get; set; }
+
     [JsonPropertyName("subFlowConfig")]
     public SubFlowConfig? SubFlowConfig { get; set; }
 
@@ -322,6 +328,38 @@ public class FileWriteConfig
     public string FileType { get; set; } = "text";
 
     /// <summary>输出变量（data URL，可下载或供后续节点使用）</summary>
+    [JsonPropertyName("output")]
+    public string Output { get; set; } = "";
+}
+
+/// <summary>Redis 缓存查询节点配置（REDIS_GET 节点）</summary>
+public class RedisGetConfig
+{
+    /// <summary>key（支持 ${变量} 模板）</summary>
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = "";
+
+    /// <summary>输出变量（JSON 字符串自动解析为对象，无值时为 null）</summary>
+    [JsonPropertyName("output")]
+    public string Output { get; set; } = "";
+}
+
+/// <summary>Redis 缓存设置节点配置（REDIS_SET 节点）</summary>
+public class RedisSetConfig
+{
+    /// <summary>key（支持 ${变量} 模板）</summary>
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = "";
+
+    /// <summary>值变量（对象自动序列化为 JSON 字符串）</summary>
+    [JsonPropertyName("value")]
+    public string Value { get; set; } = "";
+
+    /// <summary>过期秒数（0=永不过期）</summary>
+    [JsonPropertyName("expireSeconds")]
+    public int ExpireSeconds { get; set; } = 0;
+
+    /// <summary>输出变量（写入是否成功 true/false）</summary>
     [JsonPropertyName("output")]
     public string Output { get; set; } = "";
 }

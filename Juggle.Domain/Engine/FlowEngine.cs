@@ -19,18 +19,22 @@ public class FlowEngine
     private readonly Func<string, Task<string?>>? _flowContentLoader;
     /// <summary>大模型对话函数（systemPrompt, userInput → reply），供 AI 节点调用，可为 null（未接入大模型）</summary>
     private readonly Func<string, string, Task<string>>? _aiChatFunc;
+    /// <summary>Redis 连接串（供 REDIS_GET/REDIS_SET 节点使用），可为 null（未配置 Redis）</summary>
+    private readonly string? _redisConnStr;
 
     public FlowEngine(IHttpClientFactory httpClientFactory,
                       Dictionary<string, DataSourceInfo>? dataSources = null,
                       Dictionary<string, string?>? staticVariables = null,
                       Func<string, Task<string?>>? flowContentLoader = null,
-                      Func<string, string, Task<string>>? aiChatFunc = null)
+                      Func<string, string, Task<string>>? aiChatFunc = null,
+                      string? redisConnStr = null)
     {
         _httpClientFactory  = httpClientFactory;
         _dataSources        = dataSources ?? new();
         _staticVarSnapshot  = staticVariables ?? new(StringComparer.OrdinalIgnoreCase);
         _flowContentLoader  = flowContentLoader;
         _aiChatFunc         = aiChatFunc;
+        _redisConnStr       = redisConnStr;
     }
 
     public async Task<FlowResult> ExecuteAsync(
@@ -157,6 +161,10 @@ public class FlowEngine
                 "FILE_PARSE"    => new FileParseNodeExecutor(),
                 "EXCEL_READ"    => new ExcelReadNodeExecutor(),
                 "FILE_WRITE"    => new FileWriteNodeExecutor(),
+                "REDIS_GET"     => new RedisGetNodeExecutor(
+                    _redisConnStr ?? throw new InvalidOperationException("未配置 Redis（系统设置 → Redis 配置），无法执行 Redis 查询节点")),
+                "REDIS_SET"     => new RedisSetNodeExecutor(
+                    _redisConnStr ?? throw new InvalidOperationException("未配置 Redis（系统设置 → Redis 配置），无法执行 Redis 设置节点")),
                 _ => throw new InvalidOperationException($"未知节点类型: {currentNode.ElementType}")
             };
 

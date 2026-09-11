@@ -384,6 +384,48 @@
             </div>
           </template>
 
+          <!-- REDIS_GET Redis 查询节点属性 -->
+          <template v-if="selectedNode.elementType === 'REDIS_GET'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('REDIS_GET')">帮助</el-button></div>
+            <div class="prop-tip">Redis 查询节点：按 key 从 Redis 取值，JSON 字符串自动解析为对象写入输出变量；key 不存在时输出 null。</div>
+            <div class="prop-item">
+              <label>Key</label>
+              <el-input v-model="selectedNode.redisGetConfig.key" size="small" placeholder="如 user:${'${input_id}'}（支持 ${'${变量}'} 模板）" />
+            </div>
+            <div class="prop-item">
+              <label>输出变量</label>
+              <el-select v-model="selectedNode.redisGetConfig.output" size="small" style="width:100%" clearable placeholder="取值写入变量">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+          </template>
+
+          <!-- REDIS_SET Redis 设置节点属性 -->
+          <template v-if="selectedNode.elementType === 'REDIS_SET'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('REDIS_SET')">帮助</el-button></div>
+            <div class="prop-tip">Redis 设置节点：写入 key-value（对象自动序列化为 JSON 字符串），可设过期秒数，结果写入输出变量。</div>
+            <div class="prop-item">
+              <label>Key</label>
+              <el-input v-model="selectedNode.redisSetConfig.key" size="small" placeholder="如 session:${'${input_token}'}（支持 ${'${变量}'} 模板）" />
+            </div>
+            <div class="prop-item">
+              <label>值变量</label>
+              <el-select v-model="selectedNode.redisSetConfig.value" size="small" style="width:100%" clearable placeholder="写入的变量">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>过期秒数</label>
+              <el-input-number v-model="selectedNode.redisSetConfig.expireSeconds" size="small" :min="0" :step="60" style="width:100%" placeholder="0=永不过期" />
+            </div>
+            <div class="prop-item">
+              <label>输出变量</label>
+              <el-select v-model="selectedNode.redisSetConfig.output" size="small" style="width:100%" clearable placeholder="是否成功(true/false)写入变量">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+          </template>
+
           <!-- NOTIFY 通知节点属性 -->
           <template v-if="selectedNode.elementType === 'NOTIFY'">
             <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('NOTIFY')">帮助</el-button></div>
@@ -1996,6 +2038,49 @@ NOTIFY 节点消息中引用:
 3. 大文件注意 base64 体积（约增加 1/3）` }
     ]
   },
+  REDIS_GET: {
+    title: 'Redis 缓存查询节点',
+    sections: [
+      { title: '一、节点说明', code: `从 Redis 按 key 取值：
+- key 支持模板：user:${'${input_id}'}（${'${变量}'} 会替换为变量值）
+- 值为 JSON 字符串时自动解析为对象/数组写入输出变量
+- key 不存在时输出 null（条件节点可用 == null 判断缓存未命中）` },
+      { title: '二、使用 demo', code: `// 场景：先查缓存，命中则跳过接口调用
+REDIS_GET 节点:
+  Key:      user:${'${input_user_id}'}
+  输出变量: env_cached_user
+
+条件节点（缓存命中判断）:
+  分支1: env_cached_user != null  →  直接返回缓存
+  默认:   调用获取用户接口 → REDIS_SET 回写缓存` },
+      { title: '三、注意事项', code: `1. 需在系统设置 → Redis 配置中填写连接信息
+2. 未配置 Redis 时流程执行报错并提示
+3. 输出变量值可能是对象/数组/字符串/null 四种形态` }
+    ]
+  },
+  REDIS_SET: {
+    title: 'Redis 缓存设置节点',
+    sections: [
+      { title: '一、节点说明', code: `写入 Redis key-value：
+- key 支持模板：session:${'${input_token}'}
+- 值变量为对象时自动序列化为 JSON 字符串
+- 可设过期秒数（0=永不过期）
+- 输出变量写入 true/false 表示是否成功` },
+      { title: '二、使用 demo', code: `// 场景：接口调用后回写缓存
+前置 METHOD 节点: 输出映射 data → env_user（对象）
+
+REDIS_SET 节点:
+  Key:      user:${'${input_user_id}'}
+  值变量:   env_user
+  过期秒数: 3600
+  输出变量: env_cache_ok
+
+条件节点: env_cache_ok == false → NOTIFY 告警` },
+      { title: '三、注意事项', code: `1. 需在系统设置 → Redis 配置中填写连接信息
+2. 连接失败（Redis 不可用）时节点报错、流程失败
+3. 值变量不存在时写入空字符串` }
+    ]
+  },
   TRANSFORM: {
     title: '模板转换节点',
     sections: [
@@ -2845,7 +2930,7 @@ function nodeIcon(type: string) {
     START: '▶', END: '⏹', METHOD: '⚙', CONDITION: '◆',
     ASSIGN: '←', CODE: '{ }', MYSQL: '⊕', MERGE: '⇒', SUB_FLOW: '⬡',
     LOOP: '↻', DELAY: '⏱', PARALLEL: '∥', NOTIFY: '✉', TRANSFORM: '📝', AI: '🤖',
-    FILE_PARSE: '📄', EXCEL_READ: '📊', FILE_WRITE: '💾'
+    FILE_PARSE: '📄', EXCEL_READ: '📊', FILE_WRITE: '💾', REDIS_GET: '🔎', REDIS_SET: '🔏'
   }
   return map[type] || '?'
 }
@@ -2855,7 +2940,8 @@ function nodeTypeName(type: string) {
     START: '开始', END: '结束', METHOD: '方法', CONDITION: '条件',
     ASSIGN: '赋值', CODE: '代码', MYSQL: '数据库', MERGE: '聚合', SUB_FLOW: '子流程',
     LOOP: '循环', DELAY: '延迟', PARALLEL: '并行', NOTIFY: '通知', TRANSFORM: '模板转换', AI: '大模型',
-    FILE_PARSE: '文件解析', EXCEL_READ: 'Excel读取', FILE_WRITE: '文件写入'
+    FILE_PARSE: '文件解析', EXCEL_READ: 'Excel读取', FILE_WRITE: '文件写入',
+    REDIS_GET: 'Redis查询', REDIS_SET: 'Redis设置'
   }
   return map[type] || type
 }
@@ -2880,6 +2966,8 @@ const nodeToolList = [
   { type: 'FILE_PARSE', icon: '📄', label: '文件解析' },
   { type: 'EXCEL_READ', icon: '📊', label: 'Excel读取' },
   { type: 'FILE_WRITE', icon: '💾', label: '文件写入' },
+  { type: 'REDIS_GET', icon: '🔎', label: 'Redis查询' },
+  { type: 'REDIS_SET', icon: '🔏', label: 'Redis设置' },
 ]
 
 function addNode(type: string) {
@@ -2940,6 +3028,12 @@ function addNode(type: string) {
   }
   if (type === 'FILE_WRITE') bNode.fileWriteConfig = {
     content: '', fileName: '', fileType: 'text', output: ''
+  }
+  if (type === 'REDIS_GET') bNode.redisGetConfig = {
+    key: '', output: ''
+  }
+  if (type === 'REDIS_SET') bNode.redisSetConfig = {
+    key: '', value: '', expireSeconds: 0, output: ''
   }
 
   businessNodes.value.push(bNode)

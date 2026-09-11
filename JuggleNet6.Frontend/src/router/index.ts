@@ -41,6 +41,7 @@ const routes = [
       { path: 'report/designer/:id', component: () => import('../views/report/ReportDesigner.vue') },
       { path: 'report/view/:id',  component: () => import('../views/report/ReportView.vue') },
       { path: 'system/ai-provider', component: () => import('../views/system/AiProviderList.vue') },
+      { path: 'system/redis',        component: () => import('../views/system/RedisConfig.vue') },
       { path: 'ai/flow-assistant',  component: () => import('../views/ai/FlowAssistant.vue') },
       { path: 'ai/api-assistant',   component: () => import('../views/ai/ApiAssistant.vue') },
       { path: 'ai/assistants',      component: () => import('../views/ai/AiAssistantList.vue') },
