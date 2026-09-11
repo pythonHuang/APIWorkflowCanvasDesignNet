@@ -67,6 +67,7 @@ public class JuggleDbContext : DbContext
     public DbSet<KnowledgeMatchLogEntity> KnowledgeMatchLogs { get; set; } = null!;
     public DbSet<RedisConfigEntity> RedisConfigs { get; set; } = null!;
     public DbSet<SkillEntity> Skills { get; set; } = null!;
+    public DbSet<MarketItemEntity> MarketItems { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -247,6 +248,23 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Content).HasColumnName("content");
             e.Property(p => p.Enabled).HasColumnName("enabled");
             e.Property(p => p.MarketSkillId).HasColumnName("market_skill_id");
+        });
+        modelBuilder.Entity<MarketItemEntity>().ToTable("t_market_item");
+        modelBuilder.Entity<MarketItemEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.ItemType).HasColumnName("item_type");
+            e.Property(p => p.ItemName).HasColumnName("item_name");
+            e.Property(p => p.Description).HasColumnName("description");
+            e.Property(p => p.GroupName).HasColumnName("group_name");
+            e.Property(p => p.ContentJson).HasColumnName("content_json");
+            e.Property(p => p.DownloadCount).HasColumnName("download_count");
+            e.Property(p => p.Enabled).HasColumnName("enabled");
         });
         modelBuilder.Entity<AlertRuleEntity>().ToTable("t_alert_rule");
         modelBuilder.Entity<AlertRecordEntity>().ToTable("t_alert_record");

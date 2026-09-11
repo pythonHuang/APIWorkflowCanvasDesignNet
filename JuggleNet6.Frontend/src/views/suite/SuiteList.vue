@@ -36,6 +36,7 @@
           <template #default="{ row }">
             <el-button size="small" type="primary" link @click="goApiList(row)">接口管理</el-button>
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
+            <el-button size="small" type="info" link @click="openPublish(row)">发布</el-button>
             <el-button size="small" type="warning" link @click="doExport(row)">导出</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
@@ -65,6 +66,11 @@
         <el-button type="primary" @click="handleSubmit">确认</el-button>
       </template>
     </el-dialog>
+
+    <!-- 发布到市场 -->
+    <MarketPublishDialog v-model:visible="publishVisible" item-type="api"
+      :default-name="publishForm.itemName" :default-desc="publishForm.description" :default-group="publishForm.groupName"
+      :content-json="publishForm.contentJson" />
   </div>
 </template>
 
@@ -73,6 +79,29 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
+import MarketPublishDialog from '../../components/MarketPublishDialog.vue'
+
+// 发布到市场（套件及其全部接口）
+const publishVisible = ref(false)
+const publishForm = ref<any>({ itemName: '', description: '', groupName: '', contentJson: '{}' })
+async function openPublish(row: any) {
+  try {
+    const apisRes: any = await request.post('/suite/api/list', { suiteCode: row.suiteCode })
+    const apis = (apisRes.data || []).map((a: any) => ({
+      suiteCode: a.suiteCode, methodCode: a.methodCode, methodName: a.methodName,
+      methodDesc: a.methodDesc, url: a.url, requestType: a.requestType || 'POST'
+    }))
+    publishForm.value = {
+      itemName: row.suiteName || row.suiteCode || '',
+      description: row.suiteDesc || '',
+      groupName: '',
+      contentJson: JSON.stringify({
+        suites: [{ suiteCode: row.suiteCode, suiteName: row.suiteName, suiteDesc: row.suiteDesc }], apis
+      })
+    }
+    publishVisible.value = true
+  } catch { /* 拦截器已提示 */ }
+}
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
 import { saveAs } from 'file-saver'
 

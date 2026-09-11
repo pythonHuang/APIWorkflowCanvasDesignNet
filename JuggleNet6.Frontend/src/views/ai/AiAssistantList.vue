@@ -24,6 +24,7 @@
           <template #default="{ row }">
             <el-button size="small" link type="primary" @click="$router.push(`/ai/assistant/${row.id}`)">运行</el-button>
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
+            <el-button size="small" type="info" link @click="openPublish(row)">发布</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -108,6 +109,11 @@
         <el-button type="primary" @click="doSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 发布到市场 -->
+    <MarketPublishDialog v-model:visible="publishVisible" item-type="assistant"
+      :default-name="publishForm.itemName" :default-desc="publishForm.description" :default-group="publishForm.groupName"
+      :content-json="publishForm.contentJson" />
   </div>
 </template>
 
@@ -115,6 +121,23 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
+import MarketPublishDialog from '../../components/MarketPublishDialog.vue'
+
+// 发布到市场
+const publishVisible = ref(false)
+const publishForm = ref<any>({ itemName: '', description: '', groupName: '', contentJson: '{}' })
+function openPublish(row: any) {
+  publishForm.value = {
+    itemName: row.assistantName || '',
+    description: row.description || '',
+    groupName: '',
+    contentJson: JSON.stringify({
+      assistantName: row.assistantName, description: row.description, systemPrompt: row.systemPrompt,
+      inputParams: row.inputParams, outputParams: row.outputParams, quickPrompts: row.quickPrompts, icon: row.icon
+    })
+  }
+  publishVisible.value = true
+}
 
 const loading = ref(false)
 const tableData = ref<any[]>([])

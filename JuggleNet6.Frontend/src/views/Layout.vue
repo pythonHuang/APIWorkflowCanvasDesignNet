@@ -77,7 +77,11 @@
             {{ a.assistantName }}
           </el-menu-item>
           </el-sub-menu>
-          <el-sub-menu index="system" v-if="hasMenu('/system/token')">
+          <el-menu-item index="/market">
+          <el-icon><Shop /></el-icon>
+          <span>市场</span>
+        </el-menu-item>
+        <el-sub-menu index="system" v-if="hasMenu('/system/token')">
             <template #title>
               <el-icon><Setting /></el-icon>
               <span>系统设置</span>
@@ -135,7 +139,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram, Document, MagicStick, Collection } from '@element-plus/icons-vue'
+import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram, Document, MagicStick, Collection, Shop } from '@element-plus/icons-vue'
 import request from '../utils/request'
 
 const route = useRoute()

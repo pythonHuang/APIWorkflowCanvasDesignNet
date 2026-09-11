@@ -65,6 +65,7 @@
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
             <el-button size="small" type="info" link @click="doClone(row)">克隆</el-button>
             <el-button size="small" type="warning" link @click="doExport(row)">导出</el-button>
+            <el-button size="small" type="info" link @click="openPublish(row)">发布</el-button>
             <el-tooltip v-if="row.serviceAlias" :content="`WSDL: /open/services/${row.serviceAlias}/wsdl`">
               <el-button size="small" link @click="openServiceWsdl(row)">WSDL</el-button>
             </el-tooltip>
@@ -111,6 +112,11 @@
         <el-button type="primary" @click="handleSubmit">确认</el-button>
       </template>
     </el-dialog>
+
+    <!-- 发布到市场 -->
+    <MarketPublishDialog v-model:visible="publishVisible" item-type="flow"
+      :default-name="publishForm.itemName" :default-desc="publishForm.description" :default-group="publishForm.groupName"
+      :content-json="publishForm.contentJson" />
   </div>
 </template>
 
@@ -121,6 +127,22 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
 import { saveAs } from 'file-saver'
+import MarketPublishDialog from '../../components/MarketPublishDialog.vue'
+
+// 发布到市场
+const publishVisible = ref(false)
+const publishForm = ref<any>({ itemName: '', description: '', groupName: '', contentJson: '{}' })
+function openPublish(row: any) {
+  publishForm.value = {
+    itemName: row.flowName || '',
+    description: row.flowDesc || '',
+    groupName: row.groupName || '',
+    contentJson: JSON.stringify({
+      flowName: row.flowName, flowDesc: row.flowDesc, groupName: row.groupName, flowContent: row.flowContent || '[]'
+    })
+  }
+  publishVisible.value = true
+}
 
 const router = useRouter()
 const loading = ref(false)

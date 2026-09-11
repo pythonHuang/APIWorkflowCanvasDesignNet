@@ -43,6 +43,7 @@ const routes = [
       { path: 'system/ai-provider', component: () => import('../views/system/AiProviderList.vue') },
       { path: 'system/redis',        component: () => import('../views/system/RedisConfig.vue') },
       { path: 'system/skills',       component: () => import('../views/system/SkillList.vue') },
+      { path: 'market',              component: () => import('../views/market/MarketList.vue') },
       { path: 'kb/list',             component: () => import('../views/kb/KnowledgeList.vue') },
       { path: 'kb/detail/:id',       component: () => import('../views/kb/KnowledgeDetail.vue') },
       { path: 'ai/flow-assistant',  component: () => import('../views/ai/FlowAssistant.vue') },

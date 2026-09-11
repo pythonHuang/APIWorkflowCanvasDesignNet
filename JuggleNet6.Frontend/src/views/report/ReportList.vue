@@ -26,6 +26,7 @@
             <el-button size="small" type="warning" link @click="doExportPdf(row)">PDF</el-button>
             <el-button size="small" type="success" link @click="doExportExcel(row)">Excel</el-button>
             <el-button size="small" link @click="doPrint(row)">打印</el-button>
+            <el-button size="small" type="info" link @click="openPublish(row)">发布</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -33,6 +34,10 @@
       <el-pagination v-model:current-page="page" :page-size="20" layout="prev,next" :total="total" @change="loadData" style="margin-top:12px;justify-content:flex-end" />
     </el-card>
 
+    <!-- 发布到市场 -->
+    <MarketPublishDialog v-model:visible="publishVisible" item-type="report"
+      :default-name="publishForm.itemName" :default-desc="publishForm.description" :default-group="publishForm.groupName"
+      :content-json="publishForm.contentJson" />
   </div>
 </template>
 
@@ -41,6 +46,22 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
+import MarketPublishDialog from '../../components/MarketPublishDialog.vue'
+
+// 发布到市场
+const publishVisible = ref(false)
+const publishForm = ref<any>({ itemName: '', description: '', groupName: '', contentJson: '{}' })
+function openPublish(row: any) {
+  publishForm.value = {
+    itemName: row.name || '',
+    description: row.groupName || '',
+    groupName: row.groupName || '',
+    contentJson: JSON.stringify({
+      name: row.name, groupName: row.groupName, paramsConfig: row.paramsConfig || '[]', layoutJson: row.layoutJson || '{}'
+    })
+  }
+  publishVisible.value = true
+}
 
 const router = useRouter()
 const loading = ref(false)

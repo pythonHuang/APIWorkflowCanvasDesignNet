@@ -33,6 +33,7 @@
           <template #default="{ row }">
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
             <el-button size="small" link @click="viewSkill(row)">查看</el-button>
+            <el-button size="small" type="info" link @click="openPublish(row)">发布</el-button>
             <el-button size="small" type="primary" link @click="doExport(row)">导出</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
@@ -80,6 +81,11 @@
         <el-button v-if="viewMode === 'import'" type="primary" @click="doImport">导入</el-button>
       </template>
     </el-dialog>
+
+    <!-- 发布到市场 -->
+    <MarketPublishDialog v-model:visible="publishVisible" item-type="skill"
+      :default-name="publishForm.itemName" :default-desc="publishForm.description" :default-group="publishForm.groupName"
+      :content-json="publishForm.contentJson" />
   </div>
 </template>
 
@@ -88,6 +94,20 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
 import { saveAs } from 'file-saver'
+import MarketPublishDialog from '../../components/MarketPublishDialog.vue'
+
+// 发布到市场
+const publishVisible = ref(false)
+const publishForm = ref<any>({ itemName: '', description: '', groupName: '', contentJson: '{}' })
+function openPublish(row: any) {
+  publishForm.value = {
+    itemName: row.skillName || '',
+    description: row.description || '',
+    groupName: row.groupName || '',
+    contentJson: JSON.stringify({ skillName: row.skillName, groupName: row.groupName, description: row.description, content: row.content })
+  }
+  publishVisible.value = true
+}
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
