@@ -46,7 +46,13 @@
     <el-card v-if="conversation" shadow="never" style="flex:1;display:flex;flex-direction:column;min-height:0">
       <div class="chat-box" ref="chatBoxRef">
         <div v-for="(m, i) in messages" :key="i" :class="['chat-msg', m.role]">
-          <div class="chat-bubble">{{ m.content }}</div>
+          <div class="chat-bubble">
+            <MdContent v-if="m.role === 'assistant'" :content="m.content" />
+            <template v-else>
+              <div style="white-space:pre-wrap">{{ m.textContent }}</div>
+              <img v-for="(img, j) in (m.images || [])" :key="j" :src="img" style="max-width:180px;max-height:180px;border-radius:6px;margin-top:6px;display:block" />
+            </template>
+          </div>
         </div>
         <div v-if="chatLoading" class="chat-msg assistant">
           <div class="chat-bubble"><el-icon class="is-loading"><Loading /></el-icon> 思考中...</div>
@@ -58,9 +64,19 @@
       <div v-if="quickPrompts.length > 0" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
         <el-button v-for="(q, i) in quickPrompts" :key="i" size="small" round @click="fillPrompt(q)">{{ q }}</el-button>
       </div>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <el-input v-model="draft" :disabled="conversation?.status === 1" placeholder="输入消息，回车发送" size="small"
-          style="flex:1" @keydown.enter="handleSendMessage" />
+      <!-- 待发送图片 -->
+      <div v-if="pendingImages.length > 0" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+        <div v-for="(img, i) in pendingImages" :key="i" style="position:relative">
+          <img :src="img" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e4e7ed" />
+          <span @click="pendingImages.splice(i,1)" style="position:absolute;top:-6px;right:-6px;background:#f56c6c;color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;line-height:16px;text-align:center;cursor:pointer">✕</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:flex-end">
+        <el-input v-model="draft" :disabled="conversation?.status === 1" placeholder="输入消息，Ctrl+回车发送，支持粘贴/上传图片" type="textarea" :rows="2"
+          style="flex:1" @keydown.ctrl.enter="handleSendMessage" @paste="onPaste" />
+        <el-upload :show-file-list="false" :auto-upload="false" accept="image/*" :on-change="onImageUpload" style="display:inline-block">
+          <el-button size="small" :disabled="conversation?.status === 1">图片</el-button>
+        </el-upload>
         <el-button size="small" type="primary" icon="Promotion" :disabled="conversation?.status === 1" :loading="chatLoading" @click="handleSendMessage">发送</el-button>
         <el-button size="small" type="warning" :disabled="conversation?.status === 1" :loading="ending" @click="endConversation">结束对话</el-button>
       </div>
@@ -72,7 +88,12 @@
       <template #header><span style="font-weight:600">✅ 最终结果（已结束对话）</span></template>
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item v-for="p in outputParams" :key="p.name" :label="p.label || p.name">
-          {{ finalOutputs[p.name] ?? '—' }}
+          <div v-if="isJsonValue(finalOutputs[p.name])" class="json-value">
+            <pre>{{ formatJson(finalOutputs[p.name]) }}</pre>
+            <el-button size="small" text type="primary" @click="copyText(formatJson(finalOutputs[p.name]))">复制</el-button>
+          </div>
+          <MdContent v-else-if="typeof finalOutputs[p.name] === 'string' && finalOutputs[p.name].length > 30" :content="finalOutputs[p.name]" />
+          <template v-else>{{ finalOutputs[p.name] ?? '—' }}</template>
         </el-descriptions-item>
       </el-descriptions>
     </el-card>
@@ -97,6 +118,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '../../utils/request'
+import MdContent from '../../components/MdContent.vue'
 
 const route = useRoute()
 const assistantId = Number(route.params.id) || 0
@@ -111,8 +133,9 @@ const currentModel = ref('')
 
 // 对话状态
 const conversation = ref<any>(null)     // { id, status, ... }
-const messages = ref<{ role: string; content: string }[]>([])
+const messages = ref<{ role: string; content: string; textContent?: string; images?: string[] }[]>([])
 const draft = ref('')
+const pendingImages = ref<string[]>([])
 const chatLoading = ref(false)
 const starting = ref(false)
 const ending = ref(false)
@@ -171,6 +194,33 @@ function fillPrompt(q: string) {
   draft.value = draft.value?.trim() ? draft.value?.trim() || '' + '\n' + q : q
 }
 
+/** 图片上传/粘贴：转 data URL（限 3 张、单张 800KB） */
+function addImage(dataUrl: string) {
+  if (pendingImages.value.length >= 3) { ElMessage.warning('最多添加 3 张图片'); return }
+  if (dataUrl.length > 900 * 1024) { ElMessage.warning('图片过大，请压缩后重试'); return }
+  pendingImages.value.push(dataUrl)
+}
+function onImageUpload(file: any) {
+  const raw = file?.raw
+  if (!raw) return
+  const reader = new FileReader()
+  reader.onload = () => addImage(reader.result as string)
+  reader.readAsDataURL(raw)
+}
+function onPaste(e: ClipboardEvent) {
+  const items = e.clipboardData?.items
+  if (!items) return
+  for (const item of Array.from(items)) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (!file) continue
+      const reader = new FileReader()
+      reader.onload = () => addImage(reader.result as string)
+      reader.readAsDataURL(file)
+    }
+  }
+}
+
 async function startConversation() {
   if (!providerId.value) { ElMessage.warning('请先在系统设置 → 大模型设置中启用供应商'); return }
   starting.value = true
@@ -183,10 +233,8 @@ async function startConversation() {
     messages.value = []
     finalOutputs.value = {}
     // 有暂存提问词时直接发送首条消息
-    if (draft.value?.trim()) {
-      const first = draft.value
-      draft.value = ''
-      await sendMessage(first)
+    if (draft.value?.trim() || pendingImages.value.length > 0) {
+      await sendMessage()
     }
   } catch (e: any) {
     error.value = e?.message || '开始对话失败'
@@ -196,11 +244,16 @@ async function handleSendMessage() {
   await sendMessage()
 }
 
-async function sendMessage(text?: string) {
-  const content = (text || draft.value)?.trim() || ''
-  if (!content || !conversation.value || conversation.value.status === 1) return
+async function sendMessage() {
+  const text = draft.value?.trim() || ''
+  if ((!text && pendingImages.value.length === 0) || !conversation.value || conversation.value.status === 1) return
+  // 图片附加为 markdown data URL（多模态模型可识别，前端气泡同样展示）
+  const images = [...pendingImages.value]
+  let content = text
+  for (const img of images) content += (content ? '\n' : '') + `![image](${img})`
   draft.value = ''
-  messages.value.push({ role: 'user', content })
+  pendingImages.value = []
+  messages.value.push({ role: 'user', content, textContent: text, images })
   chatLoading.value = true
   error.value = ''
   try {
@@ -215,6 +268,16 @@ async function sendMessage(text?: string) {
     chatLoading.value = false
     scrollToBottom()
   }
+}
+
+function isJsonValue(v: any): boolean {
+  return typeof v === 'object' && v !== null
+}
+function formatJson(v: any): string {
+  try { return JSON.stringify(v, null, 2) } catch { return String(v) }
+}
+async function copyText(t: string) {
+  try { await navigator.clipboard.writeText(t); ElMessage.success('已复制') } catch { /* 忽略 */ }
 }
 
 async function endConversation() {
