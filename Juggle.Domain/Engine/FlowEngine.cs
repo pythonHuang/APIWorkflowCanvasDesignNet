@@ -171,6 +171,7 @@ public class FlowEngine
                     _redisConnStr ?? throw new InvalidOperationException("未配置 Redis（系统设置 → Redis 配置），无法执行 Redis 设置节点")),
                 "KB_SEARCH"     => new KbSearchNodeExecutor(
                     _kbSearchFunc ?? throw new InvalidOperationException("流程引擎未接入知识库检索能力，无法执行知识库检索节点")),
+                "DATA_EXTRACT"  => new DataExtractNodeExecutor(),
                 _ => throw new InvalidOperationException($"未知节点类型: {currentNode.ElementType}")
             };
 

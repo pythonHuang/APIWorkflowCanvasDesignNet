@@ -429,16 +429,37 @@
           <!-- REDIS_GET Redis 查询节点属性 -->
           <template v-if="selectedNode.elementType === 'REDIS_GET'">
             <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('REDIS_GET')">帮助</el-button></div>
-            <div class="prop-tip">Redis 查询节点：按 key 从 Redis 取值，JSON 字符串自动解析为对象写入输出变量；key 不存在时输出 null。</div>
+            <div class="prop-tip">Redis 查询节点：按 key 从 Redis 取值，JSON 字符串自动解析为对象写入输出目标；key 不存在时输出 null。</div>
+            <div class="prop-item">
+              <label>Redis 实例</label>
+              <el-select v-model="selectedNode.redisGetConfig.redisId" size="small" style="width:100%" clearable placeholder="默认实例">
+                <el-option v-for="r in redisConfigs" :key="r.id" :value="r.id" :label="`${r.configName}${r.isDefault ? '(默认)' : ''}`" />
+              </el-select>
+            </div>
             <div class="prop-item">
               <label>Key</label>
               <el-input v-model="selectedNode.redisGetConfig.key" size="small" placeholder="如 user:${'${input_id}'}（支持 ${'${变量}'} 模板）" />
             </div>
             <div class="prop-item">
-              <label>输出变量</label>
-              <el-select v-model="selectedNode.redisGetConfig.output" size="small" style="width:100%" clearable placeholder="取值写入变量">
-                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
-              </el-select>
+              <label>输出目标</label>
+              <div style="display:flex;gap:4px">
+                <el-select v-model="selectedNode.redisGetConfig.outputTargetType" size="small" style="width:90px;flex-shrink:0">
+                  <el-option value="VARIABLE" label="变量" />
+                  <el-option value="OUTPUT" label="出参" />
+                  <el-option value="INPUT" label="入参" />
+                </el-select>
+                <el-select v-model="selectedNode.redisGetConfig.output" :placeholder="redisOutputPlaceholder(selectedNode.redisGetConfig.outputTargetType)" size="small" style="flex:1" clearable>
+                  <template v-if="selectedNode.redisGetConfig.outputTargetType === 'VARIABLE'">
+                    <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                  </template>
+                  <template v-else-if="selectedNode.redisGetConfig.outputTargetType === 'OUTPUT'">
+                    <el-option v-for="p in flowOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </template>
+                  <template v-else>
+                    <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </template>
+                </el-select>
+              </div>
             </div>
           </template>
 
@@ -447,13 +468,27 @@
             <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('REDIS_SET')">帮助</el-button></div>
             <div class="prop-tip">Redis 设置节点：写入 key-value（对象自动序列化为 JSON 字符串），可设过期秒数，结果写入输出变量。</div>
             <div class="prop-item">
+              <label>Redis 实例</label>
+              <el-select v-model="selectedNode.redisSetConfig.redisId" size="small" style="width:100%" clearable placeholder="默认实例">
+                <el-option v-for="r in redisConfigs" :key="r.id" :value="r.id" :label="`${r.configName}${r.isDefault ? '(默认)' : ''}`" />
+              </el-select>
+            </div>
+            <div class="prop-item">
               <label>Key</label>
               <el-input v-model="selectedNode.redisSetConfig.key" size="small" placeholder="如 session:${'${input_token}'}（支持 ${'${变量}'} 模板）" />
             </div>
             <div class="prop-item">
               <label>值变量</label>
-              <el-select v-model="selectedNode.redisSetConfig.value" size="small" style="width:100%" clearable placeholder="写入的变量">
-                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              <el-select v-model="selectedNode.redisSetConfig.value" size="small" style="width:100%" clearable placeholder="写入的变量（入参/中间变量/出参）">
+                <el-option-group label="流程入参">
+                  <el-option v-for="p in flowInputParams" :key="'i'+p.paramCode" :value="'input_'+p.paramCode" :label="`input_${p.paramCode}`" />
+                </el-option-group>
+                <el-option-group label="中间变量">
+                  <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                </el-option-group>
+                <el-option-group label="流程出参">
+                  <el-option v-for="p in flowOutputParams" :key="'o'+p.paramCode" :value="'output_'+p.paramCode" :label="`output_${p.paramCode}`" />
+                </el-option-group>
               </el-select>
             </div>
             <div class="prop-item">
@@ -465,6 +500,107 @@
               <el-select v-model="selectedNode.redisSetConfig.output" size="small" style="width:100%" clearable placeholder="是否成功(true/false)写入变量">
                 <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
               </el-select>
+            </div>
+          </template>
+
+          <!-- KB_SEARCH 知识库检索节点属性 -->
+          <template v-if="selectedNode.elementType === 'KB_SEARCH'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('KB_SEARCH')">帮助</el-button></div>
+            <div class="prop-tip">知识库检索节点：按查询内容检索知识库相关片段，拼接为上下文文本写入输出变量（供 AI 节点做 RAG 问答）。</div>
+            <div class="prop-item">
+              <label>知识库</label>
+              <el-select v-model="selectedNode.kbSearchConfig.kbId" size="small" style="width:100%" clearable placeholder="选择知识库">
+                <el-option v-for="k in kbList" :key="k.id" :value="k.id" :label="`${k.kbName} (片段${k.chunkCount})`" />
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>查询内容</label>
+              <el-input v-model="selectedNode.kbSearchConfig.query" size="small" placeholder="如 ${'${input_question}'}（支持 ${'${变量}'} 模板）" />
+            </div>
+            <div class="prop-item">
+              <label>返回片段数</label>
+              <el-input-number v-model="selectedNode.kbSearchConfig.topK" size="small" :min="1" :max="20" style="width:100%" />
+            </div>
+            <div class="prop-item">
+              <label>输出变量</label>
+              <el-select v-model="selectedNode.kbSearchConfig.output" size="small" style="width:100%" clearable placeholder="检索上下文写入变量">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+          </template>
+
+          <!-- DATA_EXTRACT 数据提取节点属性 -->
+          <template v-if="selectedNode.elementType === 'DATA_EXTRACT'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('DATA_EXTRACT')">帮助</el-button></div>
+            <div class="prop-tip">数据提取节点：从输入文本中提取内容（JSON / 代码块 / 关键字 / 起止标志 / 长度截取），写入输出目标。</div>
+            <div class="prop-item">
+              <label>输入变量</label>
+              <el-select v-model="selectedNode.dataExtractConfig.input" size="small" style="width:100%" clearable placeholder="选择输入变量">
+                <el-option-group label="流程入参">
+                  <el-option v-for="p in flowInputParams" :key="'i'+p.paramCode" :value="'input_'+p.paramCode" :label="`input_${p.paramCode}`" />
+                </el-option-group>
+                <el-option-group label="中间变量">
+                  <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                </el-option-group>
+                <el-option-group label="流程出参">
+                  <el-option v-for="p in flowOutputParams" :key="'o'+p.paramCode" :value="'output_'+p.paramCode" :label="`output_${p.paramCode}`" />
+                </el-option-group>
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>提取类型</label>
+              <el-select v-model="selectedNode.dataExtractConfig.extractType" size="small" style="width:100%">
+                <el-option value="json" label="JSON（首个对象/数组）" />
+                <el-option value="code" label="代码块（```...```）" />
+                <el-option value="keyword" label="关键字后内容" />
+                <el-option value="between" label="开始/结束标志之间" />
+                <el-option value="length" label="长度截取" />
+              </el-select>
+            </div>
+            <div class="prop-item" v-if="selectedNode.dataExtractConfig.extractType === 'keyword'">
+              <label>关键字</label>
+              <el-input v-model="selectedNode.dataExtractConfig.keyword" size="small" placeholder="如 订单号（提取关键字之后到行尾的内容）" />
+            </div>
+            <template v-if="selectedNode.dataExtractConfig.extractType === 'between'">
+              <div class="prop-item">
+                <label>开始标志</label>
+                <el-input v-model="selectedNode.dataExtractConfig.startFlag" size="small" placeholder="如 <result>" />
+              </div>
+              <div class="prop-item">
+                <label>结束标志</label>
+                <el-input v-model="selectedNode.dataExtractConfig.endFlag" size="small" placeholder="如 </result>（留空到结尾）" />
+              </div>
+            </template>
+            <template v-if="selectedNode.dataExtractConfig.extractType === 'length'">
+              <div class="prop-item">
+                <label>偏移</label>
+                <el-input-number v-model="selectedNode.dataExtractConfig.offset" size="small" :min="0" style="width:100%" />
+              </div>
+              <div class="prop-item">
+                <label>长度</label>
+                <el-input-number v-model="selectedNode.dataExtractConfig.length" size="small" :min="0" style="width:100%" placeholder="0=到结尾" />
+              </div>
+            </template>
+            <div class="prop-item">
+              <label>输出目标</label>
+              <div style="display:flex;gap:4px">
+                <el-select v-model="selectedNode.dataExtractConfig.outputTargetType" size="small" style="width:90px;flex-shrink:0">
+                  <el-option value="VARIABLE" label="变量" />
+                  <el-option value="OUTPUT" label="出参" />
+                  <el-option value="INPUT" label="入参" />
+                </el-select>
+                <el-select v-model="selectedNode.dataExtractConfig.output" :placeholder="aiOutputPlaceholder(selectedNode.dataExtractConfig.outputTargetType)" size="small" style="flex:1" clearable>
+                  <template v-if="selectedNode.dataExtractConfig.outputTargetType === 'VARIABLE'">
+                    <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                  </template>
+                  <template v-else-if="selectedNode.dataExtractConfig.outputTargetType === 'OUTPUT'">
+                    <el-option v-for="p in flowOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </template>
+                  <template v-else>
+                    <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </template>
+                </el-select>
+              </div>
             </div>
           </template>
 
@@ -1818,6 +1954,27 @@ function onAiNodeProviderChange() {
 function aiOutputPlaceholder(targetType: string) {
   return targetType === 'OUTPUT' ? '选择输出参数' : targetType === 'INPUT' ? '选择入参' : '选择变量'
 }
+function redisOutputPlaceholder(targetType: string) {
+  return aiOutputPlaceholder(targetType)
+}
+
+// ====== Redis 实例列表 / 知识库列表（节点配置用） ======
+const redisConfigs = ref<any[]>([])
+const kbList = ref<any[]>([])
+
+async function loadRedisConfigs() {
+  try {
+    const res: any = await request.get('/system/redis/list')
+    redisConfigs.value = res.data || []
+  } catch { redisConfigs.value = [] }
+}
+
+async function loadKbList() {
+  try {
+    const res: any = await request.get('/kb/list')
+    kbList.value = res.data || []
+  } catch { kbList.value = [] }
+}
 
 /** 构建可用接口清单（供 AI 选择编排） */
 function buildAiApiContext(): any[] {
@@ -2138,6 +2295,59 @@ REDIS_SET 节点:
       { title: '三、注意事项', code: `1. 需在系统设置 → Redis 配置中填写连接信息
 2. 连接失败（Redis 不可用）时节点报错、流程失败
 3. 值变量不存在时写入空字符串` }
+    ]
+  },
+  KB_SEARCH: {
+    title: '知识库检索节点',
+    sections: [
+      { title: '一、节点说明', code: `从知识库（主菜单 → 知识库）检索相关片段，拼接为上下文文本写入输出变量：
+- 文本检索：中文二元组 + 英文单词关键词评分
+- 向量检索：embeddings 接口向量化 + 余弦相似度（知识库配置中切换）
+- 典型用途：AI 节点 RAG 问答（检索结果作为 AI 节点输入）` },
+      { title: '二、使用 demo', code: `// 场景：基于产品知识库的智能问答流程
+KB_SEARCH 节点:
+  知识库:    产品知识库
+  查询内容:  ${'${input_question}'}
+  返回片段数: 5
+  输出变量:  env_context
+
+AI 节点:
+  输入变量:    env_context
+  系统提示词:  你是客服助手，仅根据提供的资料回答用户问题：
+              ${'${env_context}'}
+  输出目标:    出参 answer` },
+      { title: '三、注意事项', code: `1. 知识库在「主菜单 → 知识库」中创建与维护（文档上传/手动片段）
+2. 查询内容支持 ${'${变量}'} 模板，可直接引用流程入参
+3. 检索自动记录匹配日志（知识库详情页可查）` }
+    ]
+  },
+  DATA_EXTRACT: {
+    title: '数据提取节点',
+    sections: [
+      { title: '一、节点说明', code: `从输入文本中提取内容，提取类型：
+- json    → 首个 JSON 对象/数组（解析为对象写入）
+- code    → 代码块内容（反引号三个 ... 反引号三个 之间）
+- keyword → 关键字之后到行尾的内容（自动跳过 : ：= 空格分隔符）
+- between → 开始标志与结束标志之间的内容
+- length  → 按偏移与长度截取` },
+      { title: '二、使用 demo', code: `// 场景：从 AI 回复中提取 JSON 结果
+前置 AI 节点输出 env_reply = '结果是 {"status":"ok","data":123}'
+
+DATA_EXTRACT 节点:
+  输入变量:  env_reply
+  提取类型:  json
+  输出目标:  出参 result
+
+条件节点: result.status == 'ok'
+
+// 场景：提取"订单号：A12345"中的单号
+提取类型: keyword，关键字: 订单号 → 输出 "A12345"
+
+// 场景：提取 <name>张三</name>
+提取类型: between，开始: <name>，结束: </name> → "张三"` },
+      { title: '三、注意事项', code: `1. json 提取失败（非 JSON 文本）时输出原文
+2. 关键字/标志未找到时输出空字符串
+3. 输入支持流程入参(input_)、中间变量、出参(output_)` }
     ]
   },
   TRANSFORM: {
@@ -2568,7 +2778,7 @@ function onPaneClick() {
 
 // 让容器获取焦点（以便接收键盘事件）
 onMounted(async () => {
-  await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources(), loadStaticVariables(), loadPublishedFlows(), loadObjects()])
+  await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources(), loadStaticVariables(), loadPublishedFlows(), loadObjects(), loadRedisConfigs(), loadKbList()])
   nextTick(() => { containerRef.value?.focus() })
 })
 
@@ -2989,7 +3199,8 @@ function nodeIcon(type: string) {
     START: '▶', END: '⏹', METHOD: '⚙', CONDITION: '◆',
     ASSIGN: '←', CODE: '{ }', MYSQL: '⊕', MERGE: '⇒', SUB_FLOW: '⬡',
     LOOP: '↻', DELAY: '⏱', PARALLEL: '∥', NOTIFY: '✉', TRANSFORM: '📝', AI: '🤖',
-    FILE_PARSE: '📄', EXCEL_READ: '📊', FILE_WRITE: '💾', REDIS_GET: '🔎', REDIS_SET: '🔏'
+    FILE_PARSE: '📄', EXCEL_READ: '📊', FILE_WRITE: '💾', REDIS_GET: '🔎', REDIS_SET: '🔏',
+    KB_SEARCH: '📚', DATA_EXTRACT: '✂️'
   }
   return map[type] || '?'
 }
@@ -3000,7 +3211,7 @@ function nodeTypeName(type: string) {
     ASSIGN: '赋值', CODE: '代码', MYSQL: '数据库', MERGE: '聚合', SUB_FLOW: '子流程',
     LOOP: '循环', DELAY: '延迟', PARALLEL: '并行', NOTIFY: '通知', TRANSFORM: '模板转换', AI: '大模型',
     FILE_PARSE: '文件解析', EXCEL_READ: 'Excel读取', FILE_WRITE: '文件写入',
-    REDIS_GET: 'Redis查询', REDIS_SET: 'Redis设置'
+    REDIS_GET: 'Redis查询', REDIS_SET: 'Redis设置', KB_SEARCH: '知识库检索', DATA_EXTRACT: '数据提取'
   }
   return map[type] || type
 }
@@ -3027,6 +3238,8 @@ const nodeToolList = [
   { type: 'FILE_WRITE', icon: '💾', label: '文件写入' },
   { type: 'REDIS_GET', icon: '🔎', label: 'Redis查询' },
   { type: 'REDIS_SET', icon: '🔏', label: 'Redis设置' },
+  { type: 'KB_SEARCH', icon: '📚', label: '知识库检索' },
+  { type: 'DATA_EXTRACT', icon: '✂️', label: '数据提取' },
 ]
 
 function addNode(type: string) {
@@ -3089,10 +3302,17 @@ function addNode(type: string) {
     content: '', fileName: '', fileType: 'text', output: ''
   }
   if (type === 'REDIS_GET') bNode.redisGetConfig = {
-    key: '', output: ''
+    key: '', output: '', redisId: 0, outputTargetType: 'VARIABLE'
   }
   if (type === 'REDIS_SET') bNode.redisSetConfig = {
-    key: '', value: '', expireSeconds: 0, output: ''
+    key: '', value: '', expireSeconds: 0, output: '', redisId: 0
+  }
+  if (type === 'KB_SEARCH') bNode.kbSearchConfig = {
+    kbId: 0, query: '', topK: 5, output: ''
+  }
+  if (type === 'DATA_EXTRACT') bNode.dataExtractConfig = {
+    input: '', extractType: 'json', keyword: '', startFlag: '', endFlag: '',
+    offset: 0, length: 0, output: '', outputTargetType: 'VARIABLE'
   }
 
   businessNodes.value.push(bNode)

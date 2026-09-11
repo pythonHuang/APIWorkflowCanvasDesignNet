@@ -53,6 +53,9 @@ public class FlowNode
     [JsonPropertyName("kbSearchConfig")]
     public KbSearchConfig? KbSearchConfig { get; set; }
 
+    [JsonPropertyName("dataExtractConfig")]
+    public DataExtractConfig? DataExtractConfig { get; set; }
+
     [JsonPropertyName("redisSetConfig")]
     public RedisSetConfig? RedisSetConfig { get; set; }
 
@@ -401,6 +404,46 @@ public class KbSearchConfig
     /// <summary>输出变量（检索片段拼接的上下文文本）</summary>
     [JsonPropertyName("output")]
     public string Output { get; set; } = "";
+}
+
+/// <summary>数据提取节点配置（DATA_EXTRACT 节点）</summary>
+public class DataExtractConfig
+{
+    /// <summary>输入变量（流程入参/中间变量/出参）</summary>
+    [JsonPropertyName("input")]
+    public string Input { get; set; } = "";
+
+    /// <summary>提取类型：json / code / keyword / between / length</summary>
+    [JsonPropertyName("extractType")]
+    public string ExtractType { get; set; } = "json";
+
+    /// <summary>关键字（keyword 类型）</summary>
+    [JsonPropertyName("keyword")]
+    public string Keyword { get; set; } = "";
+
+    /// <summary>开始标志（between 类型）</summary>
+    [JsonPropertyName("startFlag")]
+    public string StartFlag { get; set; } = "";
+
+    /// <summary>结束标志（between 类型，空=到结尾）</summary>
+    [JsonPropertyName("endFlag")]
+    public string EndFlag { get; set; } = "";
+
+    /// <summary>偏移（length 类型）</summary>
+    [JsonPropertyName("offset")]
+    public int Offset { get; set; }
+
+    /// <summary>长度（length 类型，0=到结尾）</summary>
+    [JsonPropertyName("length")]
+    public int Length { get; set; }
+
+    /// <summary>输出目标名</summary>
+    [JsonPropertyName("output")]
+    public string Output { get; set; } = "";
+
+    /// <summary>输出目标类型：VARIABLE / OUTPUT / INPUT</summary>
+    [JsonPropertyName("outputTargetType")]
+    public string OutputTargetType { get; set; } = "VARIABLE";
 }
 
 /// <summary>MySQL 节点配置（MYSQL 节点）</summary>
