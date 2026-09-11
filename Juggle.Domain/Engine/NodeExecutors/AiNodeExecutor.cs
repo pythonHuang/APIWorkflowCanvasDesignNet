@@ -11,8 +11,13 @@ public record AiChatRequest(string SystemPrompt, string UserInput, List<string> 
 public class AiNodeExecutor : INodeExecutor
 {
     private readonly Func<AiChatRequest, Task<string>> _chat;
+    private readonly Func<List<long>, Task<string>>? _skillResolver;
 
-    public AiNodeExecutor(Func<AiChatRequest, Task<string>> chat) => _chat = chat;
+    public AiNodeExecutor(Func<AiChatRequest, Task<string>> chat, Func<List<long>, Task<string>>? skillResolver = null)
+    {
+        _chat = chat;
+        _skillResolver = skillResolver;
+    }
 
     public async Task<string?> ExecuteAsync(FlowNode node, FlowContext context)
     {
@@ -21,6 +26,19 @@ public class AiNodeExecutor : INodeExecutor
 
         var input = string.IsNullOrWhiteSpace(cfg.Input) ? "" : context.GetVariable(cfg.Input)?.ToString() ?? "";
         var systemPrompt = string.IsNullOrWhiteSpace(cfg.SystemPrompt) ? "你是一个智能助手。" : cfg.SystemPrompt;
+
+        // 已勾选技能：内容拼入系统提示词
+        var skillIds = new List<long>();
+        foreach (var s in (cfg.Skills ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (long.TryParse(s, out var id)) skillIds.Add(id);
+        }
+        if (skillIds.Count > 0 && _skillResolver != null)
+        {
+            var skillsText = await _skillResolver(skillIds);
+            if (!string.IsNullOrWhiteSpace(skillsText))
+                systemPrompt = skillsText + "\n\n" + systemPrompt;
+        }
 
         // 图片输入（视觉模型识别）
         var images = new List<string>();

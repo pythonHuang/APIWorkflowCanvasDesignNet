@@ -321,6 +321,14 @@
                 placeholder="如：你是一名专业的文案专家，根据用户输入生成简洁有力的文案。" />
             </div>
             <div class="prop-item">
+              <label>技能 Skills</label>
+              <el-select v-model="skillIdsModel" size="small" style="width:100%" multiple collapse-tags collapse-tags-tooltip
+                clearable placeholder="勾选要附加的技能（执行时拼入系统提示词）">
+                <el-option v-for="s in skillList" :key="s.id" :label="`${s.skillName}（${s.groupName}）`" :value="s.id" />
+              </el-select>
+              <div style="font-size:11px;color:#909399;margin-top:4px">技能在 系统设置 → Skill 管理 中维护；执行时按「技能名 + 内容」拼入系统提示词。</div>
+            </div>
+            <div class="prop-item">
               <label>输出目标</label>
               <div style="display:flex;gap:4px">
                 <el-select v-model="selectedNode.aiConfig.outputTargetType" size="small" style="width:90px;flex-shrink:0">
@@ -1958,9 +1966,26 @@ function redisOutputPlaceholder(targetType: string) {
   return aiOutputPlaceholder(targetType)
 }
 
-// ====== Redis 实例列表 / 知识库列表（节点配置用） ======
+// ====== Redis 实例列表 / 知识库列表 / 技能列表（节点配置用） ======
 const redisConfigs = ref<any[]>([])
 const kbList = ref<any[]>([])
+const skillList = ref<any[]>([])
+
+// AI 节点 skills 多选（aiConfig.skills 逗号分隔字符串 ↔ 数组）
+const skillIdsModel = computed({
+  get: () => (selectedNode.value?.aiConfig?.skills || '')
+    .split(',').map((s: string) => s.trim()).filter(Boolean).map(Number),
+  set: (ids: number[]) => {
+    if (selectedNode.value?.aiConfig) selectedNode.value.aiConfig.skills = ids.join(',')
+  }
+})
+
+async function loadSkillList() {
+  try {
+    const res: any = await request.get('/skill/list', { params: { enabled: 1 } })
+    skillList.value = res.data || []
+  } catch { skillList.value = [] }
+}
 
 async function loadRedisConfigs() {
   try {
@@ -2778,7 +2803,7 @@ function onPaneClick() {
 
 // 让容器获取焦点（以便接收键盘事件）
 onMounted(async () => {
-  await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources(), loadStaticVariables(), loadPublishedFlows(), loadObjects(), loadRedisConfigs(), loadKbList()])
+  await Promise.all([loadFlowInfo(), loadSuiteApis(), loadDataSources(), loadStaticVariables(), loadPublishedFlows(), loadObjects(), loadRedisConfigs(), loadKbList(), loadSkillList()])
   nextTick(() => { containerRef.value?.focus() })
 })
 

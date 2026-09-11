@@ -23,6 +23,8 @@ public class FlowEngine
     private readonly Dictionary<long, string> _redisConnStrs;
     /// <summary>知识库检索函数（kbId, query, topK → 上下文文本），供 KB_SEARCH 节点使用</summary>
     private readonly Func<long, string, int, Task<string>>? _kbSearchFunc;
+    /// <summary>技能解析函数（技能ID列表 → 拼接的提示词文本），供 AI 节点 skills 使用</summary>
+    private readonly Func<List<long>, Task<string>>? _skillResolver;
 
     public FlowEngine(IHttpClientFactory httpClientFactory,
                       Dictionary<string, DataSourceInfo>? dataSources = null,
@@ -30,7 +32,8 @@ public class FlowEngine
                       Func<string, Task<string?>>? flowContentLoader = null,
                       Func<AiChatRequest, Task<string>>? aiChatFunc = null,
                       Dictionary<long, string>? redisConnStrs = null,
-                      Func<long, string, int, Task<string>>? kbSearchFunc = null)
+                      Func<long, string, int, Task<string>>? kbSearchFunc = null,
+                      Func<List<long>, Task<string>>? skillResolver = null)
     {
         _httpClientFactory  = httpClientFactory;
         _dataSources        = dataSources ?? new();
@@ -39,6 +42,7 @@ public class FlowEngine
         _aiChatFunc         = aiChatFunc;
         _redisConnStrs      = redisConnStrs ?? new();
         _kbSearchFunc       = kbSearchFunc;
+        _skillResolver      = skillResolver;
     }
 
     /// <summary>解析 Redis 连接串（按实例 ID，0=默认实例）；未配置时返回 null。</summary>
@@ -169,7 +173,8 @@ public class FlowEngine
                 "NOTIFY"        => new NotifyNodeExecutor(_httpClientFactory),
                 "TRANSFORM"     => new TransformNodeExecutor(),
                 "AI"            => new AiNodeExecutor(
-                    _aiChatFunc ?? throw new InvalidOperationException("流程引擎未接入大模型，无法执行 AI 节点")),
+                    _aiChatFunc ?? throw new InvalidOperationException("流程引擎未接入大模型，无法执行 AI 节点"),
+                    _skillResolver),
                 "FILE_PARSE"    => new FileParseNodeExecutor(_aiChatFunc),
                 "EXCEL_READ"    => new ExcelReadNodeExecutor(),
                 "FILE_WRITE"    => new FileWriteNodeExecutor(),

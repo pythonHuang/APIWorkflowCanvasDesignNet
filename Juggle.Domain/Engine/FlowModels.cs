@@ -300,6 +300,10 @@ public class AiConfig
     /// <summary>模型名（空=供应商默认模型）</summary>
     [JsonPropertyName("model")]
     public string Model { get; set; } = "";
+
+    /// <summary>技能 ID 列表（逗号分隔，执行时技能内容拼入系统提示词）</summary>
+    [JsonPropertyName("skills")]
+    public string Skills { get; set; } = "";
 }
 
 /// <summary>文件解析节点配置（FILE_PARSE 节点）</summary>

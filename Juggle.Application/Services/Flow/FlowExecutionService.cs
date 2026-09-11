@@ -47,7 +47,24 @@ public class FlowExecutionService
         return map;
     }
 
-    /// <summary>构建引擎（注入大模型对话/视觉函数、Redis 多实例连接与知识库检索，供 AI/文件解析/Redis/KB_SEARCH 节点使用）。</summary>
+    /// <summary>按技能 ID 列表拼接技能提示词（AI 节点 skills 使用）。</summary>
+    private async Task<string> BuildSkillsPromptAsync(List<long> ids)
+    {
+        var skills = await _db.Skills
+            .Where(s => ids.Contains(s.Id) && s.Deleted == 0 && s.Enabled == 1)
+            .ToListAsync();
+        if (skills.Count == 0) return "";
+        var sb = new System.Text.StringBuilder();
+        foreach (var s in skills)
+        {
+            sb.AppendLine($"## 技能：{s.SkillName}");
+            sb.AppendLine(s.Content);
+            sb.AppendLine();
+        }
+        return sb.ToString().Trim();
+    }
+
+    /// <summary>构建引擎（注入大模型对话/视觉函数、Redis 多实例连接、知识库检索与技能解析，供 AI/文件解析/Redis/KB_SEARCH 节点使用）。</summary>
     private async Task<FlowEngine> BuildEngineAsync(Dictionary<string, DataSourceInfo> dsInfos,
         Dictionary<string, string?> staticVars, Func<string, Task<string?>> flowContentLoader)
         => new FlowEngine(_httpClientFactory, dsInfos, staticVars, flowContentLoader,
@@ -55,7 +72,8 @@ public class FlowExecutionService
                 ? _aiService.ChatWithImagesAsync(req.SystemPrompt, req.UserInput, req.Images, req.ProviderId, req.Model)
                 : _aiService.ChatAsync(req.SystemPrompt, req.UserInput, req.ProviderId, modelOverride: req.Model),
             redisConnStrs: await GetRedisConnStrsAsync(),
-            kbSearchFunc: (kbId, query, topK) => _kbService.SearchAsContextAsync(kbId, query, topK));
+            kbSearchFunc: (kbId, query, topK) => _kbService.SearchAsContextAsync(kbId, query, topK),
+            skillResolver: BuildSkillsPromptAsync);
 
     // ────────────────────────────────────────────────────────────────
     // 数据源

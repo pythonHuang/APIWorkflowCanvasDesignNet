@@ -93,6 +93,7 @@
             <el-menu-item index="/system/config" v-if="hasMenu('/system/config')">系统配置</el-menu-item>
             <el-menu-item index="/system/ai-provider" v-if="hasMenu('/system/config')">大模型设置</el-menu-item>
           <el-menu-item index="/system/redis" v-if="hasMenu('/system/config')">Redis 配置</el-menu-item>
+          <el-menu-item index="/system/skills" v-if="hasMenu('/system/config')">Skill 管理</el-menu-item>
             <el-menu-item index="/system/login-log" v-if="hasMenu('/system/login-log')">登录日志</el-menu-item>
             <el-menu-item index="/system/audit-log" v-if="hasMenu('/system/audit-log')">审计日志</el-menu-item>
           </el-sub-menu>
