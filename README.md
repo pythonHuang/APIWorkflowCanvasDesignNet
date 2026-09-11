@@ -87,6 +87,14 @@ docker-compose up -d
 
 自定义助手支持**多轮对话**：聊天界面气泡消息、完整历史上下文、结束对话时按输出参数生成最终 JSON 结果、开启新对话与历史记录查看。
 
+#### 自定义助手使用流程
+
+1. **创建助手**：模型助手管理 → 添加助手，配置名称、描述、系统提示词（人设与任务说明）、输入参数（运行页表单）、输出参数（结束对话时按 JSON 解析展示）、辅助提问词（快捷按钮清单），启用后自动出现在「模型助手」菜单
+2. **开始对话**：点击菜单进入助手运行页，填写输入参数（按类型渲染：文本/数字/日期/开关/下拉），点击「开始对话」
+3. **多轮提问**：聊天框输入消息回车发送，每一轮都携带完整对话历史；辅助提问词按钮一键填入常用提问，可多轮追问
+4. **结束对话**：点击「结束对话」，模型基于完整对话生成最终结果 — 配置了输出参数时按 JSON 解析并在「最终结果」面板分栏展示，否则直接结束
+5. **历史记录**：顶部「历史」打开抽屉，查看该助手的全部会话（进行中/已结束），可继续未结束的对话、查看已结束会话的最终结果或删除；「新对话」随时重新开始
+
 ### 流程设计器内 AI 生成
 
 流程设计器工具栏同样提供「AI 生成」按钮，例如：
@@ -345,6 +353,14 @@ The "AI Assistants" menu provides four assistants:
 | **Report Assistant** | Describe report needs → auto-generates datasets (reuses data views / data sources / flows / APIs), query params, layout (aggregates & formulas) → preview, then confirm to create the report |
 
 Custom assistants support **multi-turn conversations**: chat bubbles, full history context, end-conversation to produce final JSON results from output params, new conversation and history viewing.
+
+#### Custom Assistant Workflow
+
+1. **Create**: AI Assistant Management → add an assistant with name, description, system prompt, input params (rendered as a form on the run page), output params (parsed from JSON on end), and quick-prompt buttons; enabled assistants appear in the "AI Assistants" menu automatically
+2. **Start**: open the assistant run page from the menu, fill in the input params (typed inputs: text/number/date/switch/select) and click "Start Conversation"
+3. **Multi-turn chat**: type and send messages — every round carries the full history; quick-prompt buttons fill common questions in one click; ask follow-ups freely
+4. **End**: click "End Conversation" — the model produces the final result from the whole conversation; with output params configured it returns JSON shown in the "Final Result" panel
+5. **History**: the "History" drawer lists all conversations (ongoing / ended) — resume unfinished ones, review final outputs of ended ones, or delete; "New Conversation" restarts anytime
 
 ### In-Designer AI Generation
 
