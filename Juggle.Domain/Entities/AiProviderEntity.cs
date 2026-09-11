@@ -24,6 +24,9 @@ public class AiProviderEntity : BaseEntity
     /// <summary>是否启用：1=启用 0=禁用</summary>
     public int Enabled { get; set; } = 1;
 
+    /// <summary>支持的能力（JSON: {skills:[id], apis:[methodCode], flows:[flowKey], tools:[工具名]}）</summary>
+    public string? Capabilities { get; set; }
+
     /// <summary>备注</summary>
     public string? Remark { get; set; }
 }

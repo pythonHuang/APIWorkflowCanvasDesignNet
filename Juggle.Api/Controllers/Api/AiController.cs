@@ -101,6 +101,7 @@ public class AiController : ControllerBase
         entity.Model = req.Model;
         entity.Models = req.Models;
         entity.Enabled = req.Enabled ? 1 : 0;
+        entity.Capabilities = req.Capabilities;
         entity.Remark = req.Remark;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
@@ -446,6 +447,7 @@ public class AiProviderSaveRequest
     public string ApiKey { get; set; } = "";
     public string Model { get; set; } = "";
     public string Models { get; set; } = "";
+    public string? Capabilities { get; set; }
     public bool Enabled { get; set; } = true;
     public string? Remark { get; set; }
 }

@@ -113,6 +113,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Model).HasColumnName("model");
             e.Property(p => p.Models).HasColumnName("models");
             e.Property(p => p.Enabled).HasColumnName("enabled");
+            e.Property(p => p.Capabilities).HasColumnName("capabilities");
             e.Property(p => p.Remark).HasColumnName("remark");
         });
         modelBuilder.Entity<AiAssistantEntity>().ToTable("t_ai_assistant");

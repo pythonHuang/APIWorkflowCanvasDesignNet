@@ -57,6 +57,32 @@
             <el-option v-for="m in fetchedModels" :key="m" :label="m" :value="m" />
           </el-select>
         </el-form-item>
+        <el-form-item label="支持的能力">
+          <div style="width:100%">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <span style="width:40px;font-size:12px;color:#666">Skills</span>
+              <el-select v-model="capSkills" size="small" style="flex:1" multiple collapse-tags collapse-tags-tooltip clearable placeholder="勾选该模型支持的技能">
+                <el-option v-for="s in skillOptions" :key="s.id" :label="`${s.skillName}（${s.groupName}）`" :value="s.id" />
+              </el-select>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <span style="width:40px;font-size:12px;color:#666">接口</span>
+              <el-select v-model="capApis" size="small" style="flex:1" multiple collapse-tags collapse-tags-tooltip filterable clearable placeholder="勾选该模型可调用的接口">
+                <el-option v-for="a in apiOptions" :key="a.methodCode" :label="`${a.methodName}（${a.methodCode}）`" :value="a.methodCode" />
+              </el-select>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <span style="width:40px;font-size:12px;color:#666">流程</span>
+              <el-select v-model="capFlows" size="small" style="flex:1" multiple collapse-tags collapse-tags-tooltip filterable clearable placeholder="勾选该模型可调用的流程">
+                <el-option v-for="f in flowOptions" :key="f.flowKey" :label="`${f.flowName}（${f.flowKey}）`" :value="f.flowKey" />
+              </el-select>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span style="width:40px;font-size:12px;color:#666">工具</span>
+              <el-input v-model="capTools" size="small" style="flex:1" placeholder="逗号分隔的工具名（如 web_search, calculator）" />
+            </div>
+          </div>
+        </el-form-item>
         <el-form-item label="启用"><el-switch v-model="form.enabled" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" /></el-form-item>
       </el-form>
@@ -83,6 +109,48 @@ const selectedModels = ref<string[]>([])
 const testingConfig = ref(false)
 const testMsg = ref('')
 const testOk = ref(false)
+// 支持的能力
+const capSkills = ref<number[]>([])
+const capApis = ref<string[]>([])
+const capFlows = ref<string[]>([])
+const capTools = ref('')
+const skillOptions = ref<any[]>([])
+const apiOptions = ref<any[]>([])
+const flowOptions = ref<any[]>([])
+
+async function loadCapabilityOptions() {
+  try {
+    const [skillRes, suiteRes, flowRes]: any[] = await Promise.all([
+      request.get('/skill/list', { params: { enabled: 1 } }),
+      request.get('/suite/list'),
+      request.post('/flow/definition/page', { pageNum: 1, pageSize: 500 })
+    ])
+    skillOptions.value = skillRes.data || []
+    flowOptions.value = flowRes.data?.list || []
+    const suites = suiteRes.data || []
+    apiOptions.value = []
+    for (const s of suites) {
+      try {
+        const apisRes: any = await request.post('/suite/api/list', { suiteCode: s.suiteCode })
+        for (const a of (apisRes.data || [])) {
+          apiOptions.value.push({ methodCode: a.methodCode, methodName: a.methodName })
+        }
+      } catch { /* 忽略单个套件失败 */ }
+    }
+  } catch { /* 忽略 */ }
+}
+
+function parseCapabilities(json: string) {
+  try {
+    const c = JSON.parse(json || '{}')
+    capSkills.value = c.skills || []
+    capApis.value = c.apis || []
+    capFlows.value = c.flows || []
+    capTools.value = (c.tools || []).join(',')
+  } catch {
+    capSkills.value = []; capApis.value = []; capFlows.value = []; capTools.value = ''
+  }
+}
 
 // 预置供应商（选择后自动填默认接口地址）
 const presetProviders = [
@@ -108,15 +176,19 @@ function openAdd() {
   form.value = { id: 0, providerName: '', baseUrl: '', apiKey: '', model: '', models: '', enabled: true, remark: '' }
   fetchedModels.value = []
   selectedModels.value = []
+  parseCapabilities('')
   testMsg.value = ''
   dialogVisible.value = true
+  loadCapabilityOptions()
 }
 function openEdit(row: any) {
   form.value = { ...row, enabled: row.enabled === 1 }
   fetchedModels.value = String(row.models || '').split(',').map((s: string) => s.trim()).filter(Boolean)
   selectedModels.value = [...fetchedModels.value]
+  parseCapabilities(row.capabilities || '')
   testMsg.value = ''
   dialogVisible.value = true
+  loadCapabilityOptions()
 }
 
 /** 选择预置供应商 → 自动填接口地址默认值 */
@@ -150,6 +222,12 @@ async function doFetchModels() {
 
 async function doSave() {
   form.value.models = selectedModels.value.join(',')
+  form.value.capabilities = JSON.stringify({
+    skills: capSkills.value,
+    apis: capApis.value,
+    flows: capFlows.value,
+    tools: capTools.value.split(',').map((s: string) => s.trim()).filter(Boolean)
+  })
   await request.post('/ai/provider/save', form.value)
   ElMessage.success('保存成功')
   dialogVisible.value = false

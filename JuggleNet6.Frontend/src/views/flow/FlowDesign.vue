@@ -324,7 +324,7 @@
               <label>技能 Skills</label>
               <el-select v-model="skillIdsModel" size="small" style="width:100%" multiple collapse-tags collapse-tags-tooltip
                 clearable placeholder="勾选要附加的技能（执行时拼入系统提示词）">
-                <el-option v-for="s in skillList" :key="s.id" :label="`${s.skillName}（${s.groupName}）`" :value="s.id" />
+                <el-option v-for="s in aiNodeSkillOptions" :key="s.id" :label="`${s.skillName}（${s.groupName}）`" :value="s.id" />
               </el-select>
               <div style="font-size:11px;color:#909399;margin-top:4px">技能在 系统设置 → Skill 管理 中维护；执行时按「技能名 + 内容」拼入系统提示词。</div>
             </div>
@@ -1978,6 +1978,18 @@ const skillIdsModel = computed({
   set: (ids: number[]) => {
     if (selectedNode.value?.aiConfig) selectedNode.value.aiConfig.skills = ids.join(',')
   }
+})
+
+// 按所选供应商的"支持的能力"过滤技能列表（供应商配置了 skills 时只显示其支持的）
+const aiNodeSkillOptions = computed(() => {
+  const provider = aiProviders.value.find((p: any) => p.id === (selectedNode.value?.aiConfig?.providerId || 0))
+  try {
+    const caps = JSON.parse(provider?.capabilities || '{}')
+    if (Array.isArray(caps.skills) && caps.skills.length > 0) {
+      return skillList.value.filter((s: any) => caps.skills.includes(s.id))
+    }
+  } catch { /* 未配置能力时显示全部 */ }
+  return skillList.value
 })
 
 async function loadSkillList() {
