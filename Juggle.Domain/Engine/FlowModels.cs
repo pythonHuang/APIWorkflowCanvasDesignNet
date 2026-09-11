@@ -357,6 +357,10 @@ public class FileWriteConfig
 /// <summary>Redis 缓存查询节点配置（REDIS_GET 节点）</summary>
 public class RedisGetConfig
 {
+    /// <summary>Redis 实例 ID（0=默认实例，系统设置 → Redis 配置中维护）</summary>
+    [JsonPropertyName("redisId")]
+    public long RedisId { get; set; }
+
     /// <summary>key（支持 ${变量} 模板）</summary>
     [JsonPropertyName("key")]
     public string Key { get; set; } = "";
@@ -369,6 +373,10 @@ public class RedisGetConfig
 /// <summary>Redis 缓存设置节点配置（REDIS_SET 节点）</summary>
 public class RedisSetConfig
 {
+    /// <summary>Redis 实例 ID（0=默认实例，系统设置 → Redis 配置中维护）</summary>
+    [JsonPropertyName("redisId")]
+    public long RedisId { get; set; }
+
     /// <summary>key（支持 ${变量} 模板）</summary>
     [JsonPropertyName("key")]
     public string Key { get; set; } = "";

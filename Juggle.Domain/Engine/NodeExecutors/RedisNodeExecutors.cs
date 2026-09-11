@@ -26,9 +26,9 @@ public static class RedisConnectionPool
 /// <summary>Redis 缓存查询节点：按 key 取值（JSON 字符串自动解析为对象）。</summary>
 public class RedisGetNodeExecutor : INodeExecutor
 {
-    private readonly string _connStr;
+    private readonly Dictionary<long, string> _connStrs;
 
-    public RedisGetNodeExecutor(string connStr) => _connStr = connStr;
+    public RedisGetNodeExecutor(Dictionary<long, string> connStrs) => _connStrs = connStrs;
 
     public async Task<string?> ExecuteAsync(FlowNode node, FlowContext context)
     {
@@ -36,9 +36,10 @@ public class RedisGetNodeExecutor : INodeExecutor
             ?? throw new InvalidOperationException($"Redis 查询节点 [{node.Key}] 未配置 redisGetConfig。");
         if (string.IsNullOrWhiteSpace(cfg.Key))
             throw new InvalidOperationException($"Redis 查询节点 [{node.Key}] 未配置 key。");
+        var connStr = Resolve(cfg.RedisId, $"Redis 查询节点 [{node.Key}]");
 
         var key = RenderTemplate(cfg.Key, context);
-        var db = RedisConnectionPool.Get(_connStr).GetDatabase();
+        var db = RedisConnectionPool.Get(connStr).GetDatabase();
 
         var value = await db.StringGetAsync(key);
         object? result = null;
@@ -60,6 +61,14 @@ public class RedisGetNodeExecutor : INodeExecutor
         return node.Outgoings.FirstOrDefault();
     }
 
+    /// <summary>解析实例连接串（0=默认实例），未配置时抛明确错误。</summary>
+    private string Resolve(long redisId, string nodeDesc)
+    {
+        if (_connStrs.TryGetValue(redisId, out var connStr)) return connStr;
+        if (redisId != 0 && _connStrs.TryGetValue(0, out var def)) return def;
+        throw new InvalidOperationException($"{nodeDesc} 未配置 Redis（系统设置 → Redis 配置，或该实例已被删除）");
+    }
+
     internal static string RenderTemplate(string template, FlowContext context)
         => System.Text.RegularExpressions.Regex.Replace(template, @"\$\{([^}]+)\}", m =>
         {
@@ -71,9 +80,9 @@ public class RedisGetNodeExecutor : INodeExecutor
 /// <summary>Redis 缓存设置节点：写入 key-value（可设过期秒数），结果写入输出变量。</summary>
 public class RedisSetNodeExecutor : INodeExecutor
 {
-    private readonly string _connStr;
+    private readonly Dictionary<long, string> _connStrs;
 
-    public RedisSetNodeExecutor(string connStr) => _connStr = connStr;
+    public RedisSetNodeExecutor(Dictionary<long, string> connStrs) => _connStrs = connStrs;
 
     public async Task<string?> ExecuteAsync(FlowNode node, FlowContext context)
     {
@@ -81,6 +90,7 @@ public class RedisSetNodeExecutor : INodeExecutor
             ?? throw new InvalidOperationException($"Redis 设置节点 [{node.Key}] 未配置 redisSetConfig。");
         if (string.IsNullOrWhiteSpace(cfg.Key))
             throw new InvalidOperationException($"Redis 设置节点 [{node.Key}] 未配置 key。");
+        var connStr = Resolve(cfg.RedisId, $"Redis 设置节点 [{node.Key}]");
 
         var key = RedisGetNodeExecutor.RenderTemplate(cfg.Key, context);
         var val = string.IsNullOrWhiteSpace(cfg.Value)
@@ -90,7 +100,7 @@ public class RedisSetNodeExecutor : INodeExecutor
                 string s => s,
                 var v => JsonSerializer.Serialize(v)
             };
-        var db = RedisConnectionPool.Get(_connStr).GetDatabase();
+        var db = RedisConnectionPool.Get(connStr).GetDatabase();
 
         var ok = cfg.ExpireSeconds > 0
             ? await db.StringSetAsync(key, val, TimeSpan.FromSeconds(cfg.ExpireSeconds))
@@ -100,5 +110,13 @@ public class RedisSetNodeExecutor : INodeExecutor
             context.SetVariable(cfg.Output, ok);
 
         return node.Outgoings.FirstOrDefault();
+    }
+
+    /// <summary>解析实例连接串（0=默认实例），未配置时抛明确错误。</summary>
+    private string Resolve(long redisId, string nodeDesc)
+    {
+        if (_connStrs.TryGetValue(redisId, out var connStr)) return connStr;
+        if (redisId != 0 && _connStrs.TryGetValue(0, out var def)) return def;
+        throw new InvalidOperationException($"{nodeDesc} 未配置 Redis（系统设置 → Redis 配置，或该实例已被删除）");
     }
 }

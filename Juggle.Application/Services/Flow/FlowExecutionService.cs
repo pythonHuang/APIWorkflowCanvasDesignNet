@@ -32,27 +32,29 @@ public class FlowExecutionService
     }
 
     /// <summary>读取 Redis 连接配置（系统配置表），未配置返回 null。</summary>
-    private async Task<string?> GetRedisConnStrAsync()
+    /// <summary>读取全部 Redis 实例连接（实例ID → 连接串，0=默认实例）。</summary>
+    private async Task<Dictionary<long, string>> GetRedisConnStrsAsync()
     {
-        var configs = await _db.SystemConfigs
-            .Where(c => c.Deleted == 0 && c.ConfigKey!.StartsWith("redis."))
-            .ToListAsync();
-        var host = configs.FirstOrDefault(c => c.ConfigKey == "redis.host")?.ConfigValue;
-        if (string.IsNullOrWhiteSpace(host)) return null;
-        var port = configs.FirstOrDefault(c => c.ConfigKey == "redis.port")?.ConfigValue ?? "6379";
-        var password = configs.FirstOrDefault(c => c.ConfigKey == "redis.password")?.ConfigValue ?? "";
-        var dbIndex = configs.FirstOrDefault(c => c.ConfigKey == "redis.db")?.ConfigValue ?? "0";
-        return $"{host}:{port},password={password},defaultDatabase={dbIndex},abortConnect=false,connectTimeout=5000";
+        var map = new Dictionary<long, string>();
+        var configs = await _db.RedisConfigs.Where(r => r.Deleted == 0).ToListAsync();
+        foreach (var c in configs)
+        {
+            if (string.IsNullOrWhiteSpace(c.Host)) continue;
+            var connStr = $"{(c.Host ?? "").Trim()}:{c.Port?.Trim() ?? "6379"},password={c.Password?.Trim()},defaultDatabase={c.Db?.Trim() ?? "0"},abortConnect=false,connectTimeout=5000";
+            map[c.Id] = connStr;
+            if (c.IsDefault == 1) map[0] = connStr;   // 0=默认实例
+        }
+        return map;
     }
 
-    /// <summary>构建引擎（注入大模型对话/视觉函数、Redis 连接与知识库检索，供 AI/文件解析/Redis/KB_SEARCH 节点使用）。</summary>
+    /// <summary>构建引擎（注入大模型对话/视觉函数、Redis 多实例连接与知识库检索，供 AI/文件解析/Redis/KB_SEARCH 节点使用）。</summary>
     private async Task<FlowEngine> BuildEngineAsync(Dictionary<string, DataSourceInfo> dsInfos,
         Dictionary<string, string?> staticVars, Func<string, Task<string?>> flowContentLoader)
         => new FlowEngine(_httpClientFactory, dsInfos, staticVars, flowContentLoader,
             aiChatFunc: req => req.Images.Count > 0
                 ? _aiService.ChatWithImagesAsync(req.SystemPrompt, req.UserInput, req.Images, req.ProviderId, req.Model)
                 : _aiService.ChatAsync(req.SystemPrompt, req.UserInput, req.ProviderId, modelOverride: req.Model),
-            redisConnStr: await GetRedisConnStrAsync(),
+            redisConnStrs: await GetRedisConnStrsAsync(),
             kbSearchFunc: (kbId, query, topK) => _kbService.SearchAsContextAsync(kbId, query, topK));
 
     // ────────────────────────────────────────────────────────────────

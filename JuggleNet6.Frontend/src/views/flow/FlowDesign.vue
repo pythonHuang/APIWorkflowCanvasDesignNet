@@ -1964,7 +1964,7 @@ const kbList = ref<any[]>([])
 
 async function loadRedisConfigs() {
   try {
-    const res: any = await request.get('/system/redis/list')
+    const res: any = await request.get('/system/redis/configs')
     redisConfigs.value = res.data || []
   } catch { redisConfigs.value = [] }
 }

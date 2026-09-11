@@ -65,6 +65,7 @@ public class JuggleDbContext : DbContext
     public DbSet<KnowledgeDocumentEntity> KnowledgeDocuments { get; set; } = null!;
     public DbSet<KnowledgeChunkEntity> KnowledgeChunks { get; set; } = null!;
     public DbSet<KnowledgeMatchLogEntity> KnowledgeMatchLogs { get; set; } = null!;
+    public DbSet<RedisConfigEntity> RedisConfigs { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -213,6 +214,22 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Query).HasColumnName("query");
             e.Property(p => p.ResultsJson).HasColumnName("results_json");
             e.Property(p => p.Score).HasColumnName("score");
+        });
+        modelBuilder.Entity<RedisConfigEntity>().ToTable("t_redis_config");
+        modelBuilder.Entity<RedisConfigEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.ConfigName).HasColumnName("config_name");
+            e.Property(p => p.Host).HasColumnName("host");
+            e.Property(p => p.Port).HasColumnName("port");
+            e.Property(p => p.Password).HasColumnName("password");
+            e.Property(p => p.Db).HasColumnName("db");
+            e.Property(p => p.IsDefault).HasColumnName("is_default");
         });
         modelBuilder.Entity<AlertRuleEntity>().ToTable("t_alert_rule");
         modelBuilder.Entity<AlertRecordEntity>().ToTable("t_alert_record");

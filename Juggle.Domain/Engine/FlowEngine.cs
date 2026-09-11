@@ -19,8 +19,8 @@ public class FlowEngine
     private readonly Func<string, Task<string?>>? _flowContentLoader;
     /// <summary>大模型对话函数（AiChatRequest → reply），供 AI 节点与文件解析(图片)调用，可为 null（未接入大模型）</summary>
     private readonly Func<AiChatRequest, Task<string>>? _aiChatFunc;
-    /// <summary>Redis 连接串（供 REDIS_GET/REDIS_SET 节点使用），可为 null（未配置 Redis）</summary>
-    private readonly string? _redisConnStr;
+    /// <summary>Redis 实例连接串（实例ID → 连接串，0=默认实例），供 REDIS_GET/REDIS_SET 节点使用</summary>
+    private readonly Dictionary<long, string> _redisConnStrs;
     /// <summary>知识库检索函数（kbId, query, topK → 上下文文本），供 KB_SEARCH 节点使用</summary>
     private readonly Func<long, string, int, Task<string>>? _kbSearchFunc;
 
@@ -29,7 +29,7 @@ public class FlowEngine
                       Dictionary<string, string?>? staticVariables = null,
                       Func<string, Task<string?>>? flowContentLoader = null,
                       Func<AiChatRequest, Task<string>>? aiChatFunc = null,
-                      string? redisConnStr = null,
+                      Dictionary<long, string>? redisConnStrs = null,
                       Func<long, string, int, Task<string>>? kbSearchFunc = null)
     {
         _httpClientFactory  = httpClientFactory;
@@ -37,8 +37,16 @@ public class FlowEngine
         _staticVarSnapshot  = staticVariables ?? new(StringComparer.OrdinalIgnoreCase);
         _flowContentLoader  = flowContentLoader;
         _aiChatFunc         = aiChatFunc;
-        _redisConnStr       = redisConnStr;
+        _redisConnStrs      = redisConnStrs ?? new();
         _kbSearchFunc       = kbSearchFunc;
+    }
+
+    /// <summary>解析 Redis 连接串（按实例 ID，0=默认实例）；未配置时返回 null。</summary>
+    private string? ResolveRedisConnStr(long redisId)
+    {
+        if (_redisConnStrs.TryGetValue(redisId, out var connStr)) return connStr;
+        if (redisId != 0 && _redisConnStrs.TryGetValue(0, out var def)) return def;
+        return null;
     }
 
     public async Task<FlowResult> ExecuteAsync(
@@ -165,10 +173,8 @@ public class FlowEngine
                 "FILE_PARSE"    => new FileParseNodeExecutor(_aiChatFunc),
                 "EXCEL_READ"    => new ExcelReadNodeExecutor(),
                 "FILE_WRITE"    => new FileWriteNodeExecutor(),
-                "REDIS_GET"     => new RedisGetNodeExecutor(
-                    _redisConnStr ?? throw new InvalidOperationException("未配置 Redis（系统设置 → Redis 配置），无法执行 Redis 查询节点")),
-                "REDIS_SET"     => new RedisSetNodeExecutor(
-                    _redisConnStr ?? throw new InvalidOperationException("未配置 Redis（系统设置 → Redis 配置），无法执行 Redis 设置节点")),
+                "REDIS_GET"     => new RedisGetNodeExecutor(_redisConnStrs),
+                "REDIS_SET"     => new RedisSetNodeExecutor(_redisConnStrs),
                 "KB_SEARCH"     => new KbSearchNodeExecutor(
                     _kbSearchFunc ?? throw new InvalidOperationException("流程引擎未接入知识库检索能力，无法执行知识库检索节点")),
                 "DATA_EXTRACT"  => new DataExtractNodeExecutor(),

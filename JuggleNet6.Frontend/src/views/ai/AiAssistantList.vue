@@ -156,6 +156,8 @@ function openEdit(row: any) {
 }
 
 function isImageIcon(icon: string): boolean {
+  if (!icon) return false
+  if (typeof icon !== 'string') return false
   return icon.startsWith('data:image') || icon.startsWith('http')
 }
 

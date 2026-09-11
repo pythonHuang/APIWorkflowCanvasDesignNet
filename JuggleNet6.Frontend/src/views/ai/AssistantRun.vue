@@ -177,7 +177,7 @@ onMounted(async () => {
 })
 
 function isImageIcon(icon: string): boolean {
-  return icon.startsWith('data:image') || icon.startsWith('http')
+  return icon?.startsWith('data:image') || icon?.startsWith('http')
 }
 
 function onProviderChange() {
@@ -211,7 +211,7 @@ function onPaste(e: ClipboardEvent) {
   const items = e.clipboardData?.items
   if (!items) return
   for (const item of Array.from(items)) {
-    if (item.type.startsWith('image/')) {
+    if (item.type?.startsWith('image/')) {
       const file = item.getAsFile()
       if (!file) continue
       const reader = new FileReader()
