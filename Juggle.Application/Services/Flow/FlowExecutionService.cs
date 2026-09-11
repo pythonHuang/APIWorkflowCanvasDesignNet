@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Juggle.Application.Services;
+using Juggle.Application.Services.Impl;
 using Juggle.Domain.Engine;
 using Juggle.Domain.Engine.NodeExecutors;
 using Juggle.Domain.Entities;
@@ -17,13 +18,21 @@ public class FlowExecutionService
     private readonly JuggleDbContext _db;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ITenantAccessor? _tenant;
+    private readonly AiService _aiService;
 
-    public FlowExecutionService(JuggleDbContext db, IHttpClientFactory httpClientFactory, ITenantAccessor? tenant = null)
+    public FlowExecutionService(JuggleDbContext db, IHttpClientFactory httpClientFactory, AiService aiService, ITenantAccessor? tenant = null)
     {
         _db = db;
         _httpClientFactory = httpClientFactory;
         _tenant = tenant;
+        _aiService = aiService;
     }
+
+    /// <summary>构建引擎（注入大模型对话函数，供 AI 节点使用）。</summary>
+    private FlowEngine BuildEngine(Dictionary<string, DataSourceInfo> dsInfos,
+        Dictionary<string, string?> staticVars, Func<string, Task<string?>> flowContentLoader)
+        => new FlowEngine(_httpClientFactory, dsInfos, staticVars, flowContentLoader,
+            aiChatFunc: (systemPrompt, userInput) => _aiService.ChatAsync(systemPrompt, userInput));
 
     // ────────────────────────────────────────────────────────────────
     // 数据源
@@ -193,7 +202,7 @@ public class FlowExecutionService
             return ver?.FlowContent;
         }
 
-        var engine      = new FlowEngine(_httpClientFactory, dsInfos, staticVars, FlowContentLoader);
+        var engine      = BuildEngine(dsInfos, staticVars, FlowContentLoader);
 
         var inputJson  = JsonSerializer.Serialize(inputParams);
         var startTime  = DateTime.Now;
@@ -363,7 +372,7 @@ public class FlowExecutionService
             return ver?.FlowContent;
         }
 
-        var engine    = new FlowEngine(_httpClientFactory, dsInfos, staticVars, FlowContentLoader);
+        var engine    = BuildEngine(dsInfos, staticVars, FlowContentLoader);
         var startTime = DateTime.Now;
         FlowResult result;
         try

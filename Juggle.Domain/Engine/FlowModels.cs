@@ -35,6 +35,9 @@ public class FlowNode
     [JsonPropertyName("mysqlConfig")]
     public MysqlConfig? MysqlConfig { get; set; }
 
+    [JsonPropertyName("aiConfig")]
+    public AiConfig? AiConfig { get; set; }
+
     [JsonPropertyName("subFlowConfig")]
     public SubFlowConfig? SubFlowConfig { get; set; }
 
@@ -244,6 +247,22 @@ public class SubFlowMapping
     /// <summary>目标名称（子流程入参名 或 当前流程变量名）</summary>
     [JsonPropertyName("target")]
     public string Target { get; set; } = "";
+}
+
+/// <summary>AI 大模型节点配置（AI 节点）</summary>
+public class AiConfig
+{
+    /// <summary>输入变量名（作为用户消息发送）</summary>
+    [JsonPropertyName("input")]
+    public string Input { get; set; } = "";
+
+    /// <summary>系统提示词（人设与任务说明）</summary>
+    [JsonPropertyName("systemPrompt")]
+    public string SystemPrompt { get; set; } = "";
+
+    /// <summary>输出变量名（模型回复写入）</summary>
+    [JsonPropertyName("output")]
+    public string Output { get; set; } = "";
 }
 
 /// <summary>MySQL 节点配置（MYSQL 节点）</summary>

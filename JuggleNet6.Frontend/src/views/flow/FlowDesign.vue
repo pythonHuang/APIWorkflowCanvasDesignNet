@@ -279,6 +279,29 @@
             </div>
           </template>
 
+          <!-- AI 大模型节点属性 -->
+          <template v-if="selectedNode.elementType === 'AI'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('AI')">帮助</el-button></div>
+            <div class="prop-tip">大模型节点：调用已配置的大模型（系统设置 → 大模型设置），把输入变量内容作为用户消息发送，回复写入输出变量。</div>
+            <div class="prop-item">
+              <label>输入变量</label>
+              <el-select v-model="selectedNode.aiConfig.input" size="small" style="width:100%" clearable placeholder="选择输入变量（作为用户消息）">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>系统提示词</label>
+              <el-input v-model="selectedNode.aiConfig.systemPrompt" type="textarea" :rows="4"
+                placeholder="如：你是一名专业的文案专家，根据用户输入生成简洁有力的文案。" />
+            </div>
+            <div class="prop-item">
+              <label>输出变量</label>
+              <el-select v-model="selectedNode.aiConfig.output" size="small" style="width:100%" clearable placeholder="选择输出变量（模型回复写入）">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+          </template>
+
           <!-- NOTIFY 通知节点属性 -->
           <template v-if="selectedNode.elementType === 'NOTIFY'">
             <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('NOTIFY')">帮助</el-button></div>
@@ -1802,6 +1825,31 @@ env_delay_ms = env_retry_count * 1000 + 500` },
 场景: 多数据源并发查询 + 汇总。` }
     ]
   },
+  AI: {
+    title: '大模型节点',
+    sections: [
+      { title: '一、节点说明', code: `大模型节点调用系统设置 → 大模型设置中启用的供应商（OpenAI 兼容接口，支持 DeepSeek/通义千问/Kimi 等），适合在流程中插入 AI 能力：
+- 内容生成 / 润色 / 翻译
+- 文本分类 / 情感分析
+- 结构化提取（要求模型返回 JSON 后用赋值节点解析）` },
+      { title: '二、配置说明', code: `输入变量:    作为用户消息发送给模型（如 env_text）
+系统提示词:  人设与任务说明（如"你是文案专家，输出简洁有力的文案"）
+输出变量:    模型回复写入的变量（如 env_ai_reply）` },
+      { title: '三、使用 demo', code: `// 场景：流程中生成商品推荐文案
+前置 ASSIGN 节点: env_product_name = "智能手表"
+
+AI 节点:
+  输入变量:    env_product_name
+  系统提示词:  你是一名电商文案专家，根据商品名称生成一句吸引人的推荐语
+  输出变量:    env_ad_copy
+
+后续节点用 ${'${env_ad_copy}'} 引用生成结果（如 NOTIFY 通知 / METHOD 参数）` },
+      { title: '四、注意事项', code: `1. 需先在系统设置 → 大模型设置中配置并启用供应商，否则流程执行时报错
+2. 输入变量不存在时以空文本发送
+3. 需要结构化结果时，在系统提示词中要求"只输出 JSON"，再用赋值节点/代码节点解析
+4. 模型调用有网络延迟，建议设置节点超时（默认不限）` }
+    ]
+  },
   TRANSFORM: {
     title: '模板转换节点',
     sections: [
@@ -2650,7 +2698,7 @@ function nodeIcon(type: string) {
   const map: Record<string, string> = {
     START: '▶', END: '⏹', METHOD: '⚙', CONDITION: '◆',
     ASSIGN: '←', CODE: '{ }', MYSQL: '⊕', MERGE: '⇒', SUB_FLOW: '⬡',
-    LOOP: '↻', DELAY: '⏱', PARALLEL: '∥', NOTIFY: '✉', TRANSFORM: '📝'
+    LOOP: '↻', DELAY: '⏱', PARALLEL: '∥', NOTIFY: '✉', TRANSFORM: '📝', AI: '🤖'
   }
   return map[type] || '?'
 }
@@ -2659,7 +2707,7 @@ function nodeTypeName(type: string) {
   const map: Record<string, string> = {
     START: '开始', END: '结束', METHOD: '方法', CONDITION: '条件',
     ASSIGN: '赋值', CODE: '代码', MYSQL: '数据库', MERGE: '聚合', SUB_FLOW: '子流程',
-    LOOP: '循环', DELAY: '延迟', PARALLEL: '并行', NOTIFY: '通知', TRANSFORM: '模板转换'
+    LOOP: '循环', DELAY: '延迟', PARALLEL: '并行', NOTIFY: '通知', TRANSFORM: '模板转换', AI: '大模型'
   }
   return map[type] || type
 }
@@ -2680,6 +2728,7 @@ const nodeToolList = [
   { type: 'PARALLEL', icon: '∥', label: '并行' },
   { type: 'NOTIFY', icon: '✉', label: '通知' },
   { type: 'TRANSFORM', icon: '📝', label: '模板转换' },
+  { type: 'AI', icon: '🤖', label: '大模型' },
 ]
 
 function addNode(type: string) {
@@ -2728,6 +2777,9 @@ function addNode(type: string) {
   }
   if (type === 'TRANSFORM') bNode.transformConfig = {
     targetType: 'VARIABLE', targetCode: '', template: ''
+  }
+  if (type === 'AI') bNode.aiConfig = {
+    input: '', systemPrompt: '', output: ''
   }
 
   businessNodes.value.push(bNode)

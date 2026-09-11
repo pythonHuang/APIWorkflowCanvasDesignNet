@@ -17,16 +17,20 @@ public class FlowEngine
     private readonly Dictionary<string, string?> _staticVarSnapshot;
     /// <summary>根据 flowKey 加载最新已发布流程内容（供 SUB_FLOW 节点调用），可为 null（不支持子流程）</summary>
     private readonly Func<string, Task<string?>>? _flowContentLoader;
+    /// <summary>大模型对话函数（systemPrompt, userInput → reply），供 AI 节点调用，可为 null（未接入大模型）</summary>
+    private readonly Func<string, string, Task<string>>? _aiChatFunc;
 
     public FlowEngine(IHttpClientFactory httpClientFactory,
                       Dictionary<string, DataSourceInfo>? dataSources = null,
                       Dictionary<string, string?>? staticVariables = null,
-                      Func<string, Task<string?>>? flowContentLoader = null)
+                      Func<string, Task<string?>>? flowContentLoader = null,
+                      Func<string, string, Task<string>>? aiChatFunc = null)
     {
         _httpClientFactory  = httpClientFactory;
         _dataSources        = dataSources ?? new();
         _staticVarSnapshot  = staticVariables ?? new(StringComparer.OrdinalIgnoreCase);
         _flowContentLoader  = flowContentLoader;
+        _aiChatFunc         = aiChatFunc;
     }
 
     public async Task<FlowResult> ExecuteAsync(
@@ -148,6 +152,8 @@ public class FlowEngine
                 "PARALLEL"      => new ParallelNodeExecutor(),
                 "NOTIFY"        => new NotifyNodeExecutor(_httpClientFactory),
                 "TRANSFORM"     => new TransformNodeExecutor(),
+                "AI"            => new AiNodeExecutor(
+                    _aiChatFunc ?? throw new InvalidOperationException("流程引擎未接入大模型，无法执行 AI 节点")),
                 _ => throw new InvalidOperationException($"未知节点类型: {currentNode.ElementType}")
             };
 
