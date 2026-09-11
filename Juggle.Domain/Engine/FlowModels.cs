@@ -38,6 +38,15 @@ public class FlowNode
     [JsonPropertyName("aiConfig")]
     public AiConfig? AiConfig { get; set; }
 
+    [JsonPropertyName("fileParseConfig")]
+    public FileParseConfig? FileParseConfig { get; set; }
+
+    [JsonPropertyName("excelReadConfig")]
+    public ExcelReadConfig? ExcelReadConfig { get; set; }
+
+    [JsonPropertyName("fileWriteConfig")]
+    public FileWriteConfig? FileWriteConfig { get; set; }
+
     [JsonPropertyName("subFlowConfig")]
     public SubFlowConfig? SubFlowConfig { get; set; }
 
@@ -261,6 +270,58 @@ public class AiConfig
     public string SystemPrompt { get; set; } = "";
 
     /// <summary>输出变量名（模型回复写入）</summary>
+    [JsonPropertyName("output")]
+    public string Output { get; set; } = "";
+}
+
+/// <summary>文件解析节点配置（FILE_PARSE 节点）</summary>
+public class FileParseConfig
+{
+    /// <summary>输入变量（文件内容：data URL / base64 / 原文）</summary>
+    [JsonPropertyName("input")]
+    public string Input { get; set; } = "";
+
+    /// <summary>文件类型：auto / text / json / xml / csv</summary>
+    [JsonPropertyName("fileType")]
+    public string FileType { get; set; } = "auto";
+
+    /// <summary>输出变量（解析结果：JSON 为对象/数组、CSV 为行数组、文本为字符串）</summary>
+    [JsonPropertyName("output")]
+    public string Output { get; set; } = "";
+}
+
+/// <summary>Excel 读取节点配置（EXCEL_READ 节点）</summary>
+public class ExcelReadConfig
+{
+    /// <summary>输入变量（Excel 文件内容：base64 / data URL）</summary>
+    [JsonPropertyName("input")]
+    public string Input { get; set; } = "";
+
+    /// <summary>工作表名（空=第一个工作表）</summary>
+    [JsonPropertyName("sheetName")]
+    public string SheetName { get; set; } = "";
+
+    /// <summary>输出变量（行字典数组，首行为表头）</summary>
+    [JsonPropertyName("output")]
+    public string Output { get; set; } = "";
+}
+
+/// <summary>文件写入节点配置（FILE_WRITE 节点）</summary>
+public class FileWriteConfig
+{
+    /// <summary>内容变量（对象自动序列化为 JSON）</summary>
+    [JsonPropertyName("content")]
+    public string Content { get; set; } = "";
+
+    /// <summary>文件名（可选，同样写入 data URL）</summary>
+    [JsonPropertyName("fileName")]
+    public string FileName { get; set; } = "";
+
+    /// <summary>文件类型：text / json / csv</summary>
+    [JsonPropertyName("fileType")]
+    public string FileType { get; set; } = "text";
+
+    /// <summary>输出变量（data URL，可下载或供后续节点使用）</summary>
     [JsonPropertyName("output")]
     public string Output { get; set; } = "";
 }

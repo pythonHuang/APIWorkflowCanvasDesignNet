@@ -154,6 +154,9 @@ public class FlowEngine
                 "TRANSFORM"     => new TransformNodeExecutor(),
                 "AI"            => new AiNodeExecutor(
                     _aiChatFunc ?? throw new InvalidOperationException("流程引擎未接入大模型，无法执行 AI 节点")),
+                "FILE_PARSE"    => new FileParseNodeExecutor(),
+                "EXCEL_READ"    => new ExcelReadNodeExecutor(),
+                "FILE_WRITE"    => new FileWriteNodeExecutor(),
                 _ => throw new InvalidOperationException($"未知节点类型: {currentNode.ElementType}")
             };
 

@@ -302,6 +302,88 @@
             </div>
           </template>
 
+          <!-- FILE_PARSE 文件解析节点属性 -->
+          <template v-if="selectedNode.elementType === 'FILE_PARSE'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('FILE_PARSE')">帮助</el-button></div>
+            <div class="prop-tip">文件解析节点：解析文件内容（data URL / base64 / 原文），JSON 解析为对象、CSV 解析为行数组、文本保留原文。</div>
+            <div class="prop-item">
+              <label>输入变量</label>
+              <el-select v-model="selectedNode.fileParseConfig.input" size="small" style="width:100%" clearable placeholder="文件内容变量">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>文件类型</label>
+              <el-select v-model="selectedNode.fileParseConfig.fileType" size="small" style="width:100%">
+                <el-option value="auto" label="自动识别" />
+                <el-option value="text" label="文本" />
+                <el-option value="json" label="JSON" />
+                <el-option value="xml" label="XML" />
+                <el-option value="csv" label="CSV" />
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>输出变量</label>
+              <el-select v-model="selectedNode.fileParseConfig.output" size="small" style="width:100%" clearable placeholder="解析结果变量">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+          </template>
+
+          <!-- EXCEL_READ Excel读取节点属性 -->
+          <template v-if="selectedNode.elementType === 'EXCEL_READ'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('EXCEL_READ')">帮助</el-button></div>
+            <div class="prop-tip">Excel 读取节点：读取 Excel 文件（base64 / data URL），首行为表头，返回行字典数组。</div>
+            <div class="prop-item">
+              <label>输入变量</label>
+              <el-select v-model="selectedNode.excelReadConfig.input" size="small" style="width:100%" clearable placeholder="Excel 内容变量（base64/data URL）">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>工作表名</label>
+              <el-input v-model="selectedNode.excelReadConfig.sheetName" size="small" placeholder="留空读取第一个工作表" />
+            </div>
+            <div class="prop-item">
+              <label>输出变量</label>
+              <el-select v-model="selectedNode.excelReadConfig.output" size="small" style="width:100%" clearable placeholder="行数据数组变量">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+          </template>
+
+          <!-- FILE_WRITE 文件写入节点属性 -->
+          <template v-if="selectedNode.elementType === 'FILE_WRITE'">
+            <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('FILE_WRITE')">帮助</el-button></div>
+            <div class="prop-tip">文件写入节点：把变量内容生成 data URL（base64），供下载或后续节点使用；对象自动序列化为 JSON。</div>
+            <div class="prop-item">
+              <label>内容变量</label>
+              <el-select v-model="selectedNode.fileWriteConfig.content" size="small" style="width:100%" clearable placeholder="要写入文件的内容变量">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>文件类型</label>
+              <el-select v-model="selectedNode.fileWriteConfig.fileType" size="small" style="width:100%">
+                <el-option value="text" label="文本(text/plain)" />
+                <el-option value="json" label="JSON" />
+                <el-option value="csv" label="CSV" />
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>文件名变量</label>
+              <el-select v-model="selectedNode.fileWriteConfig.fileName" size="small" style="width:100%" clearable placeholder="可选，data URL 同时写入此变量">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>输出变量</label>
+              <el-select v-model="selectedNode.fileWriteConfig.output" size="small" style="width:100%" clearable placeholder="data URL 写入变量">
+                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+              </el-select>
+            </div>
+          </template>
+
           <!-- NOTIFY 通知节点属性 -->
           <template v-if="selectedNode.elementType === 'NOTIFY'">
             <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('NOTIFY')">帮助</el-button></div>
@@ -1850,6 +1932,70 @@ AI 节点:
 4. 模型调用有网络延迟，建议设置节点超时（默认不限）` }
     ]
   },
+  FILE_PARSE: {
+    title: '文件解析节点',
+    sections: [
+      { title: '一、节点说明', code: `解析文件内容变量（支持 data URL、纯 base64、原始文本三种输入）：
+- json → 解析为对象/数组，后续可用 env_xxx.属性 取值
+- csv  → 首行为表头，解析为行字典数组
+- text/xml → 保留原文
+- auto → 自动尝试 JSON，失败按文本` },
+      { title: '二、配置说明', code: `输入变量: 文件内容所在变量（如 env_file_content）
+文件类型: auto / text / json / xml / csv
+输出变量: 解析结果变量（如 env_parsed）` },
+      { title: '三、使用 demo', code: `// 场景：上传的 JSON 文件解析后取字段
+FILE_PARSE 节点:
+  输入变量:  env_file
+  文件类型:  json
+  输出变量:  env_data
+
+后续条件节点: env_data.status == 'ok'
+后续方法节点入参: sourceType=变量 env_data.userId` },
+      { title: '四、注意事项', code: `1. base64 输入要求纯 base64（无换行空格），data URL 优先
+2. CSV 引号/逗号转义支持标准格式
+3. 解析失败（如 JSON 非法）时输出原文，不中断流程` }
+    ]
+  },
+  EXCEL_READ: {
+    title: 'Excel 读取节点',
+    sections: [
+      { title: '一、节点说明', code: `读取 Excel 文件（.xlsx）内容变量（base64 或 data URL）：
+- 默认读取第一个工作表，可指定工作表名
+- 第一行为表头，后续每行转为字典对象
+- 输出为行字典数组，可用 env_xxx[0].列名 取值、env_xxx.length 取行数` },
+      { title: '二、使用 demo', code: `EXCEL_READ 节点:
+  输入变量: env_excel_base64
+  工作表名:  (留空=第一个)
+  输出变量: env_rows
+
+循环节点遍历 env_rows:
+  _loop_item.姓名 / _loop_item.金额 逐行处理
+
+条件节点: env_rows.length > 0` },
+      { title: '三、注意事项', code: `1. 仅支持 .xlsx 格式（.xls 请先转换）
+2. 单元格值统一按文本读取
+3. 空单元格跳过，无表头时列名为 column1、column2...` }
+    ]
+  },
+  FILE_WRITE: {
+    title: '文件写入节点',
+    sections: [
+      { title: '一、节点说明', code: `把变量内容生成文件（data URL 格式，base64 编码）写入输出变量：
+- 文本/CSV 内容原样写入
+- 对象自动序列化为 JSON
+- data URL 可直接下载，也可传给后续节点（如文件解析节点反向读取、通知节点附件）` },
+      { title: '二、使用 demo', code: `FILE_WRITE 节点:
+  内容变量: env_report_json   (对象自动转 JSON)
+  文件类型: json
+  输出变量: env_download_url
+
+NOTIFY 节点消息中引用:
+  下载地址: ${'${env_download_url}'}` },
+      { title: '三、注意事项', code: `1. 输出为 data:xxx;base64,... 格式
+2. 文件名变量可选，data URL 同时写入该变量
+3. 大文件注意 base64 体积（约增加 1/3）` }
+    ]
+  },
   TRANSFORM: {
     title: '模板转换节点',
     sections: [
@@ -2698,7 +2844,8 @@ function nodeIcon(type: string) {
   const map: Record<string, string> = {
     START: '▶', END: '⏹', METHOD: '⚙', CONDITION: '◆',
     ASSIGN: '←', CODE: '{ }', MYSQL: '⊕', MERGE: '⇒', SUB_FLOW: '⬡',
-    LOOP: '↻', DELAY: '⏱', PARALLEL: '∥', NOTIFY: '✉', TRANSFORM: '📝', AI: '🤖'
+    LOOP: '↻', DELAY: '⏱', PARALLEL: '∥', NOTIFY: '✉', TRANSFORM: '📝', AI: '🤖',
+    FILE_PARSE: '📄', EXCEL_READ: '📊', FILE_WRITE: '💾'
   }
   return map[type] || '?'
 }
@@ -2707,7 +2854,8 @@ function nodeTypeName(type: string) {
   const map: Record<string, string> = {
     START: '开始', END: '结束', METHOD: '方法', CONDITION: '条件',
     ASSIGN: '赋值', CODE: '代码', MYSQL: '数据库', MERGE: '聚合', SUB_FLOW: '子流程',
-    LOOP: '循环', DELAY: '延迟', PARALLEL: '并行', NOTIFY: '通知', TRANSFORM: '模板转换', AI: '大模型'
+    LOOP: '循环', DELAY: '延迟', PARALLEL: '并行', NOTIFY: '通知', TRANSFORM: '模板转换', AI: '大模型',
+    FILE_PARSE: '文件解析', EXCEL_READ: 'Excel读取', FILE_WRITE: '文件写入'
   }
   return map[type] || type
 }
@@ -2729,6 +2877,9 @@ const nodeToolList = [
   { type: 'NOTIFY', icon: '✉', label: '通知' },
   { type: 'TRANSFORM', icon: '📝', label: '模板转换' },
   { type: 'AI', icon: '🤖', label: '大模型' },
+  { type: 'FILE_PARSE', icon: '📄', label: '文件解析' },
+  { type: 'EXCEL_READ', icon: '📊', label: 'Excel读取' },
+  { type: 'FILE_WRITE', icon: '💾', label: '文件写入' },
 ]
 
 function addNode(type: string) {
@@ -2780,6 +2931,15 @@ function addNode(type: string) {
   }
   if (type === 'AI') bNode.aiConfig = {
     input: '', systemPrompt: '', output: ''
+  }
+  if (type === 'FILE_PARSE') bNode.fileParseConfig = {
+    input: '', fileType: 'auto', output: ''
+  }
+  if (type === 'EXCEL_READ') bNode.excelReadConfig = {
+    input: '', sheetName: '', output: ''
+  }
+  if (type === 'FILE_WRITE') bNode.fileWriteConfig = {
+    content: '', fileName: '', fileType: 'text', output: ''
   }
 
   businessNodes.value.push(bNode)
