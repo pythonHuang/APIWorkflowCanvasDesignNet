@@ -4,31 +4,51 @@ using ClosedXML.Excel;
 
 namespace Juggle.Domain.Engine.NodeExecutors;
 
-/// <summary>文件解析节点：解析文本/JSON/XML/CSV 文件内容（支持 data URL 或 base64 输入）。</summary>
+/// <summary>文件解析节点：解析文本/JSON/XML/CSV/图片 文件内容（支持 data URL 或 base64 输入，图片用视觉模型识别）。</summary>
 public class FileParseNodeExecutor : INodeExecutor
 {
-    public Task<string?> ExecuteAsync(FlowNode node, FlowContext context)
+    private readonly Func<AiChatRequest, Task<string>>? _chat;
+
+    public FileParseNodeExecutor(Func<AiChatRequest, Task<string>>? chat = null) => _chat = chat;
+
+    public async Task<string?> ExecuteAsync(FlowNode node, FlowContext context)
     {
         var cfg = node.FileParseConfig
             ?? throw new InvalidOperationException($"文件解析节点 [{node.Key}] 未配置 fileParseConfig。");
 
         var raw = string.IsNullOrWhiteSpace(cfg.Input) ? "" : context.GetVariable(cfg.Input)?.ToString() ?? "";
-        var content = DecodeContent(raw);
         var fileType = (cfg.FileType ?? "auto").ToLower();
 
-        object? result = fileType switch
+        object? result;
+        if (fileType == "image")
         {
-            "json" => ParseJson(content),
-            "csv"  => ParseCsv(content),
-            "text" => content,
-            "xml"  => content,
-            _      => TryParseJson(content, out var obj) ? obj : content
-        };
+            // 图片：视觉模型识别（未接入大模型时报错）
+            if (_chat == null)
+                throw new InvalidOperationException("流程引擎未接入大模型，无法识别图片（请先在系统设置 → 大模型设置中配置供应商）");
+            var imageUrl = raw.Trim();
+            if (!imageUrl.StartsWith("data:image") && !imageUrl.StartsWith("http"))
+                imageUrl = "data:image/png;base64," + imageUrl;
+            result = await _chat(new AiChatRequest(
+                "你是一个专业的图片识别助手，请详细、准确地描述图片内容（文字、对象、场景等）。",
+                "请识别这张图片", new List<string> { imageUrl }, 0, null));
+        }
+        else
+        {
+            var content = DecodeContent(raw);
+            result = fileType switch
+            {
+                "json" => ParseJson(content),
+                "csv" => ParseCsv(content),
+                "text" => content,
+                "xml" => content,
+                _ => TryParseJson(content, out var obj) ? obj : content
+            };
+        }
 
         if (!string.IsNullOrWhiteSpace(cfg.Output))
             context.SetVariable(cfg.Output, result);
 
-        return Task.FromResult(node.Outgoings.FirstOrDefault());
+        return node.Outgoings.FirstOrDefault();
     }
 
     /// <summary>解析 JSON 为对象/数组（失败返回原文）。</summary>

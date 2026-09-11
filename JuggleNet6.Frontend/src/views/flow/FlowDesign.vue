@@ -282,10 +282,36 @@
           <!-- AI 大模型节点属性 -->
           <template v-if="selectedNode.elementType === 'AI'">
             <div style="display:flex;justify-content:flex-end"><el-button size="small" icon="QuestionFilled" link @click="openNodeHelp('AI')">帮助</el-button></div>
-            <div class="prop-tip">大模型节点：调用已配置的大模型（系统设置 → 大模型设置），把输入变量内容作为用户消息发送，回复写入输出变量。</div>
+            <div class="prop-tip">大模型节点：调用已配置的大模型，把输入变量内容作为用户消息发送，回复写入输出目标；支持选择模型与图片输入（视觉识别）。</div>
+            <div class="prop-item">
+              <label>模型</label>
+              <div style="display:flex;gap:4px">
+                <el-select v-model="selectedNode.aiConfig.providerId" size="small" style="flex:1" clearable placeholder="供应商(空=第一个启用)" @change="onAiNodeProviderChange">
+                  <el-option v-for="p in aiProviders" :key="p.id" :label="p.providerName" :value="p.id" />
+                </el-select>
+                <el-select v-model="selectedNode.aiConfig.model" size="small" style="flex:1" clearable filterable allow-create default-first-option placeholder="模型(空=默认)">
+                  <el-option v-for="m in aiNodeModelOptions" :key="m" :label="m" :value="m" />
+                </el-select>
+              </div>
+            </div>
             <div class="prop-item">
               <label>输入变量</label>
               <el-select v-model="selectedNode.aiConfig.input" size="small" style="width:100%" clearable placeholder="选择输入变量（作为用户消息）">
+                <el-option-group label="流程入参">
+                  <el-option v-for="p in flowInputParams" :key="'i'+p.paramCode" :value="'input_'+p.paramCode" :label="`input_${p.paramCode}`" />
+                </el-option-group>
+                <el-option-group label="中间变量">
+                  <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                </el-option-group>
+                <el-option-group label="流程出参">
+                  <el-option v-for="p in flowOutputParams" :key="'o'+p.paramCode" :value="'output_'+p.paramCode" :label="`output_${p.paramCode}`" />
+                </el-option-group>
+              </el-select>
+            </div>
+            <div class="prop-item">
+              <label>图片输入</label>
+              <el-select v-model="selectedNode.aiConfig.inputImages" size="small" style="width:100%" multiple collapse-tags clearable
+                placeholder="可选，选择图片变量（data URL），视觉模型识别用">
                 <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
               </el-select>
             </div>
@@ -295,10 +321,25 @@
                 placeholder="如：你是一名专业的文案专家，根据用户输入生成简洁有力的文案。" />
             </div>
             <div class="prop-item">
-              <label>输出变量</label>
-              <el-select v-model="selectedNode.aiConfig.output" size="small" style="width:100%" clearable placeholder="选择输出变量（模型回复写入）">
-                <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
-              </el-select>
+              <label>输出目标</label>
+              <div style="display:flex;gap:4px">
+                <el-select v-model="selectedNode.aiConfig.outputTargetType" size="small" style="width:90px;flex-shrink:0">
+                  <el-option value="VARIABLE" label="变量" />
+                  <el-option value="OUTPUT" label="出参" />
+                  <el-option value="INPUT" label="入参" />
+                </el-select>
+                <el-select v-model="selectedNode.aiConfig.output" :placeholder="aiOutputPlaceholder(selectedNode.aiConfig.outputTargetType)" size="small" style="flex:1" clearable>
+                  <template v-if="selectedNode.aiConfig.outputTargetType === 'VARIABLE'">
+                    <el-option v-for="v in allVariables" :key="v.variableCode" :value="v.variableCode" :label="v.variableCode" />
+                  </template>
+                  <template v-else-if="selectedNode.aiConfig.outputTargetType === 'OUTPUT'">
+                    <el-option v-for="p in flowOutputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </template>
+                  <template v-else>
+                    <el-option v-for="p in flowInputParams" :key="p.paramCode" :value="p.paramCode" :label="`${p.paramName} (${p.paramCode})`" />
+                  </template>
+                </el-select>
+              </div>
             </div>
           </template>
 
@@ -316,10 +357,11 @@
               <label>文件类型</label>
               <el-select v-model="selectedNode.fileParseConfig.fileType" size="small" style="width:100%">
                 <el-option value="auto" label="自动识别" />
-                <el-option value="text" label="文本" />
+                <el-option value="text" label="文本(txt/markdown)" />
                 <el-option value="json" label="JSON" />
                 <el-option value="xml" label="XML" />
                 <el-option value="csv" label="CSV" />
+                <el-option value="image" label="图片(视觉模型识别)" />
               </el-select>
             </div>
             <div class="prop-item">
@@ -1762,6 +1804,21 @@ const aiResultSummary = computed(() => {
   return nodes.map((n: any) => nodeTypeName(n.elementType)).join(' → ')
 })
 
+// ====== AI 节点：供应商/模型选择 ======
+const aiNodeModelOptions = computed(() => {
+  const p = aiProviders.value.find((x: any) => x.id === selectedNode.value?.aiConfig?.providerId)
+  const list = String(p?.models || '').split(',').map((s: string) => s.trim()).filter(Boolean)
+  if (!list.includes(p?.model)) list.unshift(p?.model || '')
+  return list.filter(Boolean)
+})
+function onAiNodeProviderChange() {
+  const p = aiProviders.value.find((x: any) => x.id === selectedNode.value?.aiConfig?.providerId)
+  if (selectedNode.value?.aiConfig && p) selectedNode.value.aiConfig.model = p.model || ''
+}
+function aiOutputPlaceholder(targetType: string) {
+  return targetType === 'OUTPUT' ? '选择输出参数' : targetType === 'INPUT' ? '选择入参' : '选择变量'
+}
+
 /** 构建可用接口清单（供 AI 选择编排） */
 function buildAiApiContext(): any[] {
   const apis: any[] = []
@@ -1956,9 +2013,11 @@ env_delay_ms = env_retry_count * 1000 + 500` },
 - 内容生成 / 润色 / 翻译
 - 文本分类 / 情感分析
 - 结构化提取（要求模型返回 JSON 后用赋值节点解析）` },
-      { title: '二、配置说明', code: `输入变量:    作为用户消息发送给模型（如 env_text）
+      { title: '二、配置说明', code: `模型:        供应商下拉（空=第一个启用）+ 模型下拉（空=供应商默认）
+输入变量:    作为用户消息发送给模型（可选流程入参/中间变量/出参）
+图片输入:    多选图片变量（data URL），配置后走视觉模型识别（多模态）
 系统提示词:  人设与任务说明（如"你是文案专家，输出简洁有力的文案"）
-输出变量:    模型回复写入的变量（如 env_ai_reply）` },
+输出目标:    变量 / 出参 / 入参 + 对应参数选择（模型回复写入）` },
       { title: '三、使用 demo', code: `// 场景：流程中生成商品推荐文案
 前置 ASSIGN 节点: env_product_name = "智能手表"
 

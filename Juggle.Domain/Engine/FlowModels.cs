@@ -278,9 +278,25 @@ public class AiConfig
     [JsonPropertyName("systemPrompt")]
     public string SystemPrompt { get; set; } = "";
 
-    /// <summary>输出变量名（模型回复写入）</summary>
+    /// <summary>输出目标名（模型回复写入）</summary>
     [JsonPropertyName("output")]
     public string Output { get; set; } = "";
+
+    /// <summary>输出目标类型：VARIABLE（中间变量）/ OUTPUT（出参）/ INPUT（入参）</summary>
+    [JsonPropertyName("outputTargetType")]
+    public string OutputTargetType { get; set; } = "VARIABLE";
+
+    /// <summary>图片输入变量（逗号分隔多个，data URL / http 地址，供视觉模型识别）</summary>
+    [JsonPropertyName("inputImages")]
+    public string InputImages { get; set; } = "";
+
+    /// <summary>供应商 ID（0=第一个启用供应商）</summary>
+    [JsonPropertyName("providerId")]
+    public long ProviderId { get; set; }
+
+    /// <summary>模型名（空=供应商默认模型）</summary>
+    [JsonPropertyName("model")]
+    public string Model { get; set; } = "";
 }
 
 /// <summary>文件解析节点配置（FILE_PARSE 节点）</summary>

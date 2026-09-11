@@ -106,6 +106,48 @@ public class AiService
         return await ChatMessagesAsync(messages, providerId, config, modelOverride);
     }
 
+    /// <summary>视觉对话：文本 + 图片（OpenAI 兼容多模态 content 数组）。</summary>
+    public async Task<string> ChatWithImagesAsync(string systemPrompt, string userText, List<string> imageUrls,
+        long providerId = 0, string? modelOverride = null)
+    {
+        var cfg = await ResolveConfigAsync(providerId > 0 ? providerId : null);
+        if (!string.IsNullOrEmpty(modelOverride)) cfg.Model = modelOverride;
+        if (string.IsNullOrEmpty(cfg.BaseUrl) || string.IsNullOrEmpty(cfg.ApiKey))
+            throw new Exception("未配置 AI 大模型：请在系统设置 → 大模型设置中添加并启用供应商");
+
+        var url = cfg.BaseUrl.TrimEnd('/');
+        if (!url.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+            url += "/chat/completions";
+
+        // 多模态 content：[{type:text,text},{type:image_url,image_url:{url}}]
+        var content = new List<object>();
+        if (!string.IsNullOrWhiteSpace(userText))
+            content.Add(new { type = "text", text = userText });
+        foreach (var img in imageUrls)
+            content.Add(new { type = "image_url", image_url = new { url = img } });
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(180);
+        using var reqMsg = new HttpRequestMessage(HttpMethod.Post, url);
+        reqMsg.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cfg.ApiKey}");
+        reqMsg.Content = new StringContent(JsonSerializer.Serialize(new
+        {
+            model = cfg.Model,
+            messages = new object[]
+            {
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = content.ToArray() }
+            },
+            temperature = 0.2
+        }), Encoding.UTF8, "application/json");
+        using var resp = await client.SendAsync(reqMsg);
+        var body = await resp.Content.ReadAsStringAsync();
+        if (!resp.IsSuccessStatusCode)
+            throw new Exception($"AI 调用失败({(int)resp.StatusCode}): {Truncate(body, 300)}");
+        using var doc = JsonDocument.Parse(body);
+        return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString()?.Trim() ?? "";
+    }
+
     /// <summary>多轮对话：完整消息列表（system + 历史消息）一次性发送。</summary>
     public async Task<string> ChatMessagesAsync(List<(string Role, string Content)> messages, long providerId = 0, AiConfig? config = null, string? modelOverride = null)
     {
