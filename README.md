@@ -65,42 +65,64 @@ docker-compose up -d
 
 通过自然语言对话，让大模型自动完成流程编排、接口接入与报表设计，无需手动操作。
 
-### 大模型设置
+### 一、大模型设置（模型供应商设置）
 
-系统设置 → 大模型设置：接入任意 **OpenAI 兼容接口**（DeepSeek / 通义千问 / Kimi / OpenAI / 智谱GLM / Ollama 等）：
+系统设置 → 大模型设置，接入任意 **OpenAI 兼容接口**（DeepSeek / 通义千问 / Kimi / OpenAI / 智谱GLM / Ollama 等）：
 
-- 供应商预置下拉（可直接输入自定义），选择后自动填默认接口地址
-- 「获取模型/测试」一键验证密钥并拉取可用模型列表
-- 默认模型下拉选择、可用模型多选（对话中可切换供应商与模型）
-- 多供应商并存，支持启用/禁用
+- **供应商下拉可选可直接输入**：预置 DeepSeek、通义千问、Kimi、OpenAI、智谱GLM、Ollama，选择后自动填默认接口地址，也支持输入自定义供应商
+- **获取模型 / 配置测试**：填写 API Key 后一键验证密钥有效性（兼作配置测试），成功即拉取该供应商的可用模型列表
+- **默认模型**：从拉取的模型列表下拉选择（也可手动输入）；**可用模型**：多选下拉（对话中可切换），保存为模型清单
+- **多供应商并存 + 启停开关**：任一助手对话时可在启用的供应商与模型中自由切换
 
-### 模型助手
+### 二、模型助手管理（自定义模型助手）
 
-菜单「模型助手」提供四个 AI 助手：
+自定义智能助手，可配置：
 
-| 助手 | 能力 |
-|------|------|
-| **模型助手管理** | 自定义智能助手：名称、系统提示词、输入参数列表（文本/数字/日期/开关/下拉）、输出参数列表、辅助提问词按钮；启用后自动加入菜单 |
-| **流程智能编排助手** | 对话描述需求 → 自动选择已有接口、生成流程编排与**入参/出参定义**、条件分支、数据库节点等 14 种节点 → 预览确认后创建流程（参数随流程入库） |
-| **接口智能接入助手** | 对话描述接入需求 → 生成套件与接口方案（**入参/Header/出参配置**）→ 预览确认后写入平台（按 code 去重） |
-| **报表智能助手** | 对话描述报表需求 → 自动生成数据集（优先复用数据视图/数据源/流程/接口）、查询参数、排版（汇总用聚合、条件用公式）→ 预览确认后创建报表 |
+| 配置项 | 说明 |
+|--------|------|
+| 名称 / 描述 | 菜单显示名与用途说明 |
+| 系统提示词 | 助手人设与任务要求（如"你是一名文案专家…"） |
+| 输入参数列表 | 运行页表单，类型支持文本/数字/日期/开关/下拉（下拉可配选项+默认值） |
+| 输出参数列表 | 结束对话时要求模型按 JSON 返回并按参数分栏展示 |
+| 辅助提问词按钮 | 运行页快捷按钮，点击即填入常用提问（换行追加可组合） |
+| 启停 | 启用后自动出现在「模型助手」菜单 |
 
-自定义助手支持**多轮对话**：聊天界面气泡消息、完整历史上下文、结束对话时按输出参数生成最终 JSON 结果、开启新对话与历史记录查看。
+运行页支持**多轮对话**：聊天气泡、每轮携带完整历史、回车发送；「结束对话」时模型基于完整对话生成最终 JSON 结果；「新对话」随时重开；「历史」抽屉查看全部会话（继续进行中对话 / 查看已结束结果 / 删除）。
 
-#### 自定义助手使用流程
+### 三、流程智能编排助手
 
-1. **创建助手**：模型助手管理 → 添加助手，配置名称、描述、系统提示词（人设与任务说明）、输入参数（运行页表单）、输出参数（结束对话时按 JSON 解析展示）、辅助提问词（快捷按钮清单），启用后自动出现在「模型助手」菜单
-2. **开始对话**：点击菜单进入助手运行页，填写输入参数（按类型渲染：文本/数字/日期/开关/下拉），点击「开始对话」
-3. **多轮提问**：聊天框输入消息回车发送，每一轮都携带完整对话历史；辅助提问词按钮一键填入常用提问，可多轮追问
-4. **结束对话**：点击「结束对话」，模型基于完整对话生成最终结果 — 配置了输出参数时按 JSON 解析并在「最终结果」面板分栏展示，否则直接结束
-5. **历史记录**：顶部「历史」打开抽屉，查看该助手的全部会话（进行中/已结束），可继续未结束的对话、查看已结束会话的最终结果或删除；「新对话」随时重新开始
+对话描述需求，AI 自动完成接口流程编排：
+
+1. 填写需求与流程名称，选择供应商/模型，点击「生成编排」
+2. AI 从平台已接入的接口清单中选择接口：自动映射入参（流程入参 input_xxx）、出参（env_ 变量）、自动连线，支持条件分支（CONDITION）、数据库节点（MYSQL）等 14 种节点
+3. **预览确认**：展示节点清单（类型/名称/连线/详情）+ **流程入参/出参定义表**（code/名称/类型/必填/说明，与节点映射严格对应）
+4. 确认生成：创建流程定义并写入编排内容，入参/出参随流程入库，可跳设计器继续调整后保存部署
+
+示例需求：
+> 接收用户id，先调用获取用户信息接口，再根据用户id查询该用户的订单列表，最后返回用户名称和订单列表
+
+### 四、接口智能接入助手
+
+对话描述接入需求，AI 生成套件与接口方案：
+
+1. 填写接入需求（如"接入用户中心相关接口：查询用户信息、修改昵称、查询收货地址"），选择供应商/模型，点击「生成接口方案」
+2. AI 规划套件（code/名称/描述）与接口（code/名称/描述/路径/GET|POST），并自动设计每个接口的**入参配置**（参数/类型/位置 body|query/必填/说明）、**Header 配置**（如 Authorization 鉴权头）、**出参配置**（响应字段）
+3. **预览确认**：套件表 + 接口表（展开行显示入参/Header/出参三段明细）
+4. 确认接入：套件与接口写入平台，参数随接口入库；按 code 去重，已存在的自动跳过
+
+### 五、报表智能助手
+
+对话描述报表需求，AI 自动完成报表设计：
+
+1. 填写需求与报表名称（如"生成月度销售统计报表，按日期范围筛选，按销售员汇总订单金额和数量，需要合计行"），点击「生成报表」
+2. **数据集**：优先复用已有数据视图（sourceType=dataview），不满足时用自定义 SQL（自动匹配可用数据源与方言），或复用已发布流程/接口数据
+3. **查询参数**：自动设计筛选参数（text/number/date/select），与数据集 SQL 的 @参数名 对应
+4. **排版**：标题行（合并居中加粗）→ 表头行 → 数据行（绑定数据集自动扩展+斑马纹）→ 汇总行；合计用 `${字段:SUM}` 聚合，条件计算用 `=IF(条件,真,假)` 公式
+5. **生成即预览**：展示数据集/参数清单 + 报表 HTML 实际渲染效果；**确认后才创建报表**，可继续去设计器调整或打开正式访问页
 
 ### 流程设计器内 AI 生成
 
-流程设计器工具栏同样提供「AI 生成」按钮，例如：
-> 接收用户id，先调用获取用户信息接口，再根据用户id查询该用户的订单列表，最后返回用户名称和订单列表
-
-AI 自动选接口、映射入参（流程入参）与出参（env_ 变量）、连线并生成条件分支，确认后可直接在画布上继续调整，保存/部署即可对外提供接口。
+流程设计器工具栏同样提供「AI 生成」按钮，对话生成后直接替换画布，可继续手工调整。
 
 ### 支持的节点
 
@@ -203,7 +225,12 @@ START / END / METHOD（接口调用）/ CONDITION（条件分支）/ MERGE（汇
 
 ### v1.8（最新）
 
-- 🤖 **AI 智能编排体系** — 接入大模型能力（OpenAI 兼容接口，支持 DeepSeek/通义千问/Kimi/OpenAI/智谱/Ollama 等）：大模型设置（多供应商/模型拉取/配置测试/启停）；流程智能编排助手（对话生成流程+入参出参，预览确认）；接口智能接入助手（对话生成套件接口+入参/Header/出参，预览确认）；报表智能助手（对话生成报表：复用数据视图/数据源 + 查询参数 + 排版公式，预览确认）；自定义智能助手（提示词/输入输出参数/辅助提问词，多轮对话+结束输出+历史记录）；设计器 AI 生成
+- ⚙️ **大模型设置** — 接入大模型能力（OpenAI 兼容接口，支持 DeepSeek/通义千问/Kimi/OpenAI/智谱GLM/Ollama）：供应商预置下拉可直接输入并自动填默认接口地址、获取模型/配置测试一键验证密钥并拉取可用模型、默认模型下拉+可用模型多选、多供应商并存启停
+- 🤖 **模型助手管理（自定义智能助手）** — 名称/描述/系统提示词/输入参数列表（文本/数字/日期/开关/下拉）/输出参数列表/辅助提问词按钮，启用后自动加入模型助手菜单；运行页支持多轮对话（气泡消息/完整历史）、结束对话按输出参数生成最终 JSON 结果、开启新对话、对话历史抽屉（查看/继续/删除）
+- 🧩 **流程智能编排助手** — 对话生成接口流程编排：自动选择已有接口、映射入参出参、连线与条件分支、14 种节点，生成**流程入参/出参定义**并在预览中展示，确认后创建流程（参数随流程入库）
+- 🔌 **接口智能接入助手** — 对话生成套件与接口方案：自动设计**入参/Header/出参配置**（位置/必填/说明），预览展开三段展示，确认后写入平台（参数入库、按 code 去重）
+- 📊 **报表智能助手** — 对话生成报表：数据集优先复用数据视图/数据源/流程/接口，自动设计查询参数与排版（汇总聚合/条件公式），生成即预览 HTML，确认后创建报表
+- 🎨 **设计器 AI 生成** — 流程设计器工具栏一键对话生成并替换画布
 - 📊 **报表模块** — 新增数据视图 + 报表设计器 + 公式引擎（SUM/AVG/COUNT/IF 等）；数据集管理支持 4 种数据源与字段树点击填入；A4 分页预览、撤销/重做、单元格直接编辑、行列插入删除
 - 📈 **监控模块** — API 拓扑图（健康检查/访问统计/状态红黄绿/DB 节点与连线/流程过滤）+ 告警规则 + 告警记录
 - 🧮 **表达式引擎** — 条件/赋值节点支持算术运算 + - * / %、字符串拼接/切片（[..5]/[2..5]）/replace、toString("#.0##") 数字与日期格式化；赋值节点新增 EXPRESSION 表达式来源
@@ -332,42 +359,64 @@ docker-compose up -d
 
 Use natural language to let the LLM auto-complete flow orchestration, API integration and report design.
 
-### Model Settings
+### 1. Model Settings (Providers)
 
 System Settings → AI Models: connect any **OpenAI-compatible API** (DeepSeek / Qwen / Kimi / OpenAI / GLM / Ollama etc.):
 
-- Preset provider dropdown (or type your own) with auto-filled default base URL
-- "Fetch models / Test" verifies the API key and pulls the available model list
-- Default model dropdown + available models multi-select (switchable during chats)
-- Multiple providers with enable/disable
+- **Provider dropdown or free input**: preset DeepSeek, Qwen, Kimi, OpenAI, GLM and Ollama with auto-filled default base URL; custom providers supported
+- **Fetch models / Config test**: one click verifies the API key and pulls the provider's available model list
+- **Default model** dropdown + **available models** multi-select (switchable during chats)
+- **Multiple providers with enable/disable** — switch provider and model freely in any assistant chat
 
-### AI Assistants
+### 2. Assistant Management (Custom Assistants)
 
-The "AI Assistants" menu provides four assistants:
+Create custom assistants with:
 
-| Assistant | Capability |
-|-----------|------------|
-| **Assistant Management** | Custom assistants: name, system prompt, input params (text/number/date/switch/select), output params, quick-prompt buttons; auto-added to menu when enabled |
-| **Flow Orchestration Assistant** | Describe requirements → auto-picks existing APIs, generates flow + input/output param definitions, condition branches, DB nodes (14 types) → preview, then confirm to create the flow |
-| **API Integration Assistant** | Describe integration needs → generates suites & APIs (input / Header / output param configs) → preview, then confirm to import (deduplicated by code) |
-| **Report Assistant** | Describe report needs → auto-generates datasets (reuses data views / data sources / flows / APIs), query params, layout (aggregates & formulas) → preview, then confirm to create the report |
+| Config | Description |
+|--------|-------------|
+| Name / Description | Menu label and purpose |
+| System prompt | Persona and task instructions (e.g. "You are a copywriting expert…") |
+| Input params | Run-page form: text / number / date / switch / select (options + defaults) |
+| Output params | End-conversation JSON fields, shown in the final result panel |
+| Quick-prompt buttons | One-click buttons that fill common questions (append with newlines to combine) |
+| Enable | Auto-appears in the "AI Assistants" menu |
 
-Custom assistants support **multi-turn conversations**: chat bubbles, full history context, end-conversation to produce final JSON results from output params, new conversation and history viewing.
+The run page supports **multi-turn conversations**: chat bubbles with full history per round; "End Conversation" produces final JSON results from output params; "New Conversation" restarts anytime; the "History" drawer lists all conversations (resume ongoing / review ended / delete).
 
-#### Custom Assistant Workflow
+### 3. Flow Orchestration Assistant
 
-1. **Create**: AI Assistant Management → add an assistant with name, description, system prompt, input params (rendered as a form on the run page), output params (parsed from JSON on end), and quick-prompt buttons; enabled assistants appear in the "AI Assistants" menu automatically
-2. **Start**: open the assistant run page from the menu, fill in the input params (typed inputs: text/number/date/switch/select) and click "Start Conversation"
-3. **Multi-turn chat**: type and send messages — every round carries the full history; quick-prompt buttons fill common questions in one click; ask follow-ups freely
-4. **End**: click "End Conversation" — the model produces the final result from the whole conversation; with output params configured it returns JSON shown in the "Final Result" panel
-5. **History**: the "History" drawer lists all conversations (ongoing / ended) — resume unfinished ones, review final outputs of ended ones, or delete; "New Conversation" restarts anytime
+Describe requirements and let the LLM build the flow:
+
+1. Enter the requirement and flow name, pick provider/model, click "Generate"
+2. The LLM picks from existing platform APIs: auto-maps inputs (flow input params) and outputs (`env_` variables), wires nodes, supports condition branches (CONDITION), DB nodes (MYSQL) — all 14 node types
+3. **Preview & confirm**: node list (type/name/wiring/details) + flow input/output param tables (strictly matching node mappings)
+4. Confirm to create the flow definition; params are saved with the flow; continue tuning in the designer
+
+Example:
+> Take a userId, call the get-user-info API, then query the user's order list, finally return the user name and the order list
+
+### 4. API Integration Assistant
+
+Describe integration needs and the LLM plans suites & APIs:
+
+1. Enter the requirement (e.g. "Integrate user-center APIs: query user info, update nickname, list shipping addresses"), pick provider/model, click "Generate API Plan"
+2. The LLM plans suites (code/name/desc) and APIs (code/name/desc/path/GET|POST) with **input params** (code/type/position body|query/required/desc), **Header configs** (e.g. Authorization) and **output params** (response fields)
+3. **Preview & confirm**: suite table + API table with expandable rows showing input/Header/output details
+4. Confirm to import; params saved with the APIs; deduplicated by code (existing ones skipped)
+
+### 5. Report Assistant
+
+Describe report needs and the LLM designs the report:
+
+1. Enter the requirement and report name (e.g. "Monthly sales statistics by seller with date-range filter, amount/qty totals and a grand-total row"), click "Generate Report"
+2. **Datasets**: reuse existing data views first (sourceType=dataview); fall back to custom SQL with a matching data source (dialect-aware), or reuse published flows/APIs
+3. **Query params**: auto-designed filters (text/number/date/select) bound to `@paramName` in dataset SQL
+4. **Layout**: title row (merged, centered, bold) → header row → data rows (dataset-bound auto-expand + zebra) → footer row; totals via `${field:SUM}` aggregates, conditional logic via `=IF(condition, a, b)` formulas
+5. **Preview on generation**: dataset/param lists + actual rendered HTML; **confirm to create the report**, then continue in the designer or open the public view page
 
 ### In-Designer AI Generation
 
-The Flow Designer toolbar also has an "AI Generate" button, e.g.:
-> Take a userId, call the get-user-info API, then query the user's order list, finally return the user name and the order list
-
-The LLM picks APIs, auto-maps inputs (flow input params) and outputs (`env_` variables), wires nodes with condition branches; confirm to apply, then fine-tune on the canvas and save/deploy.
+The Flow Designer toolbar also has an "AI Generate" button — chat to generate and replace the canvas, then fine-tune manually.
 
 ### Supported Node Types
 
@@ -458,7 +507,12 @@ START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / MYSQL / LOOP / DELAY 
 
 ### v1.8（Latest）
 
-- 🤖 **AI orchestration suite** — LLM integration (OpenAI-compatible API; DeepSeek/Qwen/Kimi/OpenAI/GLM/Ollama supported): model settings (multi-provider / model fetch / config test / enable-disable); flow orchestration assistant (chat to generate flows with I/O params, preview then confirm); API integration assistant (chat to generate suites & APIs with input/Header/output configs, preview then confirm); report assistant (chat to generate reports reusing data views/data sources + query params + layout formulas, preview then confirm); custom assistants (prompts / I/O params / quick prompts, multi-turn chat + final outputs + history); in-designer AI generation
+- ⚙️ **Model settings** — LLM integration (OpenAI-compatible API; DeepSeek/Qwen/Kimi/OpenAI/GLM/Ollama): preset provider dropdown with auto-filled base URL (free input supported), fetch-models/config-test to verify keys and pull models, default model dropdown + available models multi-select, multi-provider enable/disable
+- 🤖 **Assistant management (custom assistants)** — name/description/system prompt/input params (text/number/date/switch/select)/output params/quick-prompt buttons; enabled assistants auto-join the AI Assistants menu; run page supports multi-turn chats (bubbles + full history), end-conversation with final JSON outputs, new conversation, and a history drawer (view/resume/delete)
+- 🧩 **Flow orchestration assistant** — chat to generate flows: auto API selection, I/O mapping, wiring, condition branches, 14 node types, plus flow input/output param definitions shown in preview; confirm to create the flow with params saved
+- 🔌 **API integration assistant** — chat to generate suites & APIs with input/Header/output param configs (position/required/desc), expandable three-section preview; confirm to import (params saved, deduplicated by code)
+- 📊 **Report assistant** — chat to generate reports: datasets reuse data views/data sources/flows/APIs first, auto query params and layout (aggregates & formulas), instant HTML preview; confirm to create the report
+- 🎨 **In-designer AI generation** — one-click chat to generate and replace the canvas
 - 📊 **Report module** — Data views + Report designer + Formula engine (SUM/AVG/COUNT/IF etc.); datasets with 4 source types and field-tree click-to-fill; A4 paged preview, undo/redo, inline cell editing, row/column insert & delete
 - 📈 **Monitoring module** — API topology map (health check / visit stats / red-yellow-green status / DB nodes & edges / flow filter) + alert rules + alert records
 - 🧮 **Expression engine** — CONDITION/ASSIGN nodes support arithmetic + - * / %, string concat / slice ([..5]/[2..5]) / replace, toString("#.0##") number & date formatting; ASSIGN node adds EXPRESSION source type
