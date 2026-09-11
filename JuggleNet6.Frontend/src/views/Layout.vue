@@ -55,6 +55,13 @@
             </template>
             <el-menu-item v-for="r in reportMenuList" :key="r.id" :index="`/report/view/${r.id}`">{{ r.name }}</el-menu-item>
           </el-sub-menu>
+          <el-sub-menu index="kb">
+            <template #title>
+              <el-icon><Collection /></el-icon>
+              <span>知识库</span>
+            </template>
+            <el-menu-item index="/kb/list">知识库管理</el-menu-item>
+          </el-sub-menu>
           <el-sub-menu index="ai">
             <template #title>
               <el-icon><MagicStick /></el-icon>
@@ -127,7 +134,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram, Document, MagicStick } from '@element-plus/icons-vue'
+import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram, Document, MagicStick, Collection } from '@element-plus/icons-vue'
 import request from '../utils/request'
 
 const route = useRoute()
