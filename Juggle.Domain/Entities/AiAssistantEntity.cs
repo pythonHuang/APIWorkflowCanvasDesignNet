@@ -25,6 +25,9 @@ public class AiAssistantEntity : BaseEntity
     /// <summary>辅助提问词列表（JSON 字符串数组，运行页显示为快捷按钮）</summary>
     public string? QuickPrompts { get; set; }
 
+    /// <summary>图标（emoji 或图片 data URL，显示在菜单与运行页）</summary>
+    public string? Icon { get; set; }
+
     /// <summary>是否启用：1=启用（出现在菜单） 0=禁用</summary>
     public int Enabled { get; set; } = 1;
 }

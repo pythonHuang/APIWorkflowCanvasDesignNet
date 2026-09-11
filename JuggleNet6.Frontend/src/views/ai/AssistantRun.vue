@@ -1,9 +1,14 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <div>
-        <h2>🤖 {{ assistant?.assistantName || '智能助手' }}</h2>
-        <div style="font-size:12px;color:#888;margin-top:4px">{{ assistant?.description || '' }}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <img v-if="assistant && isImageIcon(assistant.icon)" :src="assistant.icon" style="width:28px;height:28px;object-fit:contain" />
+        <span v-else-if="assistant?.icon" style="font-size:26px">{{ assistant.icon }}</span>
+        <span v-else style="font-size:26px">🤖</span>
+        <div>
+          <h2>{{ assistant?.assistantName || '智能助手' }}</h2>
+          <div style="font-size:12px;color:#888;margin-top:2px">{{ assistant?.description || '' }}</div>
+        </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <span style="font-size:12px;color:#888">模型:</span>
@@ -55,8 +60,8 @@
       </div>
       <div style="display:flex;gap:8px;margin-top:10px">
         <el-input v-model="draft" :disabled="conversation?.status === 1" placeholder="输入消息，回车发送" size="small"
-          style="flex:1" @keydown.enter="sendMessage" />
-        <el-button size="small" type="primary" icon="Promotion" :disabled="conversation?.status === 1" :loading="chatLoading" @click="sendMessage">发送</el-button>
+          style="flex:1" @keydown.enter="handleSendMessage" />
+        <el-button size="small" type="primary" icon="Promotion" :disabled="conversation?.status === 1" :loading="chatLoading" @click="handleSendMessage">发送</el-button>
         <el-button size="small" type="warning" :disabled="conversation?.status === 1" :loading="ending" @click="endConversation">结束对话</el-button>
       </div>
       <div v-if="error" class="err-box">❌ {{ error }}</div>
@@ -120,7 +125,7 @@ const historyList = ref<any[]>([])
 const currentProvider = computed(() => providers.value.find((p: any) => p.id === providerId.value))
 const modelOptions = computed(() => {
   const p = currentProvider.value
-  const list = String(p?.models || '').split(',').map((s: string) => s.trim()).filter(Boolean)
+  const list = String(p?.models || '').split(',').map((s: string) => s?.trim() || '').filter(Boolean)
   if (!list.includes(p?.model)) list.unshift(p?.model || '')
   return list.filter(Boolean)
 })
@@ -148,18 +153,22 @@ onMounted(async () => {
   } catch { /* 未配置供应商 */ }
 })
 
+function isImageIcon(icon: string): boolean {
+  return icon.startsWith('data:image') || icon.startsWith('http')
+}
+
 function onProviderChange() {
   currentModel.value = currentProvider.value?.model || ''
 }
 
 function selectOptions(p: any): string[] {
-  return String(p.options || '').split(/[,，\n]/).map((s: string) => s.trim()).filter(Boolean)
+  return String(p.options || '').split(/[,，\n]/).map((s: string) => s?.trim()).filter(Boolean)
 }
 
 function fillPrompt(q: string) {
   if (conversation.value) { draft.value = q; return }
   // 未开始对话时作为首条消息暂存
-  draft.value = draft.value.trim() ? draft.value.trim() + '\n' + q : q
+  draft.value = draft.value?.trim() ? draft.value?.trim() || '' + '\n' + q : q
 }
 
 async function startConversation() {
@@ -174,7 +183,7 @@ async function startConversation() {
     messages.value = []
     finalOutputs.value = {}
     // 有暂存提问词时直接发送首条消息
-    if (draft.value.trim()) {
+    if (draft.value?.trim()) {
       const first = draft.value
       draft.value = ''
       await sendMessage(first)
@@ -183,9 +192,12 @@ async function startConversation() {
     error.value = e?.message || '开始对话失败'
   } finally { starting.value = false }
 }
+async function handleSendMessage() {
+  await sendMessage()
+}
 
 async function sendMessage(text?: string) {
-  const content = (text ?? draft.value).trim()
+  const content = (text || draft.value)?.trim() || ''
   if (!content || !conversation.value || conversation.value.status === 1) return
   draft.value = ''
   messages.value.push({ role: 'user', content })

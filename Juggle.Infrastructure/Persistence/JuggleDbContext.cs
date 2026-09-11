@@ -123,6 +123,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.InputParams).HasColumnName("input_params");
             e.Property(p => p.OutputParams).HasColumnName("output_params");
             e.Property(p => p.QuickPrompts).HasColumnName("quick_prompts");
+            e.Property(p => p.Icon).HasColumnName("icon");
             e.Property(p => p.Enabled).HasColumnName("enabled");
         });
         modelBuilder.Entity<AiConversationEntity>().ToTable("t_ai_conversation");

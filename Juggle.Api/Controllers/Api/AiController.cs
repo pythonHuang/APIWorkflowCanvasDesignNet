@@ -233,10 +233,40 @@ public class AiController : ControllerBase
         entity.InputParams = req.InputParams;
         entity.OutputParams = req.OutputParams;
         entity.QuickPrompts = req.QuickPrompts;
+        entity.Icon = req.Icon;
         entity.Enabled = req.Enabled ? 1 : 0;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
         return ApiResult.Success(entity.Id);
+    }
+
+    /// <summary>用大模型优化系统提示词（草稿 → 结构化润色）</summary>
+    [HttpPost("optimize-prompt")]
+    public async Task<ApiResult> OptimizePrompt([FromBody] AiOptimizePromptRequest req)
+    {
+        try
+        {
+            var system = "你是提示词优化专家。请把用户提供的提示词草稿优化为结构清晰、约束明确、可稳定执行的高质量系统提示词（保持原语言，直接输出优化后的提示词文本，不要解释、不要 markdown 围栏）。";
+            var result = await _aiService.ChatAsync(system, req.Prompt ?? "", req.ProviderId, modelOverride: req.Model);
+            return ApiResult.Success(new { prompt = result });
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
+    }
+
+    /// <summary>用大模型生成助手图标（返回 emoji）</summary>
+    [HttpPost("generate-icon")]
+    public async Task<ApiResult> GenerateIcon([FromBody] AiGenerateIconRequest req)
+    {
+        try
+        {
+            var system = "你是图标设计助手。根据助手名称与描述，只输出一个最贴切的 emoji 字符（不要任何其他文字、引号或解释）。";
+            var result = await _aiService.ChatAsync(system, $"助手名称：{req.Name}\n描述：{req.Description}", req.ProviderId, modelOverride: req.Model);
+            var icon = result.Trim().Trim('"', '\'', '`');
+            // 提取首个 emoji 字符
+            if (icon.Length > 2) icon = icon[..2];
+            return ApiResult.Success(new { icon });
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
     }
 
     /// <summary>删除助手</summary>
@@ -441,7 +471,23 @@ public class AiAssistantSaveRequest
     public string? InputParams { get; set; }
     public string? OutputParams { get; set; }
     public string? QuickPrompts { get; set; }
+    public string? Icon { get; set; }
     public bool Enabled { get; set; } = true;
+}
+
+public class AiOptimizePromptRequest
+{
+    public string? Prompt { get; set; }
+    public long ProviderId { get; set; }
+    public string? Model { get; set; }
+}
+
+public class AiGenerateIconRequest
+{
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public long ProviderId { get; set; }
+    public string? Model { get; set; }
 }
 
 public class AiAssistantToggleRequest

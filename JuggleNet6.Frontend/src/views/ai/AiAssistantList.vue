@@ -38,8 +38,28 @@
         <el-form-item label="助手名称"><el-input v-model="form.assistantName" placeholder="如 周报生成助手" /></el-form-item>
         <el-form-item label="描述"><el-input v-model="form.description" placeholder="助手用途说明（菜单提示）" /></el-form-item>
         <el-form-item label="系统提示词">
-          <el-input v-model="form.systemPrompt" type="textarea" :rows="4"
-            placeholder="如：你是一名专业的文案专家，根据用户输入生成简洁有力的文案。" />
+          <div style="width:100%">
+            <el-input v-model="form.systemPrompt" type="textarea" :rows="4"
+              placeholder="如：你是一名专业的文案专家，根据用户输入生成简洁有力的文案。" />
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+              <span style="font-size:11px;color:#909399">可用大模型对草稿提示词进行结构化润色</span>
+              <el-button size="small" icon="MagicStick" :loading="optimizing" @click="doOptimizePrompt">AI 优化</el-button>
+            </div>
+          </div>
+        </el-form-item>
+        <el-form-item label="图标">
+          <div style="display:flex;gap:8px;align-items:center;width:100%">
+            <div v-if="form.icon" class="assistant-icon-preview">
+              <img v-if="isImageIcon(form.icon)" :src="form.icon" style="width:28px;height:28px;object-fit:contain" />
+              <span v-else style="font-size:22px">{{ form.icon }}</span>
+            </div>
+            <el-input v-model="form.icon" placeholder="emoji 图标（如 📝）或上传图片" size="small" style="flex:1" clearable />
+            <el-upload :show-file-list="false" :auto-upload="false" accept="image/*" :on-change="onIconUpload" style="display:inline-block">
+              <el-button size="small">上传</el-button>
+            </el-upload>
+            <el-button size="small" icon="MagicStick" :loading="iconGenerating" @click="doGenerateIcon">AI 生成</el-button>
+          </div>
+          <div style="font-size:11px;color:#909399;margin-top:4px">图标显示在「模型助手」菜单与运行页标题左侧。</div>
         </el-form-item>
         <el-form-item label="输入参数">
           <div style="width:100%">
@@ -103,6 +123,8 @@ const form = ref<any>({ id: 0, assistantName: '', description: '', systemPrompt:
 const inputParams = ref<any[]>([])
 const outputParams = ref<any[]>([])
 const quickPrompts = ref<string[]>([])
+const optimizing = ref(false)
+const iconGenerating = ref(false)
 
 onMounted(loadData)
 
@@ -119,7 +141,7 @@ function countParams(json: string): number {
 }
 
 function openAdd() {
-  form.value = { id: 0, assistantName: '', description: '', systemPrompt: '', enabled: true }
+  form.value = { id: 0, assistantName: '', description: '', systemPrompt: '', icon: '', enabled: true }
   inputParams.value = []
   outputParams.value = []
   quickPrompts.value = []
@@ -131,6 +153,45 @@ function openEdit(row: any) {
   try { outputParams.value = JSON.parse(row.outputParams || '[]') } catch { outputParams.value = [] }
   try { quickPrompts.value = JSON.parse(row.quickPrompts || '[]') } catch { quickPrompts.value = [] }
   dialogVisible.value = true
+}
+
+function isImageIcon(icon: string): boolean {
+  return icon.startsWith('data:image') || icon.startsWith('http')
+}
+
+/** 上传图标：转 base64 data URL */
+function onIconUpload(file: any) {
+  const raw = file?.raw
+  if (!raw) return
+  if (raw.size > 200 * 1024) { ElMessage.warning('图片不能超过 200KB'); return }
+  const reader = new FileReader()
+  reader.onload = () => { form.value.icon = reader.result as string }
+  reader.readAsDataURL(raw)
+}
+
+/** AI 优化系统提示词 */
+async function doOptimizePrompt() {
+  if (!form.value.systemPrompt?.trim()) { ElMessage.warning('请先填写系统提示词草稿'); return }
+  optimizing.value = true
+  try {
+    const res: any = await request.post('/ai/optimize-prompt', { prompt: form.value.systemPrompt })
+    form.value.systemPrompt = res.data?.prompt || form.value.systemPrompt
+    ElMessage.success('提示词已优化')
+  } catch (e: any) {
+    ElMessage.error(e?.message || '优化失败，请确认已配置启用的大模型')
+  } finally { optimizing.value = false }
+}
+
+/** AI 生成 emoji 图标 */
+async function doGenerateIcon() {
+  if (!form.value.assistantName?.trim()) { ElMessage.warning('请先填写助手名称'); return }
+  iconGenerating.value = true
+  try {
+    const res: any = await request.post('/ai/generate-icon', { name: form.value.assistantName, description: form.value.description })
+    if (res.data?.icon) form.value.icon = res.data.icon
+  } catch (e: any) {
+    ElMessage.error(e?.message || '生成失败，请确认已配置启用的大模型')
+  } finally { iconGenerating.value = false }
 }
 async function doSave() {
   await request.post('/ai/assistant/save', {
@@ -160,4 +221,5 @@ async function doDelete(row: any) {
 .page-container { padding:16px;height:100%;display:flex;flex-direction:column;box-sizing:border-box }
 .page-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-shrink:0 }
 .page-header h2 { margin:0 }
+.assistant-icon-preview { width:32px;height:32px;border:1px solid #e4e7ed;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden }
 </style>
