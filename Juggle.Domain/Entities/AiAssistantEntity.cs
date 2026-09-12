@@ -30,4 +30,7 @@ public class AiAssistantEntity : BaseEntity
 
     /// <summary>是否启用：1=启用（出现在菜单） 0=禁用</summary>
     public int Enabled { get; set; } = 1;
+
+    /// <summary>支持的能力（JSON: {skills:[id],apis:["code"],flows:["key"],tools:["name"]}）</summary>
+    public string? Capabilities { get; set; }
 }

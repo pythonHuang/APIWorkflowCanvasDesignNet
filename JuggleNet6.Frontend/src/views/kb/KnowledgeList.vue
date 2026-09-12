@@ -90,7 +90,7 @@ function openEdit(row: any) {
   dialogVisible.value = true
 }
 async function doSave() {
-  await request.post('/kb/save', form.value)
+  await request.post('/kb/save', { ...form.value, enabled: form.value.enabled ? 1 : 0 })
   ElMessage.success('保存成功')
   dialogVisible.value = false
   loadData()

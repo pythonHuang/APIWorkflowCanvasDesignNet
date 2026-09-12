@@ -254,6 +254,8 @@ using (var scope = app.Services.CreateScope())
         try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_ai_assistant(id INTEGER PRIMARY KEY AUTOINCREMENT, assistant_name TEXT, description TEXT, system_prompt TEXT, input_params TEXT, output_params TEXT, enabled INTEGER DEFAULT 1, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_assistant ADD COLUMN quick_prompts TEXT DEFAULT NULL;"); } catch { }
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_assistant ADD COLUMN icon TEXT DEFAULT NULL;"); } catch { }
+        // 助手支持的能力（skills/apis/flows/tools）
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_assistant ADD COLUMN capabilities TEXT DEFAULT NULL;"); } catch { }
         // AI 助手对话会话表
         try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_ai_conversation(id INTEGER PRIMARY KEY AUTOINCREMENT, assistant_id INTEGER, assistant_name TEXT, system_prompt TEXT, input_params TEXT, output_params TEXT, messages TEXT, outputs TEXT, provider_id INTEGER, model TEXT, title TEXT, status INTEGER DEFAULT 0, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
         // Redis 多实例配置表

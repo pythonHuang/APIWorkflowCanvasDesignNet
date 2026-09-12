@@ -134,6 +134,7 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.QuickPrompts).HasColumnName("quick_prompts");
             e.Property(p => p.Icon).HasColumnName("icon");
             e.Property(p => p.Enabled).HasColumnName("enabled");
+            e.Property(p => p.Capabilities).HasColumnName("capabilities");
         });
         modelBuilder.Entity<AiConversationEntity>().ToTable("t_ai_conversation");
         modelBuilder.Entity<AiConversationEntity>(e => {

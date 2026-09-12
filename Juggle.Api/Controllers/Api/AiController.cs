@@ -235,6 +235,7 @@ public class AiController : ControllerBase
         entity.OutputParams = req.OutputParams;
         entity.QuickPrompts = req.QuickPrompts;
         entity.Icon = req.Icon;
+        entity.Capabilities = req.Capabilities;
         entity.Enabled = req.Enabled ? 1 : 0;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
@@ -477,6 +478,8 @@ public class AiAssistantSaveRequest
     public string? QuickPrompts { get; set; }
     public string? Icon { get; set; }
     public bool Enabled { get; set; } = true;
+    /// <summary>支持的能力（JSON: {skills,apis,flows,tools}）</summary>
+    public string? Capabilities { get; set; }
 }
 
 public class AiOptimizePromptRequest

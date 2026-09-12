@@ -103,6 +103,33 @@
             <div style="font-size:11px;color:#909399;margin-top:4px">运行页中显示为快捷按钮，点击即填入补充说明，方便常用提问一键发起。</div>
           </div>
         </el-form-item>
+        <el-form-item label="支持的能力">
+          <div style="width:100%">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <span style="width:40px;font-size:12px;color:#666">Skills</span>
+              <el-select v-model="capSkills" size="small" style="flex:1" multiple collapse-tags collapse-tags-tooltip clearable placeholder="勾选该助手支持的技能">
+                <el-option v-for="s in skillOptions" :key="s.id" :label="`${s.skillName}（${s.groupName}）`" :value="s.id" />
+              </el-select>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <span style="width:40px;font-size:12px;color:#666">接口</span>
+              <el-select v-model="capApis" size="small" style="flex:1" multiple collapse-tags collapse-tags-tooltip filterable clearable placeholder="勾选该助手可调用的接口">
+                <el-option v-for="a in apiOptions" :key="a.methodCode" :label="`${a.methodName}（${a.methodCode}）`" :value="a.methodCode" />
+              </el-select>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <span style="width:40px;font-size:12px;color:#666">流程</span>
+              <el-select v-model="capFlows" size="small" style="flex:1" multiple collapse-tags collapse-tags-tooltip filterable clearable placeholder="勾选该助手可调用的流程">
+                <el-option v-for="f in flowOptions" :key="f.flowKey" :label="`${f.flowName}（${f.flowKey}）`" :value="f.flowKey" />
+              </el-select>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span style="width:40px;font-size:12px;color:#666">工具</span>
+              <el-input v-model="capTools" size="small" style="flex:1" placeholder="逗号分隔的工具名（如 web_search, calculator）" />
+            </div>
+            <div style="font-size:11px;color:#909399;margin-top:4px">配置该助手支持的能力范围（Skills/接口/流程/工具）。</div>
+          </div>
+        </el-form-item>
         <el-form-item label="启用"><el-switch v-model="form.enabled" /></el-form-item>
       </el-form>
       <template #footer>
@@ -174,6 +201,50 @@ const outputParams = ref<any[]>([])
 const quickPrompts = ref<string[]>([])
 const optimizing = ref(false)
 const iconGenerating = ref(false)
+// 支持的能力（skills/apis/flows/tools）
+const capSkills = ref<number[]>([])
+const capApis = ref<string[]>([])
+const capFlows = ref<string[]>([])
+const capTools = ref('')
+const skillOptions = ref<any[]>([])
+const apiOptions = ref<any[]>([])
+const flowOptions = ref<any[]>([])
+
+/** 加载能力选项（技能/接口/流程） */
+async function loadCapabilityOptions() {
+  try {
+    const [skillRes, suiteRes, flowRes]: any[] = await Promise.all([
+      request.get('/skill/list', { params: { enabled: 1 } }),
+      request.get('/suite/list'),
+      request.post('/flow/definition/page', { pageNum: 1, pageSize: 500 })
+    ])
+    skillOptions.value = skillRes.data || []
+    flowOptions.value = flowRes.data?.list || flowRes.data?.records || []
+    const suites = suiteRes.data || []
+    apiOptions.value = []
+    for (const s of suites) {
+      try {
+        const apisRes: any = await request.post('/suite/api/list', { suiteCode: s.suiteCode })
+        for (const a of (apisRes.data || [])) {
+          apiOptions.value.push({ methodCode: a.methodCode, methodName: a.methodName })
+        }
+      } catch { /* 忽略单个套件失败 */ }
+    }
+  } catch { /* 忽略 */ }
+}
+
+/** 解析能力 JSON 到表单状态 */
+function parseCapabilities(json: string) {
+  try {
+    const c = JSON.parse(json || '{}')
+    capSkills.value = c.skills || []
+    capApis.value = c.apis || []
+    capFlows.value = c.flows || []
+    capTools.value = (c.tools || []).join(',')
+  } catch {
+    capSkills.value = []; capApis.value = []; capFlows.value = []; capTools.value = ''
+  }
+}
 
 onMounted(loadData)
 
@@ -194,14 +265,18 @@ function openAdd() {
   inputParams.value = []
   outputParams.value = []
   quickPrompts.value = []
+  parseCapabilities('')
   dialogVisible.value = true
+  loadCapabilityOptions()
 }
 function openEdit(row: any) {
   form.value = { ...row, enabled: row.enabled === 1 }
   try { inputParams.value = JSON.parse(row.inputParams || '[]') } catch { inputParams.value = [] }
   try { outputParams.value = JSON.parse(row.outputParams || '[]') } catch { outputParams.value = [] }
   try { quickPrompts.value = JSON.parse(row.quickPrompts || '[]') } catch { quickPrompts.value = [] }
+  parseCapabilities(row.capabilities || '')
   dialogVisible.value = true
+  loadCapabilityOptions()
 }
 
 function isImageIcon(icon: string): boolean {
@@ -249,7 +324,13 @@ async function doSave() {
     ...form.value,
     inputParams: JSON.stringify(inputParams.value),
     outputParams: JSON.stringify(outputParams.value),
-    quickPrompts: JSON.stringify(quickPrompts.value.filter((q: string) => q.trim()))
+    quickPrompts: JSON.stringify(quickPrompts.value.filter((q: string) => q.trim())),
+    capabilities: JSON.stringify({
+      skills: capSkills.value,
+      apis: capApis.value,
+      flows: capFlows.value,
+      tools: capTools.value.split(',').map((s: string) => s.trim()).filter(Boolean)
+    })
   })
   ElMessage.success('保存成功')
   dialogVisible.value = false
