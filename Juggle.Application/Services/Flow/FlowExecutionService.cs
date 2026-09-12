@@ -68,9 +68,7 @@ public class FlowExecutionService
     private async Task<FlowEngine> BuildEngineAsync(Dictionary<string, DataSourceInfo> dsInfos,
         Dictionary<string, string?> staticVars, Func<string, Task<string?>> flowContentLoader)
         => new FlowEngine(_httpClientFactory, dsInfos, staticVars, flowContentLoader,
-            aiChatFunc: req => req.Images.Count > 0
-                ? _aiService.ChatWithImagesAsync(req.SystemPrompt, req.UserInput, req.Images, req.ProviderId, req.Model)
-                : _aiService.ChatAsync(req.SystemPrompt, req.UserInput, req.ProviderId, modelOverride: req.Model),
+            aiChatFunc: req => _aiService.ChatRequestAsync(req),
             redisConnStrs: await GetRedisConnStrsAsync(),
             kbSearchFunc: (kbId, query, topK) => _kbService.SearchAsContextAsync(kbId, query, topK),
             skillResolver: BuildSkillsPromptAsync);

@@ -329,6 +329,29 @@
               <div style="font-size:11px;color:#909399;margin-top:4px">技能在 系统设置 → Skill 管理 中维护；执行时按「技能名 + 内容」拼入系统提示词。</div>
             </div>
             <div class="prop-item">
+              <label>模型参数</label>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                <span style="width:64px;font-size:12px;color:#666;flex-shrink:0">深度思考</span>
+                <el-switch v-model="selectedNode.aiConfig.enableThinking" size="small" />
+                <span style="font-size:11px;color:#909399">推理模型（deepseek-reasoner / Qwen 思考模式）生效</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                <span style="width:64px;font-size:12px;color:#666;flex-shrink:0">温度</span>
+                <el-slider v-model="aiTempModel" size="small" style="flex:1" :min="0" :max="2" :step="0.1" :format-tooltip="aiTempFormat" />
+                <span style="width:36px;font-size:12px;color:#666;text-align:right;flex-shrink:0">{{ aiTempModel.toFixed(1) }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                <span style="width:64px;font-size:12px;color:#666;flex-shrink:0">最大输出</span>
+                <el-input-number v-model="aiMaxTokensModel" size="small" style="flex:1" :min="0" :step="100" controls-position="right" />
+                <span style="font-size:11px;color:#909399;flex-shrink:0">0=不限制</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="width:64px;font-size:12px;color:#666;flex-shrink:0">随机种子</span>
+                <el-input-number v-model="aiSeedModel" size="small" style="flex:1" :min="0" :step="1" controls-position="right" />
+                <span style="font-size:11px;color:#909399;flex-shrink:0">0=随机</span>
+              </div>
+            </div>
+            <div class="prop-item">
               <label>输出目标</label>
               <div style="display:flex;gap:4px">
                 <el-select v-model="selectedNode.aiConfig.outputTargetType" size="small" style="width:90px;flex-shrink:0">
@@ -1980,6 +2003,21 @@ const skillIdsModel = computed({
   }
 })
 
+// AI 节点模型参数：温度（默认 0.7）/ 最大输出字数（0=不限）/ 随机种子（0=随机）
+const aiTempModel = computed<number>({
+  get: () => selectedNode.value?.aiConfig?.temperature ?? 0.7,
+  set: (v: number) => { if (selectedNode.value?.aiConfig) selectedNode.value.aiConfig.temperature = v }
+})
+const aiMaxTokensModel = computed<number>({
+  get: () => selectedNode.value?.aiConfig?.maxTokens || 0,
+  set: (v: number) => { if (selectedNode.value?.aiConfig) selectedNode.value.aiConfig.maxTokens = v > 0 ? v : null }
+})
+const aiSeedModel = computed<number>({
+  get: () => selectedNode.value?.aiConfig?.seed || 0,
+  set: (v: number) => { if (selectedNode.value?.aiConfig) selectedNode.value.aiConfig.seed = v > 0 ? v : null }
+})
+function aiTempFormat(v: number) { return v.toFixed(1) }
+
 // 按所选供应商的"支持的能力"过滤技能列表（供应商配置了 skills 时只显示其支持的）
 const aiNodeSkillOptions = computed(() => {
   const provider = aiProviders.value.find((p: any) => p.id === (selectedNode.value?.aiConfig?.providerId || 0))
@@ -2211,6 +2249,11 @@ env_delay_ms = env_retry_count * 1000 + 500` },
 输入变量:    作为用户消息发送给模型（可选流程入参/中间变量/出参）
 图片输入:    多选图片变量（data URL），配置后走视觉模型识别（多模态）
 系统提示词:  人设与任务说明（如"你是文案专家，输出简洁有力的文案"）
+模型参数:
+  深度思考:  开启后发送 enable_thinking 参数（推理模型如 deepseek-reasoner / Qwen 思考模式生效）
+  温度:      0-2 随机性（越大越发散），默认 0.7
+  最大输出:  最大输出字数（0=不限制）
+  随机种子:  固定后同输入输出更稳定（0=随机）
 输出目标:    变量 / 出参 / 入参 + 对应参数选择（模型回复写入）` },
       { title: '三、使用 demo', code: `// 场景：流程中生成商品推荐文案
 前置 ASSIGN 节点: env_product_name = "智能手表"
@@ -3327,7 +3370,7 @@ function addNode(type: string) {
     targetType: 'VARIABLE', targetCode: '', template: ''
   }
   if (type === 'AI') bNode.aiConfig = {
-    input: '', systemPrompt: '', output: ''
+    input: '', systemPrompt: '', output: '', enableThinking: false, temperature: 0.7
   }
   if (type === 'FILE_PARSE') bNode.fileParseConfig = {
     input: '', fileType: 'auto', output: ''

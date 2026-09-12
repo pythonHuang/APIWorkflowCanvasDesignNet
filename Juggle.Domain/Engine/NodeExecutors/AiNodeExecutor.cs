@@ -1,7 +1,8 @@
 namespace Juggle.Domain.Engine.NodeExecutors;
 
 /// <summary>大模型调用请求（AI 节点与文件解析图片识别共用）。</summary>
-public record AiChatRequest(string SystemPrompt, string UserInput, List<string> Images, long ProviderId, string? Model);
+public record AiChatRequest(string SystemPrompt, string UserInput, List<string> Images, long ProviderId, string? Model,
+    double? Temperature = null, int? MaxTokens = null, int? Seed = null, bool EnableThinking = false);
 
 /// <summary>
 /// AI 大模型节点执行器：把输入变量内容作为用户消息、按系统提示词调用大模型，
@@ -56,7 +57,8 @@ public class AiNodeExecutor : INodeExecutor
             }
         }
 
-        var reply = await _chat(new AiChatRequest(systemPrompt, input, images, cfg.ProviderId, string.IsNullOrWhiteSpace(cfg.Model) ? null : cfg.Model));
+        var reply = await _chat(new AiChatRequest(systemPrompt, input, images, cfg.ProviderId, string.IsNullOrWhiteSpace(cfg.Model) ? null : cfg.Model,
+            cfg.Temperature, cfg.MaxTokens, cfg.Seed, cfg.EnableThinking));
 
         if (!string.IsNullOrWhiteSpace(cfg.Output))
         {

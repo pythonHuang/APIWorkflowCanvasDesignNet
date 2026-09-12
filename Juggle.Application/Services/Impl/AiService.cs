@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Juggle.Domain.Engine.NodeExecutors;
 using Juggle.Domain.Entities;
 using Juggle.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -183,6 +184,58 @@ public class AiService
             .GetProperty("content")
             .GetString();
         return content?.Trim() ?? "";
+    }
+
+    /// <summary>按 AI 节点请求调用大模型（统一入口：支持图片输入、温度/最大输出字数/随机种子/深度思考等模型参数）。</summary>
+    public async Task<string> ChatRequestAsync(AiChatRequest req)
+    {
+        var cfg = await ResolveConfigAsync(req.ProviderId > 0 ? req.ProviderId : null);
+        if (!string.IsNullOrEmpty(req.Model)) cfg.Model = req.Model;
+        if (string.IsNullOrEmpty(cfg.BaseUrl) || string.IsNullOrEmpty(cfg.ApiKey))
+            throw new Exception("未配置 AI 大模型：请在系统设置 → 大模型设置中添加并启用供应商");
+
+        var url = cfg.BaseUrl.TrimEnd('/');
+        if (!url.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+            url += "/chat/completions";
+
+        // 图片输入 → 多模态 content 数组
+        object userContent = req.UserInput;
+        if (req.Images is { Count: > 0 })
+        {
+            var content = new List<object>();
+            if (!string.IsNullOrWhiteSpace(req.UserInput))
+                content.Add(new { type = "text", text = req.UserInput });
+            foreach (var img in req.Images)
+                content.Add(new { type = "image_url", image_url = new { url = img } });
+            userContent = content.ToArray();
+        }
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["model"] = cfg.Model,
+            ["messages"] = new object[]
+            {
+                new { role = "system", content = req.SystemPrompt },
+                new { role = "user", content = userContent }
+            },
+            ["temperature"] = req.Temperature ?? 0.2
+        };
+        if (req.MaxTokens is > 0) payload["max_tokens"] = req.MaxTokens.Value;
+        if (req.Seed.HasValue) payload["seed"] = req.Seed.Value;
+        if (req.EnableThinking) payload["enable_thinking"] = true;
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(180);
+        using var reqMsg = new HttpRequestMessage(HttpMethod.Post, url);
+        reqMsg.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cfg.ApiKey}");
+        reqMsg.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        using var resp = await client.SendAsync(reqMsg);
+        var body = await resp.Content.ReadAsStringAsync();
+        if (!resp.IsSuccessStatusCode)
+            throw new Exception($"AI 调用失败({(int)resp.StatusCode}): {Truncate(body, 300)}");
+        using var doc = JsonDocument.Parse(body);
+        return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString()?.Trim() ?? "";
     }
 
     private static string Truncate(string s, int len) => s.Length <= len ? s : s[..len] + "...";

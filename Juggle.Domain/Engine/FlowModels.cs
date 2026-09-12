@@ -304,6 +304,22 @@ public class AiConfig
     /// <summary>技能 ID 列表（逗号分隔，执行时技能内容拼入系统提示词）</summary>
     [JsonPropertyName("skills")]
     public string Skills { get; set; } = "";
+
+    /// <summary>是否启用深度思考（发送 enable_thinking 参数，Qwen/DeepSeek 等推理模型生效）</summary>
+    [JsonPropertyName("enableThinking")]
+    public bool EnableThinking { get; set; }
+
+    /// <summary>温度（0-2，越大越发散；空=服务默认）</summary>
+    [JsonPropertyName("temperature")]
+    public double? Temperature { get; set; }
+
+    /// <summary>最大输出字数（max_tokens，0/空=不限制）</summary>
+    [JsonPropertyName("maxTokens")]
+    public int? MaxTokens { get; set; }
+
+    /// <summary>随机种子（seed，固定后输出更稳定；空=随机）</summary>
+    [JsonPropertyName("seed")]
+    public int? Seed { get; set; }
 }
 
 /// <summary>文件解析节点配置（FILE_PARSE 节点）</summary>
