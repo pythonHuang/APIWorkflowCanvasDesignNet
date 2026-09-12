@@ -266,6 +266,10 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.ContentJson).HasColumnName("content_json");
             e.Property(p => p.DownloadCount).HasColumnName("download_count");
             e.Property(p => p.Enabled).HasColumnName("enabled");
+            e.Property(p => p.MarketItemId).HasColumnName("market_item_id");
+            e.Property(p => p.Icon).HasColumnName("icon");
+            e.Property(p => p.Author).HasColumnName("author");
+            e.Property(p => p.Version).HasColumnName("version");
         });
         modelBuilder.Entity<AlertRuleEntity>().ToTable("t_alert_rule");
         modelBuilder.Entity<AlertRecordEntity>().ToTable("t_alert_record");

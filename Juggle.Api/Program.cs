@@ -262,6 +262,11 @@ using (var scope = app.Services.CreateScope())
         try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_skill(id INTEGER PRIMARY KEY AUTOINCREMENT, skill_name TEXT, group_name TEXT, description TEXT, content TEXT, enabled INTEGER DEFAULT 1, market_skill_id INTEGER, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
         // 市场条目表
         try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_market_item(id INTEGER PRIMARY KEY AUTOINCREMENT, item_type TEXT, item_name TEXT, description TEXT, group_name TEXT, content_json TEXT, download_count INTEGER DEFAULT 0, enabled INTEGER DEFAULT 1, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
+        // 市场条目：官方市场 ID / 图标 / 作者 / 版本
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_market_item ADD COLUMN market_item_id INTEGER DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_market_item ADD COLUMN icon TEXT DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_market_item ADD COLUMN author TEXT DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_market_item ADD COLUMN version TEXT DEFAULT NULL;"); } catch { }
         // AI 供应商能力字段
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_provider ADD COLUMN capabilities TEXT DEFAULT NULL;"); } catch { }
         // 知识库 4 表

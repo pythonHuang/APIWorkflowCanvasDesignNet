@@ -26,4 +26,16 @@ public class MarketItemEntity : BaseEntity
 
     /// <summary>是否启用：1=上架 0=下架</summary>
     public int Enabled { get; set; } = 1;
+
+    /// <summary>官方市场条目 ID（发现导入的条目，本地发布为 null）</summary>
+    public int? MarketItemId { get; set; }
+
+    /// <summary>图标（emoji / 图片地址）</summary>
+    public string? Icon { get; set; }
+
+    /// <summary>作者</summary>
+    public string? Author { get; set; }
+
+    /// <summary>版本号</summary>
+    public string? Version { get; set; }
 }
