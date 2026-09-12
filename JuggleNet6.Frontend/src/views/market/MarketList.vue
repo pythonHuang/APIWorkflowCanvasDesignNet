@@ -15,7 +15,10 @@
         <el-tab-pane label="Skills 市场" name="skill" />
         <el-tab-pane label="报表市场" name="report" />
       </el-tabs>
-      <el-input v-model="keyword" placeholder="搜索名称/描述" size="small" style="width:220px;margin-bottom:12px" clearable />
+      <div style="display:flex;gap:16px;align-items:center;margin-bottom:12px">
+        <el-input v-model="keyword" placeholder="搜索名称/描述" size="small" style="width:220px" clearable />
+        <el-checkbox v-model="onlyFavorite" size="small" @change="loadData">⭐ 只看收藏</el-checkbox>
+      </div>
       <el-table :data="filteredList" v-loading="loading">
         <el-table-column label="名称" width="240" show-overflow-tooltip>
           <template #default="{ row }"><span style="margin-right:4px">{{ row.icon || '📦' }}</span>{{ row.itemName }}</template>
@@ -26,6 +29,13 @@
         <el-table-column prop="updatedAt" label="更新日期" width="110" />
         <el-table-column prop="description" label="描述" min-width="220" show-overflow-tooltip />
         <el-table-column prop="downloadCount" label="下载" width="70" align="center" />
+        <el-table-column label="收藏" width="70" align="center">
+          <template #default="{ row }">
+            <el-button size="small" link :loading="favoritingId === row.id" @click="toggleFavorite(row)">
+              <span :style="`font-size:16px;color:${row.favorited ? '#f7ba2a' : '#c0c4cc'}`">{{ row.favorited ? '★' : '☆' }}</span>
+            </el-button>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" link :loading="importingId === row.id" @click="doImport(row)">直接应用</el-button>
@@ -87,8 +97,10 @@ import request from '../../utils/request'
 const loading = ref(false)
 const activeTab = ref('api')
 const keyword = ref('')
+const onlyFavorite = ref(false)
 const tableData = ref<any[]>([])
 const importingId = ref<number | null>(null)
+const favoritingId = ref<number | null>(null)
 
 // ====== 发现官方市场 ======
 const discoverVisible = ref(false)
@@ -116,9 +128,23 @@ onMounted(loadData)
 async function loadData() {
   loading.value = true
   try {
-    const res: any = await request.get('/market/list', { params: { type: activeTab.value } })
+    const res: any = await request.get('/market/list', { params: { type: activeTab.value, favorite: onlyFavorite.value ? 1 : 0 } })
     tableData.value = res.data || []
   } finally { loading.value = false }
+}
+
+async function toggleFavorite(row: any) {
+  favoritingId.value = row.id
+  try {
+    const res: any = await request.post(row.favorited ? `/market/unfavorite/${row.id}` : `/market/favorite/${row.id}`)
+    row.favorited = res.data
+    if (onlyFavorite.value && !row.favorited) {
+      tableData.value = tableData.value.filter((r: any) => r.id !== row.id)
+    }
+    ElMessage.success(row.favorited ? '已收藏' : '已取消收藏')
+  } catch (e: any) {
+    ElMessage.error(e?.message || '操作失败')
+  } finally { favoritingId.value = null }
 }
 
 async function doImport(row: any) {

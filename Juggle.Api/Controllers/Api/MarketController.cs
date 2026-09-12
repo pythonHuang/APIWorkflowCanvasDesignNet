@@ -192,18 +192,58 @@ public class MarketController : ControllerBase
         }
     }
 
-    /// <summary>市场列表（平台级条目 + 我的条目），可按类型筛选</summary>
+    /// <summary>市场列表（平台级条目 + 我的条目），可按类型筛选，favorite=1 只看收藏</summary>
     [HttpGet("list")]
-    public async Task<ApiResult> List([FromQuery] string? type)
+    public async Task<ApiResult> List([FromQuery] string? type, [FromQuery] int favorite = 0)
     {
+        var tid = _tenant.TenantId;
         var query = _db.MarketItems.Where(m => m.Deleted == 0 && m.Enabled == 1);
         if (!string.IsNullOrWhiteSpace(type)) query = query.Where(m => m.ItemType == type);
+
+        var favIds = (await _db.MarketFavorites
+            .Where(f => f.Deleted == 0 && f.TenantId == tid)
+            .Select(f => f.MarketItemId)
+            .ToListAsync()).ToHashSet();
+        if (favorite == 1)
+            query = query.Where(m => favIds.Contains(m.Id));
+
         var items = await query.OrderByDescending(m => m.DownloadCount).ThenByDescending(m => m.Id).ToListAsync();
         return ApiResult.Success(items.Select(m => new
         {
             m.Id, m.ItemType, m.ItemName, m.Description, m.GroupName, m.DownloadCount,
-            m.MarketItemId, m.Icon, m.Author, m.Version, m.UpdatedAt, m.ContentJson
+            m.MarketItemId, m.Icon, m.Author, m.Version, m.UpdatedAt, m.ContentJson,
+            favorited = favIds.Contains(m.Id)
         }));
+    }
+
+    /// <summary>收藏市场条目（幂等）。</summary>
+    [HttpPost("favorite/{id}")]
+    public async Task<ApiResult> Favorite(long id)
+    {
+        var tid = _tenant.TenantId;
+        var exists = await _db.MarketFavorites.AnyAsync(f => f.MarketItemId == id && f.TenantId == tid && f.Deleted == 0);
+        if (exists) return ApiResult.Success(true);
+        _db.MarketFavorites.Add(new MarketFavoriteEntity
+        {
+            MarketItemId = id,
+            TenantId = tid,
+            CreatedBy = tid,
+            CreatedAt = DateTime.Now.ToString("o")
+        });
+        await _db.SaveChangesAsync();
+        return ApiResult.Success(true);
+    }
+
+    /// <summary>取消收藏市场条目。</summary>
+    [HttpPost("unfavorite/{id}")]
+    public async Task<ApiResult> Unfavorite(long id)
+    {
+        var tid = _tenant.TenantId;
+        var fav = await _db.MarketFavorites.FirstOrDefaultAsync(f => f.MarketItemId == id && f.TenantId == tid && f.Deleted == 0);
+        if (fav == null) return ApiResult.Success(false);
+        fav.Deleted = 1;
+        await _db.SaveChangesAsync();
+        return ApiResult.Success(false);
     }
 
     /// <summary>我发布的市场条目（管理/下架）</summary>

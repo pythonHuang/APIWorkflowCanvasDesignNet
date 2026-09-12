@@ -68,6 +68,7 @@ public class JuggleDbContext : DbContext
     public DbSet<RedisConfigEntity> RedisConfigs { get; set; } = null!;
     public DbSet<SkillEntity> Skills { get; set; } = null!;
     public DbSet<MarketItemEntity> MarketItems { get; set; } = null!;
+    public DbSet<MarketFavoriteEntity> MarketFavorites { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -270,6 +271,17 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Icon).HasColumnName("icon");
             e.Property(p => p.Author).HasColumnName("author");
             e.Property(p => p.Version).HasColumnName("version");
+        });
+        modelBuilder.Entity<MarketFavoriteEntity>().ToTable("t_market_favorite");
+        modelBuilder.Entity<MarketFavoriteEntity>(e => {
+            e.Property(p => p.Id).HasColumnName("id");
+            e.Property(p => p.Deleted).HasColumnName("deleted");
+            e.Property(p => p.CreatedAt).HasColumnName("created_at");
+            e.Property(p => p.CreatedBy).HasColumnName("created_by");
+            e.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+            e.Property(p => p.UpdatedBy).HasColumnName("updated_by");
+            e.Property(p => p.TenantId).HasColumnName("tenant_id");
+            e.Property(p => p.MarketItemId).HasColumnName("market_item_id");
         });
         modelBuilder.Entity<AlertRuleEntity>().ToTable("t_alert_rule");
         modelBuilder.Entity<AlertRecordEntity>().ToTable("t_alert_record");
@@ -811,5 +823,9 @@ public class JuggleDbContext : DbContext
         modelBuilder.Entity<SuiteEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == null || e.TenantId == CurrentTenantId);
         modelBuilder.Entity<ApiEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == null || e.TenantId == CurrentTenantId);
         modelBuilder.Entity<ParameterEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == null || e.TenantId == CurrentTenantId);
+
+        // 市场条目/收藏：平台级共享 + 租户级收藏
+        modelBuilder.Entity<MarketItemEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == null || e.TenantId == CurrentTenantId);
+        modelBuilder.Entity<MarketFavoriteEntity>().HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId);
     }
 }

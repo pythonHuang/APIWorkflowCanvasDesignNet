@@ -267,6 +267,8 @@ using (var scope = app.Services.CreateScope())
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_market_item ADD COLUMN icon TEXT DEFAULT NULL;"); } catch { }
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_market_item ADD COLUMN author TEXT DEFAULT NULL;"); } catch { }
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_market_item ADD COLUMN version TEXT DEFAULT NULL;"); } catch { }
+        // 市场收藏表
+        try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_market_favorite(id INTEGER PRIMARY KEY AUTOINCREMENT, market_item_id INTEGER, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
         // AI 供应商能力字段
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_provider ADD COLUMN capabilities TEXT DEFAULT NULL;"); } catch { }
         // 知识库 4 表
