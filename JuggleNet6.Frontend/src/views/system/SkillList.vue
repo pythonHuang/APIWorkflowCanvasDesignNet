@@ -29,11 +29,12 @@
               active-text="启用" inactive-text="禁用" inline-prompt style="--el-switch-on-color:#67c23a" />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200">
+        <el-table-column label="操作" width="250">
           <template #default="{ row }">
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
             <el-button size="small" link @click="viewSkill(row)">查看</el-button>
             <el-button size="small" type="info" link @click="openPublish(row)">发布</el-button>
+            <el-button size="small" type="warning" link @click="openShare(row)">分享</el-button>
             <el-button size="small" type="primary" link @click="doExport(row)">导出</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
@@ -86,6 +87,11 @@
     <MarketPublishDialog v-model:visible="publishVisible" item-type="skill"
       :default-name="publishForm.itemName" :default-desc="publishForm.description" :default-group="publishForm.groupName"
       :content-json="publishForm.contentJson" />
+
+    <!-- 分享到官方市场（GitHub PR） -->
+    <MarketShareDialog v-model:visible="shareVisible" item-type="skill"
+      :item-name="shareForm.itemName" :description="shareForm.description"
+      :content-json="shareForm.contentJson" />
   </div>
 </template>
 
@@ -95,18 +101,37 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
 import { saveAs } from 'file-saver'
 import MarketPublishDialog from '../../components/MarketPublishDialog.vue'
+import MarketShareDialog from '../../components/MarketShareDialog.vue'
 
 // 发布到市场
 const publishVisible = ref(false)
 const publishForm = ref<any>({ itemName: '', description: '', groupName: '', contentJson: '{}' })
+
+/** 组装技能内容 JSON */
+function buildSkillContentJson(row: any) {
+  return JSON.stringify({ skillName: row.skillName, groupName: row.groupName, description: row.description, content: row.content })
+}
+
 function openPublish(row: any) {
   publishForm.value = {
     itemName: row.skillName || '',
     description: row.description || '',
     groupName: row.groupName || '',
-    contentJson: JSON.stringify({ skillName: row.skillName, groupName: row.groupName, description: row.description, content: row.content })
+    contentJson: buildSkillContentJson(row)
   }
   publishVisible.value = true
+}
+
+// 分享到官方市场（GitHub PR）
+const shareVisible = ref(false)
+const shareForm = ref<any>({ itemName: '', description: '', contentJson: '{}' })
+function openShare(row: any) {
+  shareForm.value = {
+    itemName: row.skillName || '',
+    description: row.description || '',
+    contentJson: buildSkillContentJson(row)
+  }
+  shareVisible.value = true
 }
 
 const loading = ref(false)

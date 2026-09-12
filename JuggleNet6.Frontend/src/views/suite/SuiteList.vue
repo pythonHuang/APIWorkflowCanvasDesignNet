@@ -32,11 +32,12 @@
         <el-table-column prop="suiteVersion" label="版本" width="80" />
         <el-table-column prop="suiteDesc" label="描述" show-overflow-tooltip />
         <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="270" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" link @click="goApiList(row)">接口管理</el-button>
             <el-button size="small" link @click="openEdit(row)">编辑</el-button>
             <el-button size="small" type="info" link @click="openPublish(row)">发布</el-button>
+            <el-button size="small" type="warning" link @click="openShare(row)">分享</el-button>
             <el-button size="small" type="warning" link @click="doExport(row)">导出</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
@@ -71,6 +72,11 @@
     <MarketPublishDialog v-model:visible="publishVisible" item-type="api"
       :default-name="publishForm.itemName" :default-desc="publishForm.description" :default-group="publishForm.groupName"
       :content-json="publishForm.contentJson" />
+
+    <!-- 分享到官方市场（GitHub PR） -->
+    <MarketShareDialog v-model:visible="shareVisible" item-type="api"
+      :item-name="shareForm.itemName" :description="shareForm.description"
+      :content-json="shareForm.contentJson" />
   </div>
 </template>
 
@@ -80,26 +86,47 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
 import MarketPublishDialog from '../../components/MarketPublishDialog.vue'
+import MarketShareDialog from '../../components/MarketShareDialog.vue'
 
 // 发布到市场（套件及其全部接口）
 const publishVisible = ref(false)
 const publishForm = ref<any>({ itemName: '', description: '', groupName: '', contentJson: '{}' })
+
+/** 组装套件内容 JSON（套件 + 全部接口） */
+async function buildSuiteContentJson(row: any) {
+  const apisRes: any = await request.post('/suite/api/list', { suiteCode: row.suiteCode })
+  const apis = (apisRes.data || []).map((a: any) => ({
+    suiteCode: a.suiteCode, methodCode: a.methodCode, methodName: a.methodName,
+    methodDesc: a.methodDesc, url: a.url, requestType: a.requestType || 'POST'
+  }))
+  return JSON.stringify({
+    suites: [{ suiteCode: row.suiteCode, suiteName: row.suiteName, suiteDesc: row.suiteDesc }], apis
+  })
+}
+
 async function openPublish(row: any) {
   try {
-    const apisRes: any = await request.post('/suite/api/list', { suiteCode: row.suiteCode })
-    const apis = (apisRes.data || []).map((a: any) => ({
-      suiteCode: a.suiteCode, methodCode: a.methodCode, methodName: a.methodName,
-      methodDesc: a.methodDesc, url: a.url, requestType: a.requestType || 'POST'
-    }))
     publishForm.value = {
       itemName: row.suiteName || row.suiteCode || '',
       description: row.suiteDesc || '',
       groupName: '',
-      contentJson: JSON.stringify({
-        suites: [{ suiteCode: row.suiteCode, suiteName: row.suiteName, suiteDesc: row.suiteDesc }], apis
-      })
+      contentJson: await buildSuiteContentJson(row)
     }
     publishVisible.value = true
+  } catch { /* 拦截器已提示 */ }
+}
+
+// 分享到官方市场（GitHub PR）
+const shareVisible = ref(false)
+const shareForm = ref<any>({ itemName: '', description: '', contentJson: '{}' })
+async function openShare(row: any) {
+  try {
+    shareForm.value = {
+      itemName: row.suiteName || row.suiteCode || '',
+      description: row.suiteDesc || '',
+      contentJson: await buildSuiteContentJson(row)
+    }
+    shareVisible.value = true
   } catch { /* 拦截器已提示 */ }
 }
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, HeadingLevel, AlignmentType, BorderStyle } from 'docx'

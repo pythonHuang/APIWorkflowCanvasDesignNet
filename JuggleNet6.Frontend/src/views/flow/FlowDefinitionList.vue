@@ -58,7 +58,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="370" fixed="right">
+        <el-table-column label="操作" width="420" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" link @click="goDesign(row)">设计</el-button>
             <el-button size="small" type="success" link @click="doDeploy(row)">部署</el-button>
@@ -66,6 +66,7 @@
             <el-button size="small" type="info" link @click="doClone(row)">克隆</el-button>
             <el-button size="small" type="warning" link @click="doExport(row)">导出</el-button>
             <el-button size="small" type="info" link @click="openPublish(row)">发布</el-button>
+            <el-button size="small" type="warning" link @click="openShare(row)">分享</el-button>
             <el-tooltip v-if="row.serviceAlias" :content="`WSDL: /open/services/${row.serviceAlias}/wsdl`">
               <el-button size="small" link @click="openServiceWsdl(row)">WSDL</el-button>
             </el-tooltip>
@@ -117,6 +118,11 @@
     <MarketPublishDialog v-model:visible="publishVisible" item-type="flow"
       :default-name="publishForm.itemName" :default-desc="publishForm.description" :default-group="publishForm.groupName"
       :content-json="publishForm.contentJson" />
+
+    <!-- 分享到官方市场（GitHub PR） -->
+    <MarketShareDialog v-model:visible="shareVisible" item-type="flow"
+      :item-name="shareForm.itemName" :description="shareForm.description"
+      :content-json="shareForm.contentJson" />
   </div>
 </template>
 
@@ -128,6 +134,7 @@ import request from '../../utils/request'
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, HeadingLevel, AlignmentType, BorderStyle } from 'docx'
 import { saveAs } from 'file-saver'
 import MarketPublishDialog from '../../components/MarketPublishDialog.vue'
+import MarketShareDialog from '../../components/MarketShareDialog.vue'
 
 // 发布到市场
 const publishVisible = ref(false)
@@ -142,6 +149,20 @@ function openPublish(row: any) {
     })
   }
   publishVisible.value = true
+}
+
+// 分享到官方市场（GitHub PR）
+const shareVisible = ref(false)
+const shareForm = ref<any>({ itemName: '', description: '', contentJson: '{}' })
+function openShare(row: any) {
+  shareForm.value = {
+    itemName: row.flowName || '',
+    description: row.flowDesc || '',
+    contentJson: JSON.stringify({
+      flowName: row.flowName, flowDesc: row.flowDesc, groupName: row.groupName, flowContent: row.flowContent || '[]'
+    })
+  }
+  shareVisible.value = true
 }
 
 const router = useRouter()

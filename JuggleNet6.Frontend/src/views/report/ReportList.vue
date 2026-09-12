@@ -19,7 +19,7 @@
         <el-table-column label="状态" width="70">
           <template #default="{ row }"><el-tag :type="row.status===1?'success':'info'" size="small">{{ row.status===1?'启用':'停用' }}</el-tag></template>
         </el-table-column>
-        <el-table-column label="操作" width="320">
+        <el-table-column label="操作" width="370">
           <template #default="{ row }">
             <el-button size="small" link @click="openDesigner(row.id)">设计</el-button>
             <el-button size="small" type="primary" link @click="openPreview(row)">预览</el-button>
@@ -27,6 +27,7 @@
             <el-button size="small" type="success" link @click="doExportExcel(row)">Excel</el-button>
             <el-button size="small" link @click="doPrint(row)">打印</el-button>
             <el-button size="small" type="info" link @click="openPublish(row)">发布</el-button>
+            <el-button size="small" type="warning" link @click="openShare(row)">分享</el-button>
             <el-button size="small" type="danger" link @click="doDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -38,6 +39,11 @@
     <MarketPublishDialog v-model:visible="publishVisible" item-type="report"
       :default-name="publishForm.itemName" :default-desc="publishForm.description" :default-group="publishForm.groupName"
       :content-json="publishForm.contentJson" />
+
+    <!-- 分享到官方市场（GitHub PR） -->
+    <MarketShareDialog v-model:visible="shareVisible" item-type="report"
+      :item-name="shareForm.itemName" :description="shareForm.description"
+      :content-json="shareForm.contentJson" />
   </div>
 </template>
 
@@ -47,20 +53,39 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
 import MarketPublishDialog from '../../components/MarketPublishDialog.vue'
+import MarketShareDialog from '../../components/MarketShareDialog.vue'
 
 // 发布到市场
 const publishVisible = ref(false)
 const publishForm = ref<any>({ itemName: '', description: '', groupName: '', contentJson: '{}' })
+
+/** 组装报表内容 JSON */
+function buildReportContentJson(row: any) {
+  return JSON.stringify({
+    name: row.name, groupName: row.groupName, paramsConfig: row.paramsConfig || '[]', layoutJson: row.layoutJson || '{}'
+  })
+}
+
 function openPublish(row: any) {
   publishForm.value = {
     itemName: row.name || '',
     description: row.groupName || '',
     groupName: row.groupName || '',
-    contentJson: JSON.stringify({
-      name: row.name, groupName: row.groupName, paramsConfig: row.paramsConfig || '[]', layoutJson: row.layoutJson || '{}'
-    })
+    contentJson: buildReportContentJson(row)
   }
   publishVisible.value = true
+}
+
+// 分享到官方市场（GitHub PR）
+const shareVisible = ref(false)
+const shareForm = ref<any>({ itemName: '', description: '', contentJson: '{}' })
+function openShare(row: any) {
+  shareForm.value = {
+    itemName: row.name || '',
+    description: row.groupName || '',
+    contentJson: buildReportContentJson(row)
+  }
+  shareVisible.value = true
 }
 
 const router = useRouter()
