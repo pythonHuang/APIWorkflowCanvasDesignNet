@@ -352,3 +352,10 @@ wwwroot/
 # 前端依赖
 node_modules/
 dist/
+
+# 测试/工具残留
+.playwright-mcp/
+Juggle.Api/.config/
+JuggleNet6.Frontend/.git__/
+JuggleNet6.Frontend/.git___/
+JuggleNet6.Frontend/.git____/
