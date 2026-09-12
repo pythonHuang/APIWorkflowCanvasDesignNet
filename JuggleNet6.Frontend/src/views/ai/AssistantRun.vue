@@ -316,12 +316,26 @@ async function loadHistory() {
   } catch { historyList.value = [] }
 }
 
+/** 从历史用户消息还原文本与图片（图片以 ![](data URL) markdown 存于 content） */
+function restoreUserMessage(m: any) {
+  if (m.role !== 'user') return m
+  const images: string[] = []
+  let text = m.content || ''
+  text = text.replace(/!\[[^\]]*\]\((data:image[^)]+)\)/g, (_all: string, url: string) => {
+    images.push(url)
+    return ''
+  })
+  return { role: 'user', content: m.content, textContent: text.trim(), images }
+}
+
 async function openConversation(id: number) {
   try {
     const res: any = await request.get(`/ai/conversation/${id}`)
     const conv = res.data
     conversation.value = { id: conv.id, status: conv.status }
-    try { messages.value = JSON.parse(conv.messages || '[]') } catch { messages.value = [] }
+    try {
+      messages.value = (JSON.parse(conv.messages || '[]') as any[]).map(restoreUserMessage)
+    } catch { messages.value = [] }
     try { finalOutputs.value = JSON.parse(conv.outputs || '{}') } catch { finalOutputs.value = {} }
     historyVisible.value = false
     await nextTick()
