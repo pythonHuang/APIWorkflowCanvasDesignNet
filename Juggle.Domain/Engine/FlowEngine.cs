@@ -17,23 +17,29 @@ public class FlowEngine
     private readonly Dictionary<string, string?> _staticVarSnapshot;
     /// <summary>根据 flowKey 加载最新已发布流程内容（供 SUB_FLOW 节点调用），可为 null（不支持子流程）</summary>
     private readonly Func<string, Task<string?>>? _flowContentLoader;
-    /// <summary>大模型对话函数（AiChatRequest → reply），供 AI 节点与文件解析(图片)调用，可为 null（未接入大模型）</summary>
-    private readonly Func<AiChatRequest, Task<string>>? _aiChatFunc;
+    /// <summary>大模型对话函数（AiChatRequest → 结果含工具调用），供 AI 节点与文件解析(图片)调用，可为 null（未接入大模型）</summary>
+    private readonly Func<AiChatRequest, Task<AiChatResult>>? _aiChatFunc;
     /// <summary>Redis 实例连接串（实例ID → 连接串，0=默认实例），供 REDIS_GET/REDIS_SET 节点使用</summary>
     private readonly Dictionary<long, string> _redisConnStrs;
     /// <summary>知识库检索函数（kbId, query, topK → 上下文文本），供 KB_SEARCH 节点使用</summary>
     private readonly Func<long, string, int, Task<string>>? _kbSearchFunc;
     /// <summary>技能解析函数（技能ID列表 → 拼接的提示词文本），供 AI 节点 skills 使用</summary>
     private readonly Func<List<long>, Task<string>>? _skillResolver;
+    /// <summary>工具定义解析函数（toolApis,toolFlows → OpenAI tools JSON），供 AI 节点函数调用使用</summary>
+    private readonly Func<string, string, Task<string>>? _toolsResolver;
+    /// <summary>工具执行函数（工具名, 参数 JSON → 结果文本），供 AI 节点函数调用使用</summary>
+    private readonly Func<string, string, Task<string>>? _toolRunner;
 
     public FlowEngine(IHttpClientFactory httpClientFactory,
                       Dictionary<string, DataSourceInfo>? dataSources = null,
                       Dictionary<string, string?>? staticVariables = null,
                       Func<string, Task<string?>>? flowContentLoader = null,
-                      Func<AiChatRequest, Task<string>>? aiChatFunc = null,
+                      Func<AiChatRequest, Task<AiChatResult>>? aiChatFunc = null,
                       Dictionary<long, string>? redisConnStrs = null,
                       Func<long, string, int, Task<string>>? kbSearchFunc = null,
-                      Func<List<long>, Task<string>>? skillResolver = null)
+                      Func<List<long>, Task<string>>? skillResolver = null,
+                      Func<string, string, Task<string>>? toolsResolver = null,
+                      Func<string, string, Task<string>>? toolRunner = null)
     {
         _httpClientFactory  = httpClientFactory;
         _dataSources        = dataSources ?? new();
@@ -43,6 +49,8 @@ public class FlowEngine
         _redisConnStrs      = redisConnStrs ?? new();
         _kbSearchFunc       = kbSearchFunc;
         _skillResolver      = skillResolver;
+        _toolsResolver      = toolsResolver;
+        _toolRunner         = toolRunner;
     }
 
     /// <summary>解析 Redis 连接串（按实例 ID，0=默认实例）；未配置时返回 null。</summary>
@@ -174,7 +182,7 @@ public class FlowEngine
                 "TRANSFORM"     => new TransformNodeExecutor(),
                 "AI"            => new AiNodeExecutor(
                     _aiChatFunc ?? throw new InvalidOperationException("流程引擎未接入大模型，无法执行 AI 节点"),
-                    _skillResolver),
+                    _skillResolver, _toolsResolver, _toolRunner),
                 "FILE_PARSE"    => new FileParseNodeExecutor(_aiChatFunc),
                 "EXCEL_READ"    => new ExcelReadNodeExecutor(),
                 "FILE_WRITE"    => new FileWriteNodeExecutor(),

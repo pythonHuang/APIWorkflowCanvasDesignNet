@@ -320,6 +320,14 @@ public class AiConfig
     /// <summary>随机种子（seed，固定后输出更稳定；空=随机）</summary>
     [JsonPropertyName("seed")]
     public int? Seed { get; set; }
+
+    /// <summary>可调用的接口 methodCode 列表（逗号分隔，函数调用工具）</summary>
+    [JsonPropertyName("toolApis")]
+    public string ToolApis { get; set; } = "";
+
+    /// <summary>可调用的流程 flowKey 列表（逗号分隔，函数调用工具）</summary>
+    [JsonPropertyName("toolFlows")]
+    public string ToolFlows { get; set; } = "";
 }
 
 /// <summary>文件解析节点配置（FILE_PARSE 节点）</summary>

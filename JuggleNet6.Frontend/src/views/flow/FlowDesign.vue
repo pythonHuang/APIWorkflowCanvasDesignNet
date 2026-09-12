@@ -352,6 +352,24 @@
               </div>
             </div>
             <div class="prop-item">
+              <label>工具调用</label>
+              <div style="font-size:11px;color:#909399;margin-bottom:4px">勾选后模型可按需调用接口/流程（函数调用），执行结果回传后生成最终回答，最多 4 轮。</div>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+                <span style="width:40px;font-size:12px;color:#666;flex-shrink:0">接口</span>
+                <el-select v-model="toolApisModel" size="small" style="flex:1" multiple collapse-tags collapse-tags-tooltip clearable placeholder="模型可调用的接口">
+                  <el-option-group v-for="g in apiOptions" :key="g.value" :label="g.label">
+                    <el-option v-for="a in g.children" :key="a.value" :label="a.label" :value="a.value" />
+                  </el-option-group>
+                </el-select>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span style="width:40px;font-size:12px;color:#666;flex-shrink:0">流程</span>
+                <el-select v-model="toolFlowsModel" size="small" style="flex:1" multiple collapse-tags collapse-tags-tooltip filterable clearable placeholder="模型可调用的流程">
+                  <el-option v-for="f in publishedFlows" :key="f.flowKey" :label="`${f.flowName}（${f.flowKey}）`" :value="f.flowKey" />
+                </el-select>
+              </div>
+            </div>
+            <div class="prop-item">
               <label>输出目标</label>
               <div style="display:flex;gap:4px">
                 <el-select v-model="selectedNode.aiConfig.outputTargetType" size="small" style="width:90px;flex-shrink:0">
@@ -2003,6 +2021,22 @@ const skillIdsModel = computed({
   }
 })
 
+// AI 节点工具调用（toolApis/toolFlows 逗号分隔字符串 ↔ 数组）
+const toolApisModel = computed<string[]>({
+  get: () => (selectedNode.value?.aiConfig?.toolApis || '')
+    .split(',').map((s: string) => s.trim()).filter(Boolean),
+  set: (codes: string[]) => {
+    if (selectedNode.value?.aiConfig) selectedNode.value.aiConfig.toolApis = codes.join(',')
+  }
+})
+const toolFlowsModel = computed<string[]>({
+  get: () => (selectedNode.value?.aiConfig?.toolFlows || '')
+    .split(',').map((s: string) => s.trim()).filter(Boolean),
+  set: (keys: string[]) => {
+    if (selectedNode.value?.aiConfig) selectedNode.value.aiConfig.toolFlows = keys.join(',')
+  }
+})
+
 // AI 节点模型参数：温度（默认 0.7）/ 最大输出字数（0=不限）/ 随机种子（0=随机）
 const aiTempModel = computed<number>({
   get: () => selectedNode.value?.aiConfig?.temperature ?? 0.7,
@@ -2254,6 +2288,9 @@ env_delay_ms = env_retry_count * 1000 + 500` },
   温度:      0-2 随机性（越大越发散），默认 0.7
   最大输出:  最大输出字数（0=不限制）
   随机种子:  固定后同输入输出更稳定（0=随机）
+工具调用:    勾选接口/流程后开启函数调用（需模型支持 tools），模型按需调用工具，
+             执行结果回传后生成最终回答（最多 4 轮）；接口按参数位置拼 query/body 调用，
+             流程按入参执行并返回出参 JSON
 输出目标:    变量 / 出参 / 入参 + 对应参数选择（模型回复写入）` },
       { title: '三、使用 demo', code: `// 场景：流程中生成商品推荐文案
 前置 ASSIGN 节点: env_product_name = "智能手表"

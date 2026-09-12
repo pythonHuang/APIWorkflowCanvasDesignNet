@@ -71,7 +71,136 @@ public class FlowExecutionService
             aiChatFunc: req => _aiService.ChatRequestAsync(req),
             redisConnStrs: await GetRedisConnStrsAsync(),
             kbSearchFunc: (kbId, query, topK) => _kbService.SearchAsContextAsync(kbId, query, topK),
-            skillResolver: BuildSkillsPromptAsync);
+            skillResolver: BuildSkillsPromptAsync,
+            toolsResolver: BuildToolDefsAsync,
+            toolRunner: (name, argsJson) => RunToolAsync(name, argsJson, dsInfos, staticVars, flowContentLoader));
+
+    /// <summary>构建工具定义（AI 节点函数调用：接口/流程 → OpenAI tools JSON 数组）。</summary>
+    private async Task<string> BuildToolDefsAsync(string toolApis, string toolFlows)
+    {
+        var tools = new List<Dictionary<string, object?>>();
+
+        foreach (var code in SplitCsv(toolApis))
+        {
+            var api = await _db.Apis.FirstOrDefaultAsync(a => a.MethodCode == code && a.Deleted == 0);
+            if (api == null) continue;
+            var apiParams = await _db.Parameters
+                .Where(p => p.OwnerId == api.Id && p.ParamType == 1 && p.Deleted == 0)
+                .OrderBy(p => p.SortNum).ToListAsync();
+            var props = new Dictionary<string, object?>();
+            foreach (var p in apiParams)
+            {
+                var prop = new Dictionary<string, object?> { ["type"] = "string" };
+                if (!string.IsNullOrEmpty(p.Description)) prop["description"] = p.Description;
+                props[p.ParamCode ?? ""] = prop;
+            }
+            tools.Add(new Dictionary<string, object?>
+            {
+                ["type"] = "function",
+                ["function"] = new Dictionary<string, object?>
+                {
+                    ["name"] = $"api:{api.MethodCode}",
+                    ["description"] = $"{api.MethodName}。{api.MethodDesc} 调用方式：{api.RequestType} {api.Url}",
+                    ["parameters"] = new Dictionary<string, object?> { ["type"] = "object", ["properties"] = props }
+                }
+            });
+        }
+
+        foreach (var key in SplitCsv(toolFlows))
+        {
+            var flow = await _db.FlowDefinitions.FirstOrDefaultAsync(f => f.FlowKey == key && f.Deleted == 0);
+            if (flow == null) continue;
+            var flowParams = await _db.Parameters
+                .Where(p => p.OwnerId == flow.Id && p.ParamType == 5 && p.Deleted == 0)
+                .OrderBy(p => p.SortNum).ToListAsync();
+            var props = new Dictionary<string, object?>();
+            foreach (var p in flowParams)
+            {
+                var prop = new Dictionary<string, object?> { ["type"] = "string" };
+                if (!string.IsNullOrEmpty(p.Description)) prop["description"] = p.Description;
+                props[p.ParamCode ?? ""] = prop;
+            }
+            tools.Add(new Dictionary<string, object?>
+            {
+                ["type"] = "function",
+                ["function"] = new Dictionary<string, object?>
+                {
+                    ["name"] = $"flow:{flow.FlowKey}",
+                    ["description"] = $"{flow.FlowName}。{flow.FlowDesc} 流程编排调用",
+                    ["parameters"] = new Dictionary<string, object?> { ["type"] = "object", ["properties"] = props }
+                }
+            });
+        }
+
+        return JsonSerializer.Serialize(tools);
+    }
+
+    /// <summary>执行工具（AI 节点函数调用：api:xxx 直接 HTTP 调用，flow:xxx 递归执行子流程 → 结果文本）。</summary>
+    private async Task<string> RunToolAsync(string name, string argsJson,
+        Dictionary<string, DataSourceInfo> dsInfos, Dictionary<string, string?> staticVars,
+        Func<string, Task<string?>> flowContentLoader)
+    {
+        Dictionary<string, object?> args;
+        try { args = JsonSerializer.Deserialize<Dictionary<string, object?>>(argsJson) ?? new(); }
+        catch { args = new(); }
+
+        if (name.StartsWith("api:"))
+        {
+            var methodCode = name[4..];
+            var api = await _db.Apis.FirstOrDefaultAsync(a => a.MethodCode == methodCode && a.Deleted == 0)
+                ?? throw new Exception($"接口 [{methodCode}] 不存在");
+            if (!string.IsNullOrEmpty(api.MockJson)) return api.MockJson;
+
+            var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(60);
+            var requestType = (api.RequestType ?? "GET").ToUpper();
+            string body;
+            if (requestType == "GET" || requestType == "DELETE")
+            {
+                var query = string.Join("&", args.Select(kv =>
+                    $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value?.ToString() ?? "")}"));
+                var url = api.Url ?? "";
+                if (query.Length > 0) url = url.Contains('?') ? $"{url}&{query}" : $"{url}?{query}";
+                var resp = requestType == "GET" ? await client.GetAsync(url) : await client.DeleteAsync(url);
+                body = await resp.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                HttpContent content;
+                if (api.ContentType == "FORM")
+                {
+                    var formStr = string.Join("&", args.Select(kv =>
+                        $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value?.ToString() ?? "")}"));
+                    content = new StringContent(formStr, System.Text.Encoding.UTF8, "application/x-www-form-urlencoded");
+                }
+                else
+                {
+                    content = new StringContent(JsonSerializer.Serialize(args), System.Text.Encoding.UTF8, "application/json");
+                }
+                var resp = requestType == "PUT" ? await client.PutAsync(api.Url, content) : await client.PostAsync(api.Url, content);
+                body = await resp.Content.ReadAsStringAsync();
+            }
+            return body.Length > 8000 ? body[..8000] : body;
+        }
+
+        if (name.StartsWith("flow:"))
+        {
+            var flowKey = name[5..];
+            var flowContent = await flowContentLoader(flowKey);
+            if (string.IsNullOrEmpty(flowContent) || flowContent == "[]")
+                throw new Exception($"流程 [{flowKey}] 不存在或未发布");
+            var engine = await BuildEngineAsync(dsInfos, staticVars, flowContentLoader);
+            var result = await engine.ExecuteAsync(flowContent, args, flowKey);
+            if (!result.Success) throw new Exception(result.ErrorMessage);
+            return JsonSerializer.Serialize(result.OutputData);
+        }
+
+        throw new Exception($"未知工具: {name}");
+    }
+
+    /// <summary>拆分逗号分隔列表（去空白去空项）。</summary>
+    private static List<string> SplitCsv(string csv)
+        => (csv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
     // ────────────────────────────────────────────────────────────────
     // 数据源

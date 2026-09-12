@@ -186,8 +186,8 @@ public class AiService
         return content?.Trim() ?? "";
     }
 
-    /// <summary>按 AI 节点请求调用大模型（统一入口：支持图片输入、温度/最大输出字数/随机种子/深度思考等模型参数）。</summary>
-    public async Task<string> ChatRequestAsync(AiChatRequest req)
+    /// <summary>按 AI 节点请求调用大模型（统一入口：支持图片输入、温度/最大输出字数/随机种子/深度思考等模型参数，以及函数调用 tools 与多轮历史）。</summary>
+    public async Task<AiChatResult> ChatRequestAsync(AiChatRequest req)
     {
         var cfg = await ResolveConfigAsync(req.ProviderId > 0 ? req.ProviderId : null);
         if (!string.IsNullOrEmpty(req.Model)) cfg.Model = req.Model;
@@ -210,19 +210,28 @@ public class AiService
             userContent = content.ToArray();
         }
 
+        // 消息：system + user + 历史（工具调用多轮回传）
+        var messages = new List<object>
+        {
+            new Dictionary<string, object?> { ["role"] = "system", ["content"] = req.SystemPrompt },
+            new Dictionary<string, object?> { ["role"] = "user", ["content"] = userContent }
+        };
+        if (req.History is { Count: > 0 }) messages.AddRange(req.History);
+
         var payload = new Dictionary<string, object?>
         {
             ["model"] = cfg.Model,
-            ["messages"] = new object[]
-            {
-                new { role = "system", content = req.SystemPrompt },
-                new { role = "user", content = userContent }
-            },
+            ["messages"] = messages,
             ["temperature"] = req.Temperature ?? 0.2
         };
         if (req.MaxTokens is > 0) payload["max_tokens"] = req.MaxTokens.Value;
         if (req.Seed.HasValue) payload["seed"] = req.Seed.Value;
         if (req.EnableThinking) payload["enable_thinking"] = true;
+        if (!string.IsNullOrWhiteSpace(req.ToolsJson))
+        {
+            try { payload["tools"] = JsonSerializer.Deserialize<JsonElement>(req.ToolsJson); }
+            catch { /* 工具定义非法则忽略 */ }
+        }
 
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(180);
@@ -234,8 +243,26 @@ public class AiService
         var body = await resp.Content.ReadAsStringAsync();
         if (!resp.IsSuccessStatusCode)
             throw new Exception($"AI 调用失败({(int)resp.StatusCode}): {Truncate(body, 300)}");
+
         using var doc = JsonDocument.Parse(body);
-        return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString()?.Trim() ?? "";
+        var msg = doc.RootElement.GetProperty("choices")[0].GetProperty("message");
+        var result = new AiChatResult();
+        if (msg.TryGetProperty("content", out var contentEl) && contentEl.ValueKind == JsonValueKind.String)
+            result.Text = contentEl.GetString()?.Trim() ?? "";
+        if (msg.TryGetProperty("tool_calls", out var tcs) && tcs.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var tc in tcs.EnumerateArray())
+            {
+                if (!tc.TryGetProperty("function", out var fn)) continue;
+                result.ToolCalls.Add(new AiToolCall
+                {
+                    Id = tc.TryGetProperty("id", out var idEl) ? idEl.GetString() ?? "" : "",
+                    Name = fn.GetProperty("name").GetString() ?? "",
+                    Arguments = fn.TryGetProperty("arguments", out var argsEl) ? argsEl.GetString() ?? "{}" : "{}"
+                });
+            }
+        }
+        return result;
     }
 
     private static string Truncate(string s, int len) => s.Length <= len ? s : s[..len] + "...";

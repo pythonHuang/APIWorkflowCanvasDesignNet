@@ -7,9 +7,9 @@ namespace Juggle.Domain.Engine.NodeExecutors;
 /// <summary>文件解析节点：解析文本/JSON/XML/CSV/图片 文件内容（支持 data URL 或 base64 输入，图片用视觉模型识别）。</summary>
 public class FileParseNodeExecutor : INodeExecutor
 {
-    private readonly Func<AiChatRequest, Task<string>>? _chat;
+    private readonly Func<AiChatRequest, Task<AiChatResult>>? _chat;
 
-    public FileParseNodeExecutor(Func<AiChatRequest, Task<string>>? chat = null) => _chat = chat;
+    public FileParseNodeExecutor(Func<AiChatRequest, Task<AiChatResult>>? chat = null) => _chat = chat;
 
     public async Task<string?> ExecuteAsync(FlowNode node, FlowContext context)
     {
@@ -28,9 +28,9 @@ public class FileParseNodeExecutor : INodeExecutor
             var imageUrl = raw.Trim();
             if (!imageUrl.StartsWith("data:image") && !imageUrl.StartsWith("http"))
                 imageUrl = "data:image/png;base64," + imageUrl;
-            result = await _chat(new AiChatRequest(
+            result = (await _chat(new AiChatRequest(
                 "你是一个专业的图片识别助手，请详细、准确地描述图片内容（文字、对象、场景等）。",
-                "请识别这张图片", new List<string> { imageUrl }, 0, null));
+                "请识别这张图片", new List<string> { imageUrl }, 0, null))).Text;
         }
         else
         {
