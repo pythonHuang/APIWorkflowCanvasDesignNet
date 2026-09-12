@@ -54,9 +54,19 @@
             <el-option v-for="g in groups" :key="g" :label="g" :value="g" />
           </el-select>
         </el-form-item>
-        <el-form-item label="描述"><el-input v-model="form.description" placeholder="一句话说明技能用途（模型选择依据）" /></el-form-item>
+        <el-form-item label="描述">
+          <div style="display:flex;gap:6px;width:100%">
+            <el-input v-model="form.description" placeholder="一句话说明技能用途（模型选择依据）" style="flex:1" />
+            <el-button size="small" icon="MagicStick" :loading="optimizingDesc" @click="doOptimizeDescription">AI 优化</el-button>
+          </div>
+        </el-form-item>
         <el-form-item label="技能内容">
-          <el-input v-model="form.content" type="textarea" :rows="10" placeholder="提示词/markdown 内容，执行时拼入系统提示词" />
+          <div style="width:100%">
+            <el-input v-model="form.content" type="textarea" :rows="10" placeholder="提示词/markdown 内容，执行时拼入系统提示词" />
+            <div style="display:flex;justify-content:flex-end;margin-top:4px">
+              <el-button size="small" icon="MagicStick" :loading="optimizingContent" @click="doOptimizeContent">AI 优化生成</el-button>
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="启用"><el-switch v-model="form.enabled" /></el-form-item>
       </el-form>
@@ -132,6 +142,35 @@ function openShare(row: any) {
     contentJson: buildSkillContentJson(row)
   }
   shareVisible.value = true
+}
+
+// AI 优化生成（描述 / 技能内容）
+const optimizingDesc = ref(false)
+const optimizingContent = ref(false)
+
+/** AI 优化技能描述（一句话） */
+async function doOptimizeDescription() {
+  if (!form.value.skillName?.trim()) { ElMessage.warning('请先填写技能名称'); return }
+  optimizingDesc.value = true
+  try {
+    const res: any = await request.post('/ai/optimize-prompt', {
+      prompt: `技能名称：${form.value.skillName}\n描述草稿：${form.value.description || '（未填写，请根据技能名称生成）'}`,
+      purpose: 'description'
+    })
+    if (res.data?.prompt) form.value.description = res.data.prompt.trim()
+  } catch { /* 拦截器已提示 */ } finally { optimizingDesc.value = false }
+}
+
+/** AI 优化生成技能内容（提示词/markdown） */
+async function doOptimizeContent() {
+  if (!form.value.skillName?.trim()) { ElMessage.warning('请先填写技能名称'); return }
+  optimizingContent.value = true
+  try {
+    const res: any = await request.post('/ai/optimize-prompt', {
+      prompt: `技能名称：${form.value.skillName}\n技能描述：${form.value.description || '（未填写）'}\n技能内容草稿：${form.value.content || '（未填写，请根据名称与描述生成完整技能内容）'}`
+    })
+    if (res.data?.prompt) form.value.content = res.data.prompt.trim()
+  } catch { /* 拦截器已提示 */ } finally { optimizingContent.value = false }
 }
 
 const loading = ref(false)

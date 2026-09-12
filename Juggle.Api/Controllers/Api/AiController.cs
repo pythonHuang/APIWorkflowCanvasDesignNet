@@ -247,7 +247,9 @@ public class AiController : ControllerBase
     {
         try
         {
-            var system = "你是提示词优化专家。请把用户提供的提示词草稿优化为结构清晰、约束明确、可稳定执行的高质量系统提示词（保持原语言，直接输出优化后的提示词文本，不要解释、不要 markdown 围栏）。";
+            var system = (req.Purpose ?? "") == "description"
+                ? "你是文案专家。请把用户提供的内容优化为一句简洁、准确、易检索的中文描述（30字以内，直接输出描述文本，不要解释、不要 markdown 围栏、不要引号）。"
+                : "你是提示词优化专家。请把用户提供的提示词草稿优化为结构清晰、约束明确、可稳定执行的高质量系统提示词（保持原语言，直接输出优化后的提示词文本，不要解释、不要 markdown 围栏）。";
             var result = await _aiService.ChatAsync(system, req.Prompt ?? "", req.ProviderId, modelOverride: req.Model);
             return ApiResult.Success(new { prompt = result });
         }
@@ -482,6 +484,8 @@ public class AiOptimizePromptRequest
     public string? Prompt { get; set; }
     public long ProviderId { get; set; }
     public string? Model { get; set; }
+    /// <summary>优化目标：空=系统提示词优化；description=一句话描述优化</summary>
+    public string? Purpose { get; set; }
 }
 
 public class AiGenerateIconRequest

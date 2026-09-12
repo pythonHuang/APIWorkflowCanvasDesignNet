@@ -67,6 +67,8 @@
               <el-icon><MagicStick /></el-icon>
               <span>模型助手</span>
             </template>
+            <el-menu-item index="/system/ai-provider">大模型设置</el-menu-item>
+            <el-menu-item index="/system/skills">Skill 管理</el-menu-item>
             <el-menu-item index="/ai/assistants">模型助手管理</el-menu-item>
             <el-menu-item index="/ai/flow-assistant">流程智能编排助手</el-menu-item>
             <el-menu-item index="/ai/api-assistant">接口智能接入助手</el-menu-item>
@@ -95,9 +97,7 @@
             <el-menu-item index="/system/role" v-if="hasMenu('/system/role')">角色管理</el-menu-item>
             <el-menu-item index="/system/tenant" v-if="hasMenu('/system/tenant')">租户管理</el-menu-item>
             <el-menu-item index="/system/config" v-if="hasMenu('/system/config')">系统配置</el-menu-item>
-            <el-menu-item index="/system/ai-provider" v-if="hasMenu('/system/config')">大模型设置</el-menu-item>
           <el-menu-item index="/system/redis" v-if="hasMenu('/system/config')">Redis 配置</el-menu-item>
-          <el-menu-item index="/system/skills" v-if="hasMenu('/system/config')">Skill 管理</el-menu-item>
             <el-menu-item index="/system/login-log" v-if="hasMenu('/system/login-log')">登录日志</el-menu-item>
             <el-menu-item index="/system/audit-log" v-if="hasMenu('/system/audit-log')">审计日志</el-menu-item>
           </el-sub-menu>
