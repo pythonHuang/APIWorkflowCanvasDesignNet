@@ -239,6 +239,17 @@ START / END / METHOD（接口调用）/ CONDITION（条件分支）/ MERGE（汇
 - 🔗 **接口直连访问** — 套件接口支持 `/open/api/{code}` 直接调用（Token 授权）+ 访问别名 `/open/api/{alias}` + 停用/启用开关 + 一键复制地址
 - 🧩 **WSDL 解析增强** — 支持 generatedXSD 地址、xsd:include/import schemaLocation 递归加载、粘贴 XSD 内容（解决内网 schemaLocation 无法访问）
 - 📚 **安装部署文档** — 新增 Docker/Linux/Windows/Nginx/数据库/升级部署指南
+- 🧠 **大模型节点增强** — 可设置供应商与模型、输入变量可选流程入出参及中间变量、图片输入（多模态视觉识别，多选 data URL 变量）、输出目标可选变量/出参/入参；文件解析节点支持图片类型（视觉模型识别描述）
+- 🎛️ **大模型节点模型参数** — 深度思考开关（enable_thinking，deepseek-reasoner/Qwen 思考模式生效）、温度 0-2、最大输出字数（max_tokens）、随机种子（seed）
+- 🔧 **大模型节点工具调用** — 勾选接口/流程作为函数调用 tools，模型按需调用工具（接口直接 HTTP 调用/流程递归执行），结果回传后生成最终回答（最多 4 轮）
+- 📚 **知识库子系统** — 多知识库 CRUD 与配置（切片大小/重叠、文本或向量检索、向量模型），文档上传自动解析（word/excel/pdf/txt/markdown）切片入库、手动片段、文本关键词检索与向量余弦相似度检索（embeddings）、清洗（去空去重超短）与重新向量化、匹配记录查询；流程设计器新增知识库检索节点（KB_SEARCH）供 AI 节点 RAG 问答
+- ✂️ **数据提取节点** — 输入可选流程入出参与中间变量，提取类型 json（首个对象数组）/code（代码块）/keyword（关键字后到行尾）/between（起止标志）/length（偏移长度），输出可赋值变量/出参/入参
+- 🔎 **Redis 缓存节点** — 查询/设置节点（key 支持变量模板/JSON 自动解析/过期秒数）+ 系统设置 Redis 多实例配置（地址/端口/密码/库/测试连接/默认实例），未配置时节点执行给出明确报错
+- 🛠️ **Skill 管理** — 技能 CRUD（名称/分组/描述/内容/启停）、单个导入（JSON 或 markdown，首个 # 标题为技能名）、批量导入、单个/批量导出；大模型节点可勾选多个技能，执行时拼入系统提示词
+- 🛒 **市场系统** — 接口/流程/模型助手/Skills/报表五个市场：发布后平台级共享，任意租户一键导入（按名称/code 去重 + 下载计数）；条目展示图标/名称/描述/作者/版本/更新日期；收藏/取消收藏 + 只看收藏过滤；条目 JSON 下载与直接应用
+- 🔍 **市场发现** — 从 GitHub 官方仓库（pythonHuang/APIWorkflowCanvasDesignNet）market 目录拉取 index.json 及各类型 {id}.json 到本地，按 id 导入（id 相同更新，否则新增）
+- 🚀 **市场分享** — 分享到官方 GitHub 市场：填写作者/版本，本地生成 market/{type}/{id}.json 并更新 index.json，GitHub Token 授权后自动 fork → 建分支 → 写条目文件 → 合并官方最新索引 → 生成 Pull Request，管理员审核合并进入官方市场
+- 🔗 **模型能力绑定** — 供应商可设置支持的能力（Skills 多选/接口多选/流程多选/工具列表），流程 AI 节点按所选供应商过滤技能列表
 
 ### v1.7
 
@@ -277,6 +288,11 @@ START / END / METHOD（接口调用）/ CONDITION（条件分支）/ MERGE（汇
 
 ## 📚 文档
 
+- [系统需求文档](./REQUIREMENTS.md)
+- [系统架构文档](./Architecture.md)
+- [系统详细设计文档](./DesignDoc.md)
+- [系统部署文档](./DEPLOY.md)
+- [数据库表结构](./docs/表结构/表列表.md)
 - [原项目文档](https://juggle.plus/docs/guide/introduce/introduce.html)（Java 版本参考）
 - [Release Notes](./RELEASE.md)
 
@@ -521,6 +537,17 @@ START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / MYSQL / LOOP / DELAY 
 - 🔗 **Direct API access** — Suite APIs callable via `/open/api/{code}` (Token auth) + access alias `/open/api/{alias}` + enable/disable switch + one-click copy URL
 - 🧩 **WSDL parser enhancements** — generatedXSD location, recursive xsd:include/import schemaLocation loading, paste XSD content (for unreachable internal schemaLocation)
 - 📚 **Deployment docs** — Docker / Linux / Windows / Nginx / database / upgrade guides
+- 🧠 **LLM node enhancement** — Provider & model selection, input variable from flow in/out/intermediate vars, image input (multimodal vision, multi-select data URLs), output target variable/out-param/in-param; file-parse node supports image type (vision description)
+- 🎛️ **LLM node model params** — Deep-thinking switch (enable_thinking for reasoning models), temperature 0-2, max output tokens, random seed
+- 🔧 **LLM node tool calling** — Select APIs/flows as function-calling tools; the model calls tools on demand (APIs invoked directly over HTTP, flows run recursively), results are fed back to produce the final answer (max 4 rounds)
+- 📚 **Knowledge base subsystem** — Multi-KB CRUD & config (chunk size/overlap, text or vector retrieval, embedding model), auto document parsing (word/excel/pdf/txt/markdown) & chunking, manual chunks, keyword search & vector cosine-similarity search, cleaning & re-embedding, match-log query; new KB_SEARCH flow node for RAG Q&A with AI nodes
+- ✂️ **Data-extract node** — json (first object/array) / code (code block) / keyword (text after keyword to line end) / between (start-end markers) / length (offset-length) extraction types; output to variable/out-param/in-param
+- 🔎 **Redis cache nodes** — Get/Set nodes (variable templates in key / auto JSON parse / TTL seconds) + multi-instance Redis config page (host/port/password/db/test-connection/default instance); clear error when not configured
+- 🛠️ **Skill management** — Skill CRUD (name/group/desc/content/enable), single import (JSON or markdown), batch import, single/batch export; AI nodes can attach multiple skills appended to the system prompt at runtime
+- 🛒 **Market system** — Five markets (APIs/flows/assistants/skills/reports): publish for platform-wide sharing, one-click import with dedup & download count; items show icon/name/desc/author/version/date; favorite/unfavorite with filter; JSON download & direct apply
+- 🔍 **Market discovery** — Pull index.json and {id}.json files from the official GitHub repo (pythonHuang/APIWorkflowCanvasDesignNet) market directory to local; import by id (update if same id, else insert)
+- 🚀 **Market sharing** — Share to the official GitHub market: fill author/version, generate local market/{type}/{id}.json and update index.json, GitHub token auth, then auto fork → branch → write item file → merge latest official index → create Pull Request; admins review and merge into the official market
+- 🔗 **Model capability binding** — Providers can set supported capabilities (skills/APIs/flows/tools); the flow AI node filters its skill list by the selected provider
 
 ### v1.7
 
@@ -559,6 +586,7 @@ START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / MYSQL / LOOP / DELAY 
 
 ## 📚 Documentation
 
+- [Requirements](./REQUIREMENTS.md) / [Architecture](./Architecture.md) / [Detailed Design](./DesignDoc.md) / [Deployment](./DEPLOY.md) / [DB Tables](./docs/表结构/表列表.md)（中文）
 - [Original Project Docs](https://juggle.plus/docs/guide/introduce/introduce.html) (Java version reference)
 - [Release Notes](./RELEASE.md)
 

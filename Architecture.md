@@ -215,6 +215,15 @@ console-ui/
 | 模板市场 | /market/template | 流程模板市场 |
 | Token 管理 | /system/token | 访问令牌管理 |
 | 数据源管理 | /system/datasource | MySQL 数据源配置 |
+| 市场 | /market | 五类条目市场（接口/流程/模型助手/Skill/报表）+ 发现/收藏/下载/分享 |
+| 模型助手 | /ai/assistant | 自定义模型助手管理 + 流程/接口/报表智能编排 |
+| 大模型设置 | /system/ai-provider | 模型供应商（多供应商/能力绑定/模型拉取测试） |
+| 知识库 | /knowledge | 知识库管理（文档解析切片/检索/清洗/匹配记录） |
+| Skill 管理 | /system/skill | 技能 CRUD / 导入导出 |
+| Redis 配置 | /system/redis | Redis 多实例配置与测试 |
+| 报表管理 | /report | 数据视图 + 报表设计器 + 报表查询 |
+
+> 注：报表/知识库/市场/模型助手模块为 v1.8 新增，详见图 4.2 对应的菜单路由配置（`router/index.ts`）。
 
 ### 4.3 核心组件
 
@@ -252,6 +261,16 @@ console-ui/
 | t_flow_version | 流程版本表 |
 | t_token | 访问令牌表 |
 | t_data_source | 数据源表 |
+| t_ai_provider | AI 模型供应商表（baseUrl/apiKey/models/capabilities 能力绑定） |
+| t_ai_assistant | AI 自定义助手表（系统提示词/入出参/快速提示词/图标） |
+| t_ai_conversation | AI 对话会话表（多轮消息/输出/历史） |
+| t_skill | 技能表（分组/内容/启停，AI 节点拼入提示词） |
+| t_kb / t_kb_document / t_kb_chunk / t_kb_match_log | 知识库 4 表（切片/向量/匹配记录） |
+| t_redis_config | Redis 多实例配置表 |
+| t_market_item | 市场条目表（平台级共享，含官方 ID/图标/作者/版本） |
+| t_market_favorite | 市场收藏表（租户级） |
+| t_data_view / t_report | 数据视图 / 报表表 |
+| t_alert_rule / t_alert_record | 告警规则 / 告警记录表 |
 
 ### 5.2 ER 关系
 
@@ -338,6 +357,14 @@ t_flow_definition ──(部署)──> t_flow_info ──< t_flow_version
 | PARALLEL | 并行节点，多分支并发执行 |
 | NOTIFY | 通知节点，Webhook/邮件通知 |
 | TRANSFORM | 模板转换节点，${var|pipe} 语法替换占位符 |
+| AI | 大模型节点：供应商/模型/图片输入/模型参数（深度思考/温度/最大输出/随机种子）+ 函数调用工具（接口/流程，最多 4 轮） |
+| FILE_PARSE | 文件解析节点：json/csv/xml/text/图片（视觉模型识别） |
+| EXCEL_READ | Excel 读取节点 |
+| FILE_WRITE | 文件写入节点 |
+| REDIS_GET | Redis 查询节点（多实例/变量模板/JSON 解析） |
+| REDIS_SET | Redis 设置节点（过期秒数） |
+| KB_SEARCH | 知识库检索节点（RAG 上下文） |
+| DATA_EXTRACT | 数据提取节点（json/code/keyword/between/length 五种提取类型） |
 
 ### 6.3 变量机制
 
@@ -543,4 +570,71 @@ JuggleNet6/
 | v1.2 | 流程调试 + 部署 + 触发 + 开放接口 | P0 |
 | v1.3 | Token 管理 + 数据源管理 | P1 |
 | v1.4 | 套件/模板市场（只读展示） | P2 |
-| v2.0 | 多租户支持、权限系统 | P3 |
+| v1.5-v1.7 | 子流程/监控/静态变量/WSDL/TRANSFORM/报表/AI 助手 | ✅ 已完成 |
+| v1.8 | AI 节点增强与工具调用、知识库、Redis 多实例、Skill 管理、市场生态（发现/收藏/分享 GitHub PR）、模型能力绑定 | ✅ 已完成（2026-09） |
+| v1.9 | 官方市场运营（GitHub 仓库 index.json 维护）、更多节点类型、AI 多模态扩展 | ⏳ 待规划 |
+
+---
+
+## 十二、AI 能力与开放生态架构（v1.8 新增）
+
+### 12.1 AI 大模型能力架构
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    前端 AI 模块（Vue3）                            │
+│  大模型设置(供应商/模型/能力绑定)  模型助手管理  流程/接口/报表助手   │
+└──────────────┬───────────────────────────────────────────────────┘
+               │ /api/ai/*（JWT）
+┌──────────────▼───────────────────────────────────────────────────┐
+│                    AiService（Application 层）                    │
+│  ChatRequestAsync(统一入口: 图片/模型参数/tools/多轮历史)           │
+│  ResolveConfigAsync(供应商解析)  GenerateFlow/Apis/Report(编排生成) │
+│  Conversation(多轮会话)   ExtractJson(代码块剥离)                  │
+└──────────────┬───────────────────────────────────────────────────┘
+               │ Func 回调注入（引擎与配置解耦）
+┌──────────────▼───────────────────────────────────────────────────┐
+│                   FlowEngine 回调注入体系                          │
+│  aiChatFunc       → AiChatRequest → AiChatResult(Text+ToolCalls)  │
+│  toolsResolver    → 接口/流程 → OpenAI tools 定义(含参数说明)       │
+│  toolRunner       → api:xxx HTTP 调用 / flow:xxx 递归子引擎执行     │
+│  skillResolver    → 技能 ID → 提示词拼接                            │
+│  kbSearchFunc     → 知识库检索上下文                                │
+│  redisConnStrs    → Redis 多实例连接串（0=默认实例）                │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+**关键设计**：
+1. **能力绑定（Capabilities）**：供应商存 `capabilities` JSON（skills/apis/flows/tools），前端按所选供应商过滤 AI 节点技能下拉。
+2. **函数调用（Tool Calling）**：AI 节点勾选接口/流程 → 执行时经 `toolsResolver` 生成 OpenAI 函数定义 → 模型返回 `tool_calls` → `toolRunner` 执行（接口走 HTTP，流程走递归 FlowEngine）→ 结果以 `role=tool` 消息回传，最多 4 轮；`AiChatRequest` 携带 `History`（多轮 tool_calls 消息）与 `ToolsJson`。
+3. **模型参数**：深度思考（enable_thinking）、温度、max_tokens、seed 经统一请求入口透传 OpenAI 兼容接口。
+
+### 12.2 知识库检索架构
+
+- **存储**：`t_kb`（库配置：切片大小/重叠/检索类型/向量模型）→ `t_kb_document`（文档）→ `t_kb_chunk`（切片，`vector_json` 存向量）。
+- **检索**：文本模式（SQLite LIKE 关键词打分）与向量模式（调用供应商 embeddings 接口 → 余弦相似度 TopK）；`t_kb_match_log` 记录每次检索。
+- **流程接入**：`KB_SEARCH` 节点经 `kbSearchFunc` 回调获取 TopK 上下文文本，供 AI 节点 RAG 问答。
+
+### 12.3 市场生态架构（发现 / 收藏 / 分享）
+
+```
+GitHub 官方仓库 pythonHuang/APIWorkflowCanvasDesignNet
+  └── market/
+        ├── index.json            # 条目索引（id/type/name/author/version/file）
+        ├── flow/1.json ...       # 各类型 {id}.json 条目文件
+
+① 发现：GET /api/market/discover → 拉取 index.json + 各条目文件 → 本地 market/ 目录
+② 导入：POST /api/market/import-file → 按 (market_item_id, item_type) upsert t_market_item
+③ 应用：POST /api/market/import/{id} → 按类型创建业务实体（按名称/code 去重）
+④ 收藏：t_market_favorite（租户级）→ 列表过滤 favorite=1
+⑤ 分享：POST /api/market/generate-share-file → 本地生成 {id}.json + 更新 index.json
+        （同名条目复用原 id）→ 前端 GitHub API：fork → 分支 → 写条目文件
+        → 合并官方最新 index.json → Pull Request（管理员审核合并）
+```
+
+**多租户**：市场条目 `TenantId=null`（平台级共享，宽松隔离）；收藏 `TenantId=当前租户`（严格隔离）；导入产生的业务实体归属导入方租户。
+
+### 12.4 Redis 多实例架构
+
+- `t_redis_config` 存多实例（0=默认实例），`RedisConnectionPool` 按连接串缓存 `ConnectionMultiplexer`。
+- 引擎经 `redisConnStrs` 字典（实例 ID → 连接串）注入；节点 `redisId` 解析实例，未配置时抛明确错误。

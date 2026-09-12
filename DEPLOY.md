@@ -318,3 +318,40 @@ journalctl -u juggle -f
 # Docker
 docker logs -f juggle
 ```
+
+---
+
+## 十、市场发现与分享配置（v1.8）
+
+### 10.1 本地 market 目录
+
+- 市场「发现」拉取官方市场时，条目文件落在后端运行目录下的 `market/` 目录（`market/{type}/{id}.json` + `market/index.json`）。
+- 分享时也会在该目录生成 `{id}.json` 并更新 `index.json`（同名条目复用原 id）。
+- Docker 部署建议将该目录挂载到卷以持久化：
+
+```bash
+docker run -d --name juggle -p 9127:9127 \
+  -v juggle_data:/data \
+  -v juggle_market:/app/market \
+  pythonhuang/juggle-net8:v1.0
+```
+
+> 官方市场仓库：`https://github.com/pythonHuang/APIWorkflowCanvasDesignNet`（market 目录由管理员审核 PR 后维护）。
+
+### 10.2 分享到官方市场（GitHub 授权）
+
+1. 在 GitHub 创建 Personal Access Token（classic）：
+   `Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token`，
+   勾选 **repo** 权限（fork/写文件/创建 PR 所需）。
+2. 分享弹窗中粘贴 Token（仅保存在本机浏览器 localStorage，不落库、不上传服务器），填写作者与版本号。
+3. 系统自动完成：校验令牌 → 确保 fork → 创建分支 → 写入 `market/{type}/{id}.json` → 合并官方最新 `index.json` → 创建 Pull Request。
+4. 管理员审核合并 PR 后，条目进入官方市场；其他用户通过「市场 → 发现」拉取。
+
+### 10.3 常见问题
+
+| 问题 | 处理 |
+|------|------|
+| 发现提示 index.json 获取失败 404 | 官方仓库尚未建立 market 目录/网络受限，稍后重试 |
+| 分享提示 Fork 创建超时 | 登录 GitHub 手动 fork 一次后重试 |
+| PR 创建失败（token 无权限） | 确认 Token 勾选了 repo 权限且未过期 |
+| 大模型节点报"未配置 AI 大模型" | 系统设置 → 大模型设置 添加并启用供应商（支持 DeepSeek/通义千问/Kimi/OpenAI/GLM/Ollama） |

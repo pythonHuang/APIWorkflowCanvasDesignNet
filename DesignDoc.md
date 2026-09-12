@@ -1357,9 +1357,154 @@ VALUES ('sync_example', '示例流程', 'sync', '...JSON...', '', 0);
 - [x] 监控仪表盘独立菜单，置于首位
 - [x] 复制 URL 剪贴板兼容非 HTTPS 环境
 
-### v1.7（待规划）
-- [ ] 流程模板市场
-- [ ] 执行日志统计图表增强
-- [ ] 接口批量测试
-- [ ] 属性选择器集成到方法节点入/出参
+### v1.7（AI 助手与报表）✅ 已完成
+- [x] 大模型设置（供应商/模型拉取测试/启停）
+- [x] 模型助手管理（自定义助手 + 多轮对话 + 对话历史）
+- [x] 流程/接口/报表智能编排助手
+- [x] 报表模块（数据视图 + 报表设计器 + 公式引擎 + PDF/Excel 导出）
+- [x] 数据库节点 SQL 辅助（表/视图/存储过程浏览 + 测试 SQL）
+- [x] 条件/赋值节点表达式增强（算术/字符串/toString/&&||/子属性/数组）
+
+### v1.8（AI 深化与开放生态）✅ 已完成（2026-09）
+- [x] AI 节点增强：供应商/模型、图片输入（多模态）、输出目标三选
+- [x] AI 节点模型参数：深度思考/温度/最大输出字数/随机种子
+- [x] AI 节点工具调用：接口/流程函数调用（tools，最多 4 轮）
+- [x] 知识库子系统（4 表 + 文档解析切片 + 文本/向量检索 + 清洗 + 匹配记录）+ KB_SEARCH 节点
+- [x] 数据提取节点（json/code/keyword/between/length）
+- [x] Redis 缓存查询/设置节点 + Redis 多实例配置
+- [x] Skill 管理（CRUD/导入导出）+ AI 节点多技能拼接
+- [x] 市场系统（5 类条目/发布/导入去重/收藏/下载/元信息）
+- [x] 市场发现（GitHub index.json → 本地 market 目录 → 按 id 导入更新）
+- [x] 市场分享（本地生成 id.json+index.json → GitHub fork/分支/PR）
+- [x] 模型能力绑定（供应商 capabilities：skills/apis/flows/tools）
+
+---
+
+## 十二、v1.8 新增模块详细设计
+
+### 12.1 新增数据表
+
+#### t_ai_provider（AI 模型供应商表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INTEGER | 主键 |
+| provider_name | TEXT | 供应商名称 |
+| base_url | TEXT | 接口地址（OpenAI 兼容 /v1 一级） |
+| api_key | TEXT | API Key |
+| model | TEXT | 默认模型 |
+| models | TEXT | 可用模型（逗号分隔，对话中可切换） |
+| capabilities | TEXT | 能力绑定 JSON：`{"skills":[..],"apis":["code",..],"flows":["key",..],"tools":["web_search"]}` |
+| enabled | INTEGER | 1=启用 0=禁用 |
+
+#### t_ai_assistant（AI 自定义助手表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INTEGER | 主键 |
+| assistant_name / description | TEXT | 名称 / 描述 |
+| system_prompt | TEXT | 系统提示词（人设与任务） |
+| input_params / output_params | TEXT | 入参/出参定义 JSON（含数据类型/是否必填） |
+| quick_prompts | TEXT | 辅助提问词 JSON（按钮列表） |
+| icon | TEXT | 图标（emoji/上传/模型生成） |
+| enabled | INTEGER | 启用后自动加入模型助手菜单 |
+
+#### t_ai_conversation（对话会话表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| assistant_id / assistant_name | INTEGER/TEXT | 关联助手 |
+| messages | TEXT | 多轮消息 JSON（气泡历史） |
+| outputs | TEXT | 最终输出 JSON（按输出参数生成） |
+| provider_id / model | INTEGER/TEXT | 对话所用供应商/模型（支持切换） |
+| status | INTEGER | 0=进行中 1=已结束 |
+
+#### t_skill（技能表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| skill_name / group_name | TEXT | 名称 / 分组 |
+| description / content | TEXT | 描述 / 技能内容（拼入系统提示词） |
+| enabled | INTEGER | 启停 |
+| market_skill_id | INTEGER | 市场导入来源标记 |
+
+#### t_kb / t_kb_document / t_kb_chunk / t_kb_match_log（知识库 4 表）
+
+| 表 | 关键字段 | 说明 |
+|------|------|------|
+| t_kb | chunk_size / chunk_overlap / retrieve_type(text\|vector) / vector_model / chunk_count | 库配置 |
+| t_kb_document | kb_id / doc_name / doc_type / content / status | 文档（上传解析后原文） |
+| t_kb_chunk | kb_id / doc_id / content / seq_no / vector_json | 切片（向量 JSON 数组） |
+| t_kb_match_log | kb_id / query / results_json / score | 检索匹配记录 |
+
+#### t_redis_config（Redis 多实例配置表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| config_name | TEXT | 实例名称 |
+| host / port / password / db | TEXT | 连接参数 |
+| is_default | INTEGER | 默认实例（全局唯一，0 号=默认） |
+
+#### t_market_item（市场条目表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| item_type | TEXT | api / flow / assistant / skill / report |
+| item_name / description / group_name | TEXT | 名称 / 描述 / 分组 |
+| content_json | TEXT | 内容快照（按类型结构不同） |
+| download_count | INTEGER | 导入次数 |
+| market_item_id | INTEGER | 官方市场条目 ID（发现导入；本地发布为 null） |
+| icon / author / version | TEXT | 图标 / 作者 / 版本号（7.5 元信息） |
+| enabled | INTEGER | 上架/下架 |
+
+#### t_market_favorite（市场收藏表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| market_item_id | INTEGER | 收藏的市场条目 ID |
+| tenant_id | INTEGER | 收藏租户（严格隔离） |
+
+### 12.2 新增后端 API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | /api/market/discover | 发现官方市场：拉取 GitHub index.json + 条目文件到本地 market 目录 |
+| GET | /api/market/local-files | 本地 market 目录条目列表（含是否已导入） |
+| POST | /api/market/import-file | 按 (type, marketId) 导入本地文件（id 相同更新否则新增） |
+| POST | /api/market/favorite/{id} / unfavorite/{id} | 收藏 / 取消收藏（幂等） |
+| GET | /api/market/list?favorite=1 | 列表（含元信息 + favorited 标记 + 收藏过滤） |
+| POST | /api/market/generate-share-file | 生成分享文件：本地写 market/{type}/{id}.json + 更新 index.json（同名复用 id） |
+| GET | /api/ai/providers · /api/ai/provider/save · /api/ai/fetch-models | 供应商 CRUD + 模型拉取/配置测试（capabilities 能力绑定） |
+| GET/POST | /api/skill/list · save · delete · toggle · import · batch-import · export · batch-export | Skill 管理 |
+| GET | /api/redis-config/configs · config · save · delete · config/test | Redis 多实例 |
+| GET/POST | /api/knowledge/* | 知识库（kb/document/chunk/search/clean/revectorize/match-logs） |
+
+### 12.3 AI 节点函数调用流程（工具调用）
+
+```
+1. 执行器解析 aiConfig：toolApis（接口 methodCode 列表）+ toolFlows（流程 flowKey 列表）
+2. toolsResolver 回调 → 加载接口/流程定义（含参数说明）→ OpenAI tools JSON
+3. _chat(new AiChatRequest(..., ToolsJson, History)) → AiChatResult{Text, ToolCalls}
+4. ToolCalls 非空（且 <4 轮）：
+   a. history 追加 assistant 消息（tool_calls）
+   b. toolRunner(name, args) 逐个执行：
+      - api:xxx → 按 RequestType 拼 query/body 直接 HTTP 调用（MockJson 优先），响应截断 8000 字符
+      - flow:xxx → flowContentLoader 加载 → 递归 BuildEngineAsync → ExecuteAsync(args) → 出参 JSON
+   c. history 追加 tool 消息（tool_call_id + 结果）
+   d. 回到步骤 3 携带 History 继续
+5. 取最终文本（无文本时回退最近非空文本）写入输出目标
+```
+
+### 12.4 市场分享（GitHub PR）流程
+
+```
+1. 前端校验作者 → POST /api/market/generate-share-file：
+   后端本地落盘 market/{type}/{id}.json（同名复用 id）+ upsert market/index.json
+2. 前端 GitHub API（api.github.com，Token 存 localStorage）：
+   GET /user 校验 → GET/POST forks 确保 fork → POST git/refs 建分支
+   → PUT contents/market/{type}/{id}.json（条目文件）
+   → GET raw index.json（官方最新）合并本条索引 → PUT contents/market/index.json
+   → POST pulls 创建 PR（head=用户名:分支, base=默认分支）→ 打开 PR 页面
+3. 管理员审核合并 → 进入官方 market 目录 → 其他用户「发现」拉取
+```
 
