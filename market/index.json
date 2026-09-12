@@ -1,0 +1,70 @@
+{
+  "items": [
+    {
+      "id": 1789186031,
+      "type": "flow",
+      "name": "登陆并获取订单信息",
+      "description": "登陆并获取订单信息",
+      "icon": "\uD83D\uDCE6",
+      "author": "pythonHuang",
+      "version": "1.0.0",
+      "updatedAt": "2026-09-12",
+      "file": "flow/1789186031.json"
+    },
+    {
+      "id": 1789186045,
+      "type": "flow",
+      "name": "登陆并获取订单",
+      "description": "登陆并获取订单",
+      "icon": "\uD83D\uDCE6",
+      "author": "pythonHuang",
+      "version": "1.0.0",
+      "updatedAt": "2026-09-12",
+      "file": "flow/1789186045.json"
+    },
+    {
+      "id": 1789186091,
+      "type": "api",
+      "name": "百度登录",
+      "description": "百度账号用户名密码登录相关接口",
+      "icon": "\uD83D\uDCE6",
+      "author": "pythonHuang",
+      "version": "1.0.0",
+      "updatedAt": "2026-09-12",
+      "file": "api/1789186091.json"
+    },
+    {
+      "id": 1789186136,
+      "type": "report",
+      "name": "智能生成患者结算信息",
+      "description": "demo",
+      "icon": "\uD83D\uDCE6",
+      "author": "pythonHuag",
+      "version": "1.0.0",
+      "updatedAt": "2026-09-12",
+      "file": "report/1789186136.json"
+    },
+    {
+      "id": 1789186181,
+      "type": "assistant",
+      "name": "图表助手",
+      "description": "图表助手",
+      "icon": "\uD83D\uDCCA",
+      "author": "pythonHuang",
+      "version": "1.0.0",
+      "updatedAt": "2026-09-12",
+      "file": "assistant/1789186181.json"
+    },
+    {
+      "id": 1789186345,
+      "type": "skill",
+      "name": "读取文件",
+      "description": "根据要求目录获取文件内容",
+      "icon": "\uD83D\uDCE6",
+      "author": "pythonHuange",
+      "version": "1.0.0",
+      "updatedAt": "2026-09-12",
+      "file": "skill/1789186345.json"
+    }
+  ]
+}

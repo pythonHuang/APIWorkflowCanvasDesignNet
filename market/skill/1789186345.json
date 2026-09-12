@@ -1,0 +1,16 @@
+{
+  "id": 1789186345,
+  "type": "skill",
+  "name": "读取文件",
+  "description": "根据要求目录获取文件内容",
+  "icon": "\uD83D\uDCE6",
+  "author": "pythonHuange",
+  "version": "1.0.0",
+  "updatedAt": "2026-09-12",
+  "content": {
+    "skillName": "读取文件",
+    "groupName": "",
+    "description": "根据要求目录获取文件内容",
+    "content": "根据要求目录获取文件内容"
+  }
+}

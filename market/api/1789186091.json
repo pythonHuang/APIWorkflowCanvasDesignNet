@@ -1,0 +1,29 @@
+{
+  "id": 1789186091,
+  "type": "api",
+  "name": "百度登录",
+  "description": "百度账号用户名密码登录相关接口",
+  "icon": "\uD83D\uDCE6",
+  "author": "pythonHuang",
+  "version": "1.0.0",
+  "updatedAt": "2026-09-12",
+  "content": {
+    "suites": [
+      {
+        "suiteCode": "baiduLogin",
+        "suiteName": "百度登录",
+        "suiteDesc": "百度账号用户名密码登录相关接口"
+      }
+    ],
+    "apis": [
+      {
+        "suiteCode": "baiduLogin",
+        "methodCode": "baiduLoginByPwd",
+        "methodName": "百度用户名密码登录",
+        "methodDesc": "使用百度账号（用户名/手机号/邮箱）与密码进行登录，成功返回登录态令牌与用户基础信息",
+        "url": "/v2/api/?login",
+        "requestType": "POST"
+      }
+    ]
+  }
+}
