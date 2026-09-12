@@ -1,0 +1,16 @@
+{
+  "id": 1789191346,
+  "type": "flow",
+  "name": "自动预约",
+  "description": "",
+  "icon": "\uD83D\uDCE6",
+  "author": "pythonHuang",
+  "version": "1.0.0",
+  "updatedAt": "2026-09-12",
+  "content": {
+    "flowName": "自动预约",
+    "flowDesc": "",
+    "groupName": "测试",
+    "flowContent": "[]"
+  }
+}
