@@ -236,6 +236,12 @@ public class AiController : ControllerBase
         entity.QuickPrompts = req.QuickPrompts;
         entity.Icon = req.Icon;
         entity.Capabilities = req.Capabilities;
+        entity.ProviderId = req.ProviderId;
+        entity.Model = string.IsNullOrWhiteSpace(req.Model) ? null : req.Model.Trim();
+        entity.Temperature = req.Temperature;
+        entity.MaxTokens = req.MaxTokens is > 0 ? req.MaxTokens : null;
+        entity.Seed = req.Seed is > 0 ? req.Seed : null;
+        entity.EnableThinking = req.EnableThinking ? 1 : 0;
         entity.Enabled = req.Enabled ? 1 : 0;
         entity.UpdatedAt = DateTime.Now.ToString("o");
         await _db.SaveChangesAsync();
@@ -480,6 +486,18 @@ public class AiAssistantSaveRequest
     public bool Enabled { get; set; } = true;
     /// <summary>支持的能力（JSON: {skills,apis,flows,tools}）</summary>
     public string? Capabilities { get; set; }
+    /// <summary>默认供应商 ID（0=第一个启用供应商）</summary>
+    public long ProviderId { get; set; }
+    /// <summary>默认模型（空=供应商默认）</summary>
+    public string? Model { get; set; }
+    /// <summary>温度（0-2，null=服务默认）</summary>
+    public double? Temperature { get; set; }
+    /// <summary>最大输出字数（0=不限制）</summary>
+    public int? MaxTokens { get; set; }
+    /// <summary>随机种子（0=随机）</summary>
+    public int? Seed { get; set; }
+    /// <summary>是否启用深度思考</summary>
+    public bool EnableThinking { get; set; }
 }
 
 public class AiOptimizePromptRequest

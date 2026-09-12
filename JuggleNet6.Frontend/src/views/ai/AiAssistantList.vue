@@ -103,6 +103,39 @@
             <div style="font-size:11px;color:#909399;margin-top:4px">运行页中显示为快捷按钮，点击即填入补充说明，方便常用提问一键发起。</div>
           </div>
         </el-form-item>
+        <el-form-item label="模型参数">
+          <div style="width:100%">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+              <span style="width:64px;font-size:12px;color:#666;flex-shrink:0">默认模型</span>
+              <el-select v-model="form.providerId" size="small" style="flex:1" clearable placeholder="供应商(空=第一个启用)" @change="onAssistantProviderChange">
+                <el-option v-for="p in aiProviders" :key="p.id" :label="p.providerName" :value="p.id" />
+              </el-select>
+              <el-select v-model="form.model" size="small" style="flex:1" clearable filterable allow-create default-first-option placeholder="模型(空=供应商默认)">
+                <el-option v-for="m in assistantModelOptions" :key="m" :label="m" :value="m" />
+              </el-select>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="width:64px;font-size:12px;color:#666;flex-shrink:0">深度思考</span>
+              <el-switch v-model="form.enableThinking" size="small" />
+              <span style="font-size:11px;color:#909399">推理模型（deepseek-reasoner / Qwen 思考模式）生效</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="width:64px;font-size:12px;color:#666;flex-shrink:0">温度</span>
+              <el-slider v-model="form.temperature" size="small" style="flex:1" :min="0" :max="2" :step="0.1" :format-tooltip="tempFormat" />
+              <span style="width:36px;font-size:12px;color:#666;text-align:right;flex-shrink:0">{{ (form.temperature || 0).toFixed(1) }}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="width:64px;font-size:12px;color:#666;flex-shrink:0">最大输出</span>
+              <el-input-number v-model="form.maxTokens" size="small" style="flex:1" :min="0" :step="100" controls-position="right" />
+              <span style="font-size:11px;color:#909399;flex-shrink:0">0=不限制</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="width:64px;font-size:12px;color:#666;flex-shrink:0">随机种子</span>
+              <el-input-number v-model="form.seed" size="small" style="flex:1" :min="0" :step="1" controls-position="right" />
+              <span style="font-size:11px;color:#909399;flex-shrink:0">0=随机</span>
+            </div>
+          </div>
+        </el-form-item>
         <el-form-item label="支持的能力">
           <div style="width:100%">
             <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
@@ -151,7 +184,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
 import MarketPublishDialog from '../../components/MarketPublishDialog.vue'
@@ -210,6 +243,28 @@ const skillOptions = ref<any[]>([])
 const apiOptions = ref<any[]>([])
 const flowOptions = ref<any[]>([])
 
+// 模型参数（默认供应商/模型/深度思考/温度/最大输出/随机种子）
+const aiProviders = ref<any[]>([])
+const assistantModelOptions = computed(() => {
+  const p = aiProviders.value.find((x: any) => x.id === form.value.providerId)
+  const list = String(p?.models || '').split(',').map((s: string) => s.trim()).filter(Boolean)
+  if (p?.model && !list.includes(p.model)) list.unshift(p.model)
+  return list.filter(Boolean)
+})
+function onAssistantProviderChange() {
+  const p = aiProviders.value.find((x: any) => x.id === form.value.providerId)
+  if (p) form.value.model = p.model || ''
+}
+function tempFormat(v: number) { return v.toFixed(1) }
+
+/** 加载启用的供应商（默认模型选择用） */
+async function loadAiProviders() {
+  try {
+    const res: any = await request.get('/ai/providers/enabled')
+    aiProviders.value = res.data || []
+  } catch { /* 未配置供应商 */ }
+}
+
 /** 加载能力选项（技能/接口/流程） */
 async function loadCapabilityOptions() {
   try {
@@ -261,22 +316,36 @@ function countParams(json: string): number {
 }
 
 function openAdd() {
-  form.value = { id: 0, assistantName: '', description: '', systemPrompt: '', icon: '', enabled: true }
+  form.value = {
+    id: 0, assistantName: '', description: '', systemPrompt: '', icon: '', enabled: true,
+    providerId: 0, model: '', enableThinking: false, temperature: 0.7, maxTokens: 0, seed: 0
+  }
   inputParams.value = []
   outputParams.value = []
   quickPrompts.value = []
   parseCapabilities('')
   dialogVisible.value = true
   loadCapabilityOptions()
+  loadAiProviders()
 }
 function openEdit(row: any) {
-  form.value = { ...row, enabled: row.enabled === 1 }
+  form.value = {
+    ...row,
+    enabled: row.enabled === 1,
+    enableThinking: row.enableThinking === 1,
+    temperature: row.temperature ?? 0.7,
+    maxTokens: row.maxTokens || 0,
+    seed: row.seed || 0,
+    providerId: row.providerId || 0,
+    model: row.model || ''
+  }
   try { inputParams.value = JSON.parse(row.inputParams || '[]') } catch { inputParams.value = [] }
   try { outputParams.value = JSON.parse(row.outputParams || '[]') } catch { outputParams.value = [] }
   try { quickPrompts.value = JSON.parse(row.quickPrompts || '[]') } catch { quickPrompts.value = [] }
   parseCapabilities(row.capabilities || '')
   dialogVisible.value = true
   loadCapabilityOptions()
+  loadAiProviders()
 }
 
 function isImageIcon(icon: string): boolean {

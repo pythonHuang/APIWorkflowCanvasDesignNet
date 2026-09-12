@@ -34,6 +34,18 @@ public class AiConversationEntity : BaseEntity
     /// <summary>使用的模型</summary>
     public string? Model { get; set; }
 
+    /// <summary>温度快照（0-2，null=服务默认）</summary>
+    public double? Temperature { get; set; }
+
+    /// <summary>最大输出字数快照（0/null=不限制）</summary>
+    public int? MaxTokens { get; set; }
+
+    /// <summary>随机种子快照（0/null=随机）</summary>
+    public int? Seed { get; set; }
+
+    /// <summary>是否启用深度思考快照</summary>
+    public int EnableThinking { get; set; }
+
     /// <summary>会话标题（首条用户消息截断）</summary>
     public string? Title { get; set; }
 

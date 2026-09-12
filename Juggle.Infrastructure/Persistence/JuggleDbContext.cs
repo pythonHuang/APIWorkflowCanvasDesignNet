@@ -135,6 +135,12 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Icon).HasColumnName("icon");
             e.Property(p => p.Enabled).HasColumnName("enabled");
             e.Property(p => p.Capabilities).HasColumnName("capabilities");
+            e.Property(p => p.ProviderId).HasColumnName("provider_id");
+            e.Property(p => p.Model).HasColumnName("model");
+            e.Property(p => p.Temperature).HasColumnName("temperature");
+            e.Property(p => p.MaxTokens).HasColumnName("max_tokens");
+            e.Property(p => p.Seed).HasColumnName("seed");
+            e.Property(p => p.EnableThinking).HasColumnName("enable_thinking");
         });
         modelBuilder.Entity<AiConversationEntity>().ToTable("t_ai_conversation");
         modelBuilder.Entity<AiConversationEntity>(e => {
@@ -154,6 +160,10 @@ public class JuggleDbContext : DbContext
             e.Property(p => p.Outputs).HasColumnName("outputs");
             e.Property(p => p.ProviderId).HasColumnName("provider_id");
             e.Property(p => p.Model).HasColumnName("model");
+            e.Property(p => p.Temperature).HasColumnName("temperature");
+            e.Property(p => p.MaxTokens).HasColumnName("max_tokens");
+            e.Property(p => p.Seed).HasColumnName("seed");
+            e.Property(p => p.EnableThinking).HasColumnName("enable_thinking");
             e.Property(p => p.Title).HasColumnName("title");
             e.Property(p => p.Status).HasColumnName("status");
         });

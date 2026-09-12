@@ -256,6 +256,18 @@ using (var scope = app.Services.CreateScope())
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_assistant ADD COLUMN icon TEXT DEFAULT NULL;"); } catch { }
         // 助手支持的能力（skills/apis/flows/tools）
         try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_assistant ADD COLUMN capabilities TEXT DEFAULT NULL;"); } catch { }
+        // 助手默认模型参数（供应商/模型/温度/最大输出/随机种子/深度思考）
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_assistant ADD COLUMN provider_id INTEGER DEFAULT 0;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_assistant ADD COLUMN model TEXT DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_assistant ADD COLUMN temperature REAL DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_assistant ADD COLUMN max_tokens INTEGER DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_assistant ADD COLUMN seed INTEGER DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_assistant ADD COLUMN enable_thinking INTEGER DEFAULT 0;"); } catch { }
+        // 会话模型参数快照（温度/最大输出/随机种子/深度思考）
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_conversation ADD COLUMN temperature REAL DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_conversation ADD COLUMN max_tokens INTEGER DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_conversation ADD COLUMN seed INTEGER DEFAULT NULL;"); } catch { }
+        try { db.Database.ExecuteSqlRaw("ALTER TABLE t_ai_conversation ADD COLUMN enable_thinking INTEGER DEFAULT 0;"); } catch { }
         // AI 助手对话会话表
         try { db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS t_ai_conversation(id INTEGER PRIMARY KEY AUTOINCREMENT, assistant_id INTEGER, assistant_name TEXT, system_prompt TEXT, input_params TEXT, output_params TEXT, messages TEXT, outputs TEXT, provider_id INTEGER, model TEXT, title TEXT, status INTEGER DEFAULT 0, created_at TEXT, created_by INTEGER, updated_at TEXT, updated_by INTEGER, tenant_id INTEGER, deleted INTEGER DEFAULT 0);"); } catch { }
         // Redis 多实例配置表

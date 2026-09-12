@@ -33,4 +33,22 @@ public class AiAssistantEntity : BaseEntity
 
     /// <summary>支持的能力（JSON: {skills:[id],apis:["code"],flows:["key"],tools:["name"]}）</summary>
     public string? Capabilities { get; set; }
+
+    /// <summary>默认供应商 ID（0=第一个启用供应商）</summary>
+    public long ProviderId { get; set; }
+
+    /// <summary>默认模型（空=供应商默认模型）</summary>
+    public string? Model { get; set; }
+
+    /// <summary>温度（0-2，null=服务默认）</summary>
+    public double? Temperature { get; set; }
+
+    /// <summary>最大输出字数（0/null=不限制）</summary>
+    public int? MaxTokens { get; set; }
+
+    /// <summary>随机种子（0/null=随机）</summary>
+    public int? Seed { get; set; }
+
+    /// <summary>是否启用深度思考（enable_thinking）</summary>
+    public int EnableThinking { get; set; }
 }

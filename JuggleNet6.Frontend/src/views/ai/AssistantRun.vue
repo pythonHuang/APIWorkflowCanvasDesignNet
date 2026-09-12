@@ -170,8 +170,12 @@ onMounted(async () => {
     const res: any = await request.get('/ai/providers/enabled')
     providers.value = res.data || []
     if (providers.value.length > 0) {
-      providerId.value = providers.value[0].id
-      currentModel.value = providers.value[0].model || ''
+      // 优先助手配置的默认供应商/模型，否则取第一个启用供应商
+      const ap = assistant.value?.providerId
+        ? providers.value.find((p: any) => p.id === assistant.value.providerId)
+        : null
+      providerId.value = ap?.id || providers.value[0].id
+      currentModel.value = assistant.value?.model || ap?.model || providers.value[0].model || ''
     }
   } catch { /* 未配置供应商 */ }
 })
