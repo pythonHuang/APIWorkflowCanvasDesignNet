@@ -1,4 +1,6 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Unicode;
 using Juggle.Application.Models.Response;
 using Juggle.Application.Services;
 using Juggle.Domain.Entities;
@@ -215,6 +217,143 @@ public class MarketController : ControllerBase
             favorited = favIds.Contains(m.Id)
         }));
     }
+
+    /// <summary>市场文件 JSON 序列化选项（中文不转义）。</summary>
+    private static readonly JsonSerializerOptions MarketFileJsonOpts = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
+    };
+
+    /// <summary>生成分享文件：写入本地 market/{type}/{id}.json 并更新 market/index.json（同名条目复用原 id），返回条目 JSON 与索引条目（供 GitHub PR 使用）。</summary>
+    [HttpPost("generate-share-file")]
+    public async Task<ApiResult> GenerateShareFile([FromBody] MarketShareRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.ItemType) || string.IsNullOrWhiteSpace(req.Name))
+            return ApiResult.Fail("条目类型与名称不能为空");
+        if (string.IsNullOrWhiteSpace(req.Author))
+            return ApiResult.Fail("请填写作者");
+
+        // 同名条目已分享过则复用原 id（重新分享即更新），否则生成新 id
+        var id = FindExistingShareId(req.ItemType, req.Name)
+                 ?? (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var updatedAt = DateTime.Now.ToString("yyyy-MM-dd");
+
+        object? content;
+        try { content = JsonSerializer.Deserialize<JsonElement>(string.IsNullOrWhiteSpace(req.ContentJson) ? "{}" : req.ContentJson); }
+        catch { return ApiResult.Fail("内容 JSON 格式非法"); }
+
+        var itemJson = JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["id"] = id,
+            ["type"] = req.ItemType,
+            ["name"] = req.Name,
+            ["description"] = req.Description ?? "",
+            ["icon"] = string.IsNullOrWhiteSpace(req.Icon) ? "📦" : req.Icon,
+            ["author"] = req.Author,
+            ["version"] = string.IsNullOrWhiteSpace(req.Version) ? "1.0.0" : req.Version,
+            ["updatedAt"] = updatedAt,
+            ["content"] = content
+        }, MarketFileJsonOpts);
+
+        var indexEntry = new Dictionary<string, object?>
+        {
+            ["id"] = id,
+            ["type"] = req.ItemType,
+            ["name"] = req.Name,
+            ["description"] = req.Description ?? "",
+            ["icon"] = string.IsNullOrWhiteSpace(req.Icon) ? "📦" : req.Icon,
+            ["author"] = req.Author,
+            ["version"] = string.IsNullOrWhiteSpace(req.Version) ? "1.0.0" : req.Version,
+            ["updatedAt"] = updatedAt,
+            ["file"] = $"{req.ItemType}/{id}.json"
+        };
+
+        try
+        {
+            var typeDir = Path.Combine(MarketDir, req.ItemType);
+            Directory.CreateDirectory(typeDir);
+            await System.IO.File.WriteAllTextAsync(Path.Combine(typeDir, $"{id}.json"), itemJson);
+
+            var indexPath = Path.Combine(MarketDir, "index.json");
+            var indexJson = await UpsertIndexEntryAsync(indexPath, id, req.ItemType, indexEntry);
+            return ApiResult.Success(new { id, itemJson, indexEntry, indexJson, file = $"{req.ItemType}/{id}.json" });
+        }
+        catch (Exception ex)
+        {
+            return ApiResult.Fail($"生成本地分享文件失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>查找同类型同名条目的已分享 id（重新分享时更新原文件）。</summary>
+    private int? FindExistingShareId(string type, string name)
+    {
+        var typeDir = Path.Combine(MarketDir, type);
+        if (!Directory.Exists(typeDir)) return null;
+        foreach (var file in Directory.GetFiles(typeDir, "*.json"))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(System.IO.File.ReadAllText(file));
+                var root = doc.RootElement;
+                var fName = root.TryGetProperty("name", out var n) ? n.GetString() : null;
+                if (string.Equals(fName, name, StringComparison.OrdinalIgnoreCase)
+                    && root.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number)
+                    return idEl.GetInt32();
+            }
+            catch { /* 跳过损坏文件 */ }
+        }
+        return null;
+    }
+
+    /// <summary>更新本地 market/index.json（同 id+type 更新，否则追加），返回最新索引 JSON。</summary>
+    private static async Task<string> UpsertIndexEntryAsync(string indexPath, int id, string type, Dictionary<string, object?> entry)
+    {
+        var entries = new List<Dictionary<string, object?>>();
+        if (System.IO.File.Exists(indexPath))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(await System.IO.File.ReadAllTextAsync(indexPath));
+                var root = doc.RootElement;
+                var items = root.ValueKind == JsonValueKind.Array ? root
+                    : root.TryGetProperty("items", out var it) ? it : default;
+                if (items.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var e in items.EnumerateArray())
+                    {
+                        var d = new Dictionary<string, object?>();
+                        foreach (var p in e.EnumerateObject()) d[p.Name] = p.Value.Clone();
+                        entries.Add(d);
+                    }
+                }
+            }
+            catch { /* 损坏则重建 */ }
+        }
+
+        var idx = entries.FindIndex(e =>
+            AsLong(e.GetValueOrDefault("id")) == id && string.Equals(AsString(e.GetValueOrDefault("type")), type, StringComparison.OrdinalIgnoreCase));
+        if (idx >= 0) entries[idx] = entry; else entries.Add(entry);
+
+        var indexJson = JsonSerializer.Serialize(new Dictionary<string, object?> { ["items"] = entries }, MarketFileJsonOpts);
+        await System.IO.File.WriteAllTextAsync(indexPath, indexJson);
+        return indexJson;
+    }
+
+    private static long? AsLong(object? o) => o switch
+    {
+        JsonElement je when je.ValueKind == JsonValueKind.Number => je.GetInt64(),
+        long l => l,
+        int i => i,
+        _ => null
+    };
+
+    private static string? AsString(object? o) => o switch
+    {
+        JsonElement je when je.ValueKind == JsonValueKind.String => je.GetString(),
+        string s => s,
+        _ => null
+    };
 
     /// <summary>收藏市场条目（幂等）。</summary>
     [HttpPost("favorite/{id}")]
@@ -477,4 +616,15 @@ public class MarketImportFileRequest
 {
     public string Type { get; set; } = "";
     public int MarketId { get; set; }
+}
+
+public class MarketShareRequest
+{
+    public string ItemType { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Icon { get; set; } = "";
+    public string Author { get; set; } = "";
+    public string Version { get; set; } = "1.0.0";
+    public string ContentJson { get; set; } = "{}";
 }
