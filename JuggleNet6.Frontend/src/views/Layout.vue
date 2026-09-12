@@ -13,28 +13,28 @@
               <el-icon><Histogram /></el-icon>
               <span>监控</span>
             </template>
-            <el-menu-item index="/flow/dashboard">仪表盘</el-menu-item>
-            <el-menu-item index="/monitor/topology">API拓扑图</el-menu-item>
-            <el-menu-item index="/monitor/alert-rule">告警规则</el-menu-item>
-            <el-menu-item index="/monitor/alert-record">告警记录</el-menu-item>
+            <el-menu-item index="/flow/dashboard"><el-icon><Odometer /></el-icon><span>仪表盘</span></el-menu-item>
+            <el-menu-item index="/monitor/topology"><el-icon><Share /></el-icon><span>API拓扑图</span></el-menu-item>
+            <el-menu-item index="/monitor/alert-rule"><el-icon><Bell /></el-icon><span>告警规则</span></el-menu-item>
+            <el-menu-item index="/monitor/alert-record"><el-icon><Tickets /></el-icon><span>告警记录</span></el-menu-item>
           </el-sub-menu>
           <el-sub-menu index="flow" v-if="hasMenu('/flow/define')">
             <template #title>
               <el-icon><Connection /></el-icon>
               <span>流程管理</span>
             </template>
-            <el-menu-item index="/flow/define" v-if="hasMenu('/flow/define')">流程定义</el-menu-item>
-            <el-menu-item index="/flow/list" v-if="hasMenu('/flow/list')">流程列表</el-menu-item>
-            <el-menu-item index="/flow/log" v-if="hasMenu('/flow/log')">执行日志</el-menu-item>
-            <el-menu-item index="/flow/testcase" v-if="hasMenu('/flow/testcase')">测试用例</el-menu-item>
-            <el-menu-item index="/flow/async-result" v-if="hasMenu('/flow/async-result')">异步结果查询</el-menu-item>
+            <el-menu-item index="/flow/define" v-if="hasMenu('/flow/define')"><el-icon><SetUp /></el-icon><span>流程定义</span></el-menu-item>
+            <el-menu-item index="/flow/list" v-if="hasMenu('/flow/list')"><el-icon><List /></el-icon><span>流程列表</span></el-menu-item>
+            <el-menu-item index="/flow/log" v-if="hasMenu('/flow/log')"><el-icon><Document /></el-icon><span>执行日志</span></el-menu-item>
+            <el-menu-item index="/flow/testcase" v-if="hasMenu('/flow/testcase')"><el-icon><Files /></el-icon><span>测试用例</span></el-menu-item>
+            <el-menu-item index="/flow/async-result" v-if="hasMenu('/flow/async-result')"><el-icon><Search /></el-icon><span>异步结果查询</span></el-menu-item>
           </el-sub-menu>
           <el-sub-menu index="suite" v-if="hasMenu('/suite/list')">
             <template #title>
               <el-icon><Grid /></el-icon>
               <span>套件管理</span>
             </template>
-            <el-menu-item index="/suite/list">套件列表</el-menu-item>
+            <el-menu-item index="/suite/list"><el-icon><Grid /></el-icon><span>套件列表</span></el-menu-item>
           </el-sub-menu>
           <el-menu-item index="/object/list" v-if="hasMenu('/object/list')">
             <el-icon><DataBoard /></el-icon>
@@ -45,37 +45,37 @@
               <el-icon><Document /></el-icon>
               <span>报表</span>
             </template>
-            <el-menu-item index="/report/dataview">数据视图</el-menu-item>
-            <el-menu-item index="/report/design">报表管理</el-menu-item>
+            <el-menu-item index="/report/dataview"><el-icon><DataAnalysis /></el-icon><span>数据视图</span></el-menu-item>
+            <el-menu-item index="/report/design"><el-icon><Document /></el-icon><span>报表管理</span></el-menu-item>
           </el-sub-menu>
           <el-sub-menu index="report-view" v-if="reportMenuList.length > 0">
             <template #title>
               <el-icon><Document /></el-icon>
               <span>报表查询</span>
             </template>
-            <el-menu-item v-for="r in reportMenuList" :key="r.id" :index="`/report/view/${r.id}`">{{ r.name }}</el-menu-item>
+            <el-menu-item v-for="r in reportMenuList" :key="r.id" :index="`/report/view/${r.id}`"><el-icon><Reading /></el-icon><span>{{ r.name }}</span></el-menu-item>
           </el-sub-menu>
           <el-sub-menu index="kb">
             <template #title>
               <el-icon><Collection /></el-icon>
               <span>知识库</span>
             </template>
-            <el-menu-item index="/kb/list">知识库管理</el-menu-item>
+            <el-menu-item index="/kb/list"><el-icon><Collection /></el-icon><span>知识库管理</span></el-menu-item>
           </el-sub-menu>
           <el-sub-menu index="ai">
             <template #title>
               <el-icon><MagicStick /></el-icon>
               <span>模型助手</span>
             </template>
-            <el-menu-item index="/system/ai-provider">大模型设置</el-menu-item>
-            <el-menu-item index="/system/skills">Skill 管理</el-menu-item>
-            <el-menu-item index="/ai/assistants">模型助手管理</el-menu-item>
-            <el-menu-item index="/ai/flow-assistant">流程智能编排助手</el-menu-item>
-            <el-menu-item index="/ai/api-assistant">接口智能接入助手</el-menu-item>
-            <el-menu-item index="/ai/report-assistant">报表智能助手</el-menu-item>
+            <el-menu-item index="/system/ai-provider"><el-icon><Cpu /></el-icon><span>大模型设置</span></el-menu-item>
+            <el-menu-item index="/system/skills"><el-icon><MagicStick /></el-icon><span>Skill 管理</span></el-menu-item>
+            <el-menu-item index="/ai/assistants"><el-icon><UserFilled /></el-icon><span>模型助手管理</span></el-menu-item>
+            <el-menu-item index="/ai/flow-assistant"><el-icon><Connection /></el-icon><span>流程智能编排助手</span></el-menu-item>
+            <el-menu-item index="/ai/api-assistant"><el-icon><Link /></el-icon><span>接口智能接入助手</span></el-menu-item>
+            <el-menu-item index="/ai/report-assistant"><el-icon><DataAnalysis /></el-icon><span>报表智能助手</span></el-menu-item>
             <el-menu-item v-for="a in assistantMenuList" :key="a.id" :index="`/ai/assistant/${a.id}`">
             <img v-if="isImageIcon(a.icon)" :src="a.icon" style="width:16px;height:16px;margin-right:6px;vertical-align:-3px" />
-            <span v-else-if="a.icon" style="margin-right:6px">{{ a.icon }}</span>
+            <span v-else style="margin-right:6px">{{ a.icon || '🤖' }}</span>
             {{ a.assistantName }}
           </el-menu-item>
           </el-sub-menu>
@@ -88,18 +88,18 @@
               <el-icon><Setting /></el-icon>
               <span>系统设置</span>
             </template>
-            <el-menu-item index="/system/token" v-if="hasMenu('/system/token')">Token管理</el-menu-item>
-            <el-menu-item index="/system/datasource" v-if="hasMenu('/system/datasource')">数据源管理</el-menu-item>
-            <el-menu-item index="/system/static-var" v-if="hasMenu('/system/static-var')">静态变量</el-menu-item>
-            <el-menu-item index="/system/schedule" v-if="hasMenu('/system/schedule')">定时任务</el-menu-item>
-            <el-menu-item index="/system/webhook" v-if="hasMenu('/system/webhook')">Webhook 管理</el-menu-item>
-            <el-menu-item index="/system/users" v-if="hasMenu('/system/users')">用户管理</el-menu-item>
-            <el-menu-item index="/system/role" v-if="hasMenu('/system/role')">角色管理</el-menu-item>
-            <el-menu-item index="/system/tenant" v-if="hasMenu('/system/tenant')">租户管理</el-menu-item>
-            <el-menu-item index="/system/config" v-if="hasMenu('/system/config')">系统配置</el-menu-item>
-          <el-menu-item index="/system/redis" v-if="hasMenu('/system/config')">Redis 配置</el-menu-item>
-            <el-menu-item index="/system/login-log" v-if="hasMenu('/system/login-log')">登录日志</el-menu-item>
-            <el-menu-item index="/system/audit-log" v-if="hasMenu('/system/audit-log')">审计日志</el-menu-item>
+            <el-menu-item index="/system/token" v-if="hasMenu('/system/token')"><el-icon><Key /></el-icon><span>Token管理</span></el-menu-item>
+            <el-menu-item index="/system/datasource" v-if="hasMenu('/system/datasource')"><el-icon><Coin /></el-icon><span>数据源管理</span></el-menu-item>
+            <el-menu-item index="/system/static-var" v-if="hasMenu('/system/static-var')"><el-icon><SetUp /></el-icon><span>静态变量</span></el-menu-item>
+            <el-menu-item index="/system/schedule" v-if="hasMenu('/system/schedule')"><el-icon><Timer /></el-icon><span>定时任务</span></el-menu-item>
+            <el-menu-item index="/system/webhook" v-if="hasMenu('/system/webhook')"><el-icon><Connection /></el-icon><span>Webhook 管理</span></el-menu-item>
+            <el-menu-item index="/system/users" v-if="hasMenu('/system/users')"><el-icon><User /></el-icon><span>用户管理</span></el-menu-item>
+            <el-menu-item index="/system/role" v-if="hasMenu('/system/role')"><el-icon><UserFilled /></el-icon><span>角色管理</span></el-menu-item>
+            <el-menu-item index="/system/tenant" v-if="hasMenu('/system/tenant')"><el-icon><OfficeBuilding /></el-icon><span>租户管理</span></el-menu-item>
+            <el-menu-item index="/system/config" v-if="hasMenu('/system/config')"><el-icon><Setting /></el-icon><span>系统配置</span></el-menu-item>
+          <el-menu-item index="/system/redis" v-if="hasMenu('/system/config')"><el-icon><Coin /></el-icon><span>Redis 配置</span></el-menu-item>
+            <el-menu-item index="/system/login-log" v-if="hasMenu('/system/login-log')"><el-icon><Document /></el-icon><span>登录日志</span></el-menu-item>
+            <el-menu-item index="/system/audit-log" v-if="hasMenu('/system/audit-log')"><el-icon><Tickets /></el-icon><span>审计日志</span></el-menu-item>
           </el-sub-menu>
         </el-menu>
       </el-scrollbar>
@@ -139,7 +139,9 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram, Document, MagicStick, Collection, Shop } from '@element-plus/icons-vue'
+import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram, Document, MagicStick, Collection, Shop,
+  Odometer, Share, Bell, List, Files, Search, DataAnalysis, Reading, Cpu, Link, Key, Timer, User, UserFilled,
+  OfficeBuilding, Tickets, SetUp, Coin } from '@element-plus/icons-vue'
 import request from '../utils/request'
 
 const route = useRoute()
