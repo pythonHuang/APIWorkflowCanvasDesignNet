@@ -97,14 +97,15 @@ public class AiService
     // ==================== 对话 ====================
 
     /// <summary>调用大模型对话（OpenAI 兼容接口）。providerId 指定供应商，0=第一个启用供应商；modelOverride 可在供应商可用模型内切换。</summary>
-    public async Task<string> ChatAsync(string systemPrompt, string userPrompt, long providerId = 0, AiConfig? config = null, string? modelOverride = null)
+    public async Task<string> ChatAsync(string systemPrompt, string userPrompt, long providerId = 0, AiConfig? config = null, string? modelOverride = null,
+        double? temperature = null, int? maxTokens = null, int? seed = null, bool enableThinking = false)
     {
         var messages = new List<(string Role, string Content)>
         {
             ("system", systemPrompt),
             ("user", userPrompt)
         };
-        return await ChatMessagesAsync(messages, providerId, config, modelOverride);
+        return await ChatMessagesAsync(messages, providerId, config, modelOverride, temperature, maxTokens, seed, enableThinking);
     }
 
     /// <summary>视觉对话：文本 + 图片（OpenAI 兼容多模态 content 数组）。</summary>
@@ -149,8 +150,9 @@ public class AiService
         return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString()?.Trim() ?? "";
     }
 
-    /// <summary>多轮对话：完整消息列表（system + 历史消息）一次性发送。</summary>
-    public async Task<string> ChatMessagesAsync(List<(string Role, string Content)> messages, long providerId = 0, AiConfig? config = null, string? modelOverride = null)
+    /// <summary>多轮对话：完整消息列表（system + 历史消息）一次性发送（支持温度/最大输出/随机种子/深度思考等模型参数）。</summary>
+    public async Task<string> ChatMessagesAsync(List<(string Role, string Content)> messages, long providerId = 0, AiConfig? config = null, string? modelOverride = null,
+        double? temperature = null, int? maxTokens = null, int? seed = null, bool enableThinking = false)
     {
         var cfg = config ?? await ResolveConfigAsync(providerId > 0 ? providerId : null);
         if (!string.IsNullOrEmpty(modelOverride)) cfg.Model = modelOverride;
@@ -161,16 +163,21 @@ public class AiService
         if (!url.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
             url += "/chat/completions";
 
+        var payload = new Dictionary<string, object?>
+        {
+            ["model"] = cfg.Model,
+            ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
+            ["temperature"] = temperature ?? 0.2
+        };
+        if (maxTokens is > 0) payload["max_tokens"] = maxTokens.Value;
+        if (seed.HasValue) payload["seed"] = seed.Value;
+        if (enableThinking) payload["enable_thinking"] = true;
+
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(180);
         using var reqMsg = new HttpRequestMessage(HttpMethod.Post, url);
         reqMsg.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cfg.ApiKey}");
-        reqMsg.Content = new StringContent(JsonSerializer.Serialize(new
-        {
-            model = cfg.Model,
-            messages = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
-            temperature = 0.2
-        }), Encoding.UTF8, "application/json");
+        reqMsg.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         using var resp = await client.SendAsync(reqMsg);
         var body = await resp.Content.ReadAsStringAsync();
@@ -798,7 +805,11 @@ public class AiService
             sb.AppendLine($"请只输出 JSON（不要解释、不要 markdown 围栏），字段：{names}，其中 {descs}。");
         }
 
-        var content = await ChatAsync(assistant.SystemPrompt ?? "你是一个智能助手。", sb.ToString(), providerId, modelOverride: model);
+        var content = await ChatAsync(assistant.SystemPrompt ?? "你是一个智能助手。", sb.ToString(),
+            providerId > 0 ? providerId : assistant.ProviderId,
+            modelOverride: string.IsNullOrWhiteSpace(model) ? assistant.Model : model,
+            temperature: assistant.Temperature, maxTokens: assistant.MaxTokens,
+            seed: assistant.Seed, enableThinking: assistant.EnableThinking == 1);
 
         var outputs = new Dictionary<string, object?>();
         if (outputParams.Count > 0)
@@ -842,16 +853,20 @@ public class AiService
     {
         var conv = new AiConversationEntity
         {
-            AssistantId   = assistant.Id,
-            AssistantName = assistant.AssistantName,
-            SystemPrompt  = assistant.SystemPrompt,
-            InputParams   = assistant.InputParams,
-            OutputParams  = assistant.OutputParams,
-            ProviderId    = providerId,
-            Model         = model,
-            Messages      = "[]",
-            Status        = 0,
-            CreatedAt     = DateTime.Now.ToString("o")
+            AssistantId    = assistant.Id,
+            AssistantName  = assistant.AssistantName,
+            SystemPrompt   = assistant.SystemPrompt,
+            InputParams    = assistant.InputParams,
+            OutputParams   = assistant.OutputParams,
+            ProviderId     = providerId > 0 ? providerId : assistant.ProviderId,
+            Model          = string.IsNullOrWhiteSpace(model) ? assistant.Model : model,
+            Temperature    = assistant.Temperature,
+            MaxTokens      = assistant.MaxTokens,
+            Seed           = assistant.Seed,
+            EnableThinking = assistant.EnableThinking,
+            Messages       = "[]",
+            Status         = 0,
+            CreatedAt      = DateTime.Now.ToString("o")
         };
         // 输入参数并入系统上下文（每轮对话可见）
         var inputParams = ParseParamList(assistant.InputParams);
@@ -879,7 +894,8 @@ public class AiService
         history.Add(("user", userContent));
         var messages = new List<(string, string)> { ("system", conv.SystemPrompt ?? "") };
         messages.AddRange(history);
-        var reply = await ChatMessagesAsync(messages, providerId, null, model);
+        var reply = await ChatMessagesAsync(messages, providerId, null, model,
+            conv.Temperature, conv.MaxTokens, conv.Seed, conv.EnableThinking == 1);
         history.Add(("assistant", reply));
         conv.Messages = JsonSerializer.Serialize(history.Select(m => new { role = m.Role, content = m.Content }));
         if (string.IsNullOrEmpty(conv.Title))
@@ -903,7 +919,8 @@ public class AiService
             var messages = new List<(string, string)> { ("system", conv.SystemPrompt ?? "") };
             messages.AddRange(ParseMessages(conv.Messages));
             messages.Add(("user", $"请根据以上对话生成最终结果，只输出 JSON（不要解释、不要 markdown 围栏），字段：{names}，其中 {descs}。"));
-            finalReply = await ChatMessagesAsync(messages, providerId, null, model);
+            finalReply = await ChatMessagesAsync(messages, providerId, null, model,
+                conv.Temperature, conv.MaxTokens, conv.Seed, conv.EnableThinking == 1);
             try
             {
                 var json = ExtractJson(finalReply);
