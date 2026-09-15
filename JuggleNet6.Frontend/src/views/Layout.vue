@@ -1,13 +1,15 @@
 <template>
   <el-container style="height:100vh">
-    <!-- 侧边栏 -->
-    <el-aside width="220px" style="background:#001529;overflow:hidden;">
+    <!-- 侧边栏（可折叠） -->
+    <el-aside :width="isCollapse ? '64px' : '220px'" style="background:#001529;overflow:hidden;transition:width .2s;">
       <div class="sidebar-logo">
-        <span>⚡</span> Juggle
+        <span>⚡</span>
+        <span v-show="!isCollapse">Juggle</span>
       </div>
       <el-scrollbar style="height:calc(100vh - 60px);overflow-y:auto;">
-        <el-menu :default-active="activeMenu" router background-color="#001529" 
-          text-color="#aaa" active-text-color="#fff" style="border:none;">
+        <el-menu :default-active="activeMenu" router background-color="#001529"
+          text-color="#aaa" active-text-color="#fff" style="border:none;"
+          :collapse="isCollapse" :collapse-transition="false">
           <el-sub-menu index="monitor" v-if="hasMenu('/flow/dashboard')">
             <template #title>
               <el-icon><Histogram /></el-icon>
@@ -76,7 +78,7 @@
             <el-menu-item v-for="a in assistantMenuList" :key="a.id" :index="`/ai/assistant/${a.id}`">
             <img v-if="isImageIcon(a.icon)" :src="a.icon" style="width:16px;height:16px;margin-right:6px;vertical-align:-3px" />
             <span v-else style="margin-right:6px">{{ a.icon || '🤖' }}</span>
-            {{ a.assistantName }}
+            <span>{{ a.assistantName }}</span>
           </el-menu-item>
           </el-sub-menu>
           <el-menu-item index="/market">
@@ -108,9 +110,15 @@
     <el-container>
       <!-- 顶部导航 -->
       <el-header style="background:#fff;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;padding:0 24px">
-        <el-breadcrumb separator="/">
-          <el-breadcrumb-item>Juggle 接口编排平台</el-breadcrumb-item>
-        </el-breadcrumb>
+        <div style="display:flex;align-items:center;gap:14px">
+          <el-icon class="collapse-btn" :size="20" @click="isCollapse = !isCollapse">
+            <Expand v-if="isCollapse" />
+            <Fold v-else />
+          </el-icon>
+          <el-breadcrumb separator="/">
+            <el-breadcrumb-item>Juggle 接口编排平台</el-breadcrumb-item>
+          </el-breadcrumb>
+        </div>
         <el-dropdown @command="handleCommand">
           <span style="cursor:pointer;display:flex;align-items:center;gap:8px">
             <el-avatar :size="32" style="background:#0f3460">{{ userName?.charAt(0)?.toUpperCase() }}</el-avatar>
@@ -136,15 +144,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { Connection, Grid, DataBoard, Setting, ArrowDown, Histogram, Document, MagicStick, Collection, Shop,
   Odometer, Share, Bell, List, Files, Search, DataAnalysis, Reading, Cpu, Link, Key, Timer, User, UserFilled,
-  OfficeBuilding, Tickets, SetUp, Coin } from '@element-plus/icons-vue'
+  OfficeBuilding, Tickets, SetUp, Coin, Fold, Expand } from '@element-plus/icons-vue'
 import request from '../utils/request'
 
 const route = useRoute()
+
+// 左侧菜单折叠（记住用户偏好）
+const isCollapse = ref(localStorage.getItem('sidebar_collapse') === '1')
+watch(isCollapse, v => localStorage.setItem('sidebar_collapse', v ? '1' : '0'))
 const router = useRouter()
 const userName = computed(() => localStorage.getItem('userName') || 'User')
 const activeMenu = computed(() => route.path)
@@ -210,7 +222,11 @@ function handleCommand(cmd: string) {
   color: #fff;
   gap: 8px;
   border-bottom: 1px solid #0a2540;
+  white-space: nowrap;
+  overflow: hidden;
 }
+.collapse-btn { cursor: pointer; color: #303133; }
+.collapse-btn:hover { color: #409eff; }
 .main-content {
   background: #f5f7fa;
   overflow: hidden;
