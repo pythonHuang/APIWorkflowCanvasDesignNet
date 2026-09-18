@@ -15,8 +15,10 @@
         <el-select v-model="providerId" size="small" style="width:150px" @change="onProviderChange">
           <el-option v-for="p in providers" :key="p.id" :label="p.providerName" :value="p.id" />
         </el-select>
-        <el-select v-model="currentModel" size="small" style="width:170px" filterable allow-create default-first-option>
-          <el-option v-for="m in modelOptions" :key="m" :label="m" :value="m" />
+        <el-select v-model="currentModel" size="small" style="width:200px" filterable allow-create default-first-option>
+          <el-option v-for="m in modelOptions" :key="m" :value="m">
+            <span v-if="modelKindEmoji(m)" style="margin-right:4px">{{ modelKindEmoji(m) }}</span>{{ m }}
+          </el-option>
         </el-select>
         <el-button size="small" @click="startNew">新对话</el-button>
         <el-button size="small" @click="loadHistory">历史</el-button>
@@ -47,7 +49,17 @@
       <div class="chat-box" ref="chatBoxRef">
         <div v-for="(m, i) in messages" :key="i" :class="['chat-msg', m.role]">
           <div class="chat-bubble">
-            <MdContent v-if="m.role === 'assistant'" :content="m.content" />
+            <template v-if="m.role === 'assistant'">
+              <div v-if="m.generating" style="display:flex;align-items:center;gap:6px;color:#909399">
+                <el-icon class="is-loading"><Loading /></el-icon>{{ m.content }}
+              </div>
+              <template v-else>
+                <MdContent :content="m.content" />
+                <div v-if="getMediaUrl(m.content)" style="margin-top:6px;display:flex;gap:8px;align-items:center">
+                  <el-button size="small" type="primary" link @click="openMedia(getMediaUrl(m.content))">💾 下载/打开</el-button>
+                </div>
+              </template>
+            </template>
             <template v-else>
               <div style="white-space:pre-wrap">{{ m.textContent }}</div>
               <img v-for="(img, j) in (m.images || [])" :key="j" :src="img" style="max-width:180px;max-height:180px;border-radius:6px;margin-top:6px;display:block" />
@@ -65,20 +77,20 @@
         <el-button v-for="(q, i) in quickPrompts" :key="i" size="small" round @click="fillPrompt(q)">{{ q }}</el-button>
       </div>
       <!-- 待发送图片 -->
-      <div v-if="pendingImages.length > 0" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+      <div v-if="!isMediaModel && pendingImages.length > 0" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
         <div v-for="(img, i) in pendingImages" :key="i" style="position:relative">
           <img :src="img" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e4e7ed" />
           <span @click="pendingImages.splice(i,1)" style="position:absolute;top:-6px;right:-6px;background:#f56c6c;color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;line-height:16px;text-align:center;cursor:pointer">✕</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;align-items:flex-end">
-        <el-input v-model="draft" :disabled="conversation?.status === 1" placeholder="输入消息，Ctrl+回车发送，支持粘贴/上传图片" type="textarea" :rows="2"
+        <el-input v-model="draft" :disabled="conversation?.status === 1" :placeholder="inputPlaceholder" type="textarea" :rows="2"
           style="flex:1" @keydown.ctrl.enter="handleSendMessage" @paste="onPaste" />
-        <el-upload :show-file-list="false" :auto-upload="false" accept="image/*" :on-change="onImageUpload" style="display:inline-block">
+        <el-upload v-if="!isMediaModel" :show-file-list="false" :auto-upload="false" accept="image/*" :on-change="onImageUpload" style="display:inline-block">
           <el-button size="small" :disabled="conversation?.status === 1">图片</el-button>
         </el-upload>
-        <el-button size="small" type="primary" icon="Promotion" :disabled="conversation?.status === 1" :loading="chatLoading" @click="handleSendMessage">发送</el-button>
-        <el-button size="small" type="warning" :disabled="conversation?.status === 1" :loading="ending" @click="endConversation">结束对话</el-button>
+        <el-button size="small" type="primary" icon="Promotion" :disabled="conversation?.status === 1" :loading="chatLoading" @click="handleSendMessage">{{ isMediaModel ? '生成' : '发送' }}</el-button>
+        <el-button v-if="!isMediaModel" size="small" type="warning" :disabled="conversation?.status === 1" :loading="ending" @click="endConversation">结束对话</el-button>
       </div>
       <div v-if="error" class="err-box">❌ {{ error }}</div>
     </el-card>
@@ -119,6 +131,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '../../utils/request'
 import MdContent from '../../components/MdContent.vue'
+import { detectModelKind, modelKindEmoji } from '../../utils/aiModel'
 
 const route = useRoute()
 const assistantId = Number(route.params.id) || 0
@@ -133,7 +146,7 @@ const currentModel = ref('')
 
 // 对话状态
 const conversation = ref<any>(null)     // { id, status, ... }
-const messages = ref<{ role: string; content: string; textContent?: string; images?: string[] }[]>([])
+const messages = ref<{ role: string; content: string; textContent?: string; images?: string[]; generating?: boolean }[]>([])
 const draft = ref('')
 const pendingImages = ref<string[]>([])
 const chatLoading = ref(false)
@@ -152,6 +165,29 @@ const modelOptions = computed(() => {
   if (!list.includes(p?.model)) list.unshift(p?.model || '')
   return list.filter(Boolean)
 })
+
+// 当前模型类型：chat 对话 / image 生图 / video 生视频
+const currentModelKind = computed(() => detectModelKind(currentModel.value))
+const isMediaModel = computed(() => currentModelKind.value !== 'chat')
+const inputPlaceholder = computed(() => isMediaModel.value
+  ? (currentModelKind.value === 'video'
+    ? '输入视频描述（生视频模型，生成约需 1-3 分钟），Ctrl+回车生成'
+    : '输入图片描述（生图模型），Ctrl+回车生成')
+  : '输入消息，Ctrl+回车发送，支持粘贴/上传图片')
+
+/** 从助手消息 markdown 中提取媒体 URL（图片 ![](url) 或 <video src="url">） */
+function getMediaUrl(content: string): string {
+  if (!content) return ''
+  const img = content.match(/!\[[^\]]*\]\(([^)]+)\)/)
+  if (img?.[1]) return img[1]
+  const video = content.match(/<video[^>]*src="([^"]+)"/)
+  if (video?.[1]) return video[1]
+  return ''
+}
+
+function openMedia(url: string) {
+  window.open(url, '_blank')
+}
 
 onMounted(async () => {
   try {
@@ -249,6 +285,11 @@ async function handleSendMessage() {
 }
 
 async function sendMessage() {
+  // 生图/生视频模型：走媒体生成流程
+  if (isMediaModel.value) {
+    await sendMediaMessage()
+    return
+  }
   const text = draft.value?.trim() || ''
   if ((!text && pendingImages.value.length === 0) || !conversation.value || conversation.value.status === 1) return
   // 图片附加为 markdown data URL（多模态模型可识别，前端气泡同样展示）
@@ -268,6 +309,57 @@ async function sendMessage() {
     messages.value.push({ role: 'assistant', content: res.data?.reply || '' })
   } catch (e: any) {
     error.value = e?.message || '发送失败'
+  } finally {
+    chatLoading.value = false
+    scrollToBottom()
+  }
+}
+
+/** 生图/生视频模型：提问 → 调 generate-media → 媒体结果气泡 + 写入会话历史 */
+async function sendMediaMessage() {
+  const text = draft.value?.trim() || ''
+  if (!text) { ElMessage.warning('请输入图片/视频描述'); return }
+  const kind = currentModelKind.value
+  chatLoading.value = true
+  error.value = ''
+  try {
+    // 无会话或已结束时自动开启新会话（仅用于历史记录，不调用对话模型）
+    if (!conversation.value || conversation.value.status === 1) {
+      const res: any = await request.post('/ai/conversation/start', {
+        assistantId, providerId: providerId.value, model: currentModel.value || null, inputs: {}
+      })
+      conversation.value = { id: res.data?.id, status: res.data?.status ?? 0 }
+    }
+    draft.value = ''
+    messages.value.push({ role: 'user', content: text, textContent: text, images: [] })
+    const placeholder: any = { role: 'assistant', content: kind === 'video' ? '🎬 视频生成中，通常需要 1-3 分钟，请稍候...' : '🎨 图片生成中，请稍候...', generating: true }
+    messages.value.push(placeholder)
+    scrollToBottom()
+
+    const res: any = await request.post('/ai/generate-media', {
+      providerId: providerId.value, model: currentModel.value || null, prompt: text
+    })
+    const url = res.data?.url || ''
+    if (!url) throw new Error('生成成功但未返回结果地址')
+    placeholder.generating = false
+    placeholder.content = res.data?.type === 'video'
+      ? `\n<video controls src="${url}" style="max-width:100%;border-radius:6px"></video>\n`
+      : `![生成图片](${url})`
+
+    // 媒体消息写入会话历史（失败不影响页面展示）
+    try {
+      await request.post('/ai/conversation/media', {
+        conversationId: conversation.value.id, userContent: text, assistantContent: placeholder.content
+      })
+    } catch { /* 历史记录失败忽略 */ }
+  } catch (e: any) {
+    const last = messages.value[messages.value.length - 1]
+    if (last?.generating) {
+      last.generating = false
+      last.content = `❌ 生成失败：${e?.message || '未知错误'}`
+    } else {
+      error.value = e?.message || '生成失败'
+    }
   } finally {
     chatLoading.value = false
     scrollToBottom()

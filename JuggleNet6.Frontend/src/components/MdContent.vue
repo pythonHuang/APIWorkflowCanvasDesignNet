@@ -138,6 +138,7 @@ onMounted(render)
 .md-content :deep(p) { margin: 4px 0; }
 .md-content :deep(ul), .md-content :deep(ol) { padding-left: 20px; margin: 4px 0; }
 .md-content :deep(img) { max-width: 100%; border-radius: 6px; }
+.md-content :deep(video) { max-width: 100%; border-radius: 6px; display: block; margin: 6px 0; }
 .md-content :deep(table) { border-collapse: collapse; margin: 6px 0; }
 .md-content :deep(th), .md-content :deep(td) { border: 1px solid #e4e7ed; padding: 4px 8px; font-size: 12px; }
 .md-content :deep(blockquote) { border-left: 3px solid #dcdfe6; margin: 6px 0; padding: 2px 10px; color: #666; }

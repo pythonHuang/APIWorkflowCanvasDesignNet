@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Juggle.Domain.Engine.NodeExecutors;
 using Juggle.Domain.Entities;
 using Juggle.Infrastructure.Persistence;
@@ -270,6 +271,128 @@ public class AiService
             }
         }
         return result;
+    }
+
+    /// <summary>模型类型识别（chat/image/video，按模型名关键词，与前端 utils/aiModel.ts 保持一致）。</summary>
+    public static string DetectModelKind(string? model)
+    {
+        var m = (model ?? "").ToLower();
+        if (Regex.IsMatch(m, @"(t2v|wanx[^a-z0-9]*video|kling|hailuo|pixverse|pika|cogvideo|minimax[^a-z0-9]*video|sora|veo|mochi|ltx|video)"))
+            return "video";
+        if (Regex.IsMatch(m, @"(wanx|t2i|dall|gpt-image|flux|stable|midjourney|kandinsky|playground|image)"))
+            return "image";
+        return "chat";
+    }
+
+    /// <summary>生成图片/视频（生图/生视频模型）：通义万相走 DashScope 异步任务+轮询，OpenAI 兼容走 images/generations。返回 {type,url}。</summary>
+    public async Task<object> GenerateMediaAsync(long providerId, string? model, string prompt)
+    {
+        var kind = DetectModelKind(model);
+        if (kind == "chat")
+            throw new Exception($"模型「{model}」不是生图/生视频模型");
+
+        var provider = providerId > 0
+            ? await _db.AiProviders.FirstOrDefaultAsync(p => p.Id == providerId && p.Deleted == 0)
+            : null;
+        provider ??= await _db.AiProviders.FirstOrDefaultAsync(p => p.Deleted == 0 && p.Enabled == 1)
+            ?? throw new Exception("未配置 AI 大模型：请在系统设置 → 大模型设置中添加并启用供应商");
+
+        var apiKey = provider.ApiKey ?? "";
+        if (string.IsNullOrEmpty(apiKey))
+            throw new Exception("供应商未配置 API Key");
+        var modelName = string.IsNullOrWhiteSpace(model) ? provider.Model ?? "" : model;
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(60);
+
+        // 通义万相（DashScope）：异步任务提交 + 轮询结果
+        if ((provider.BaseUrl ?? "").Contains("dashscope", StringComparison.OrdinalIgnoreCase))
+        {
+            var isVideo = kind == "video";
+            var api = isVideo
+                ? "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2video/video-synthesis"
+                : "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis";
+            var body = JsonSerializer.Serialize(new
+            {
+                model = modelName,
+                input = new { prompt },
+                parameters = isVideo ? (object)new { size = "1280*720" } : new { size = "1024*1024", n = 1 }
+            });
+            using var reqMsg = new HttpRequestMessage(HttpMethod.Post, api);
+            reqMsg.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiKey}");
+            reqMsg.Headers.TryAddWithoutValidation("X-DashScope-Async", "enable");
+            reqMsg.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            using var resp = await client.SendAsync(reqMsg);
+            var respBody = await resp.Content.ReadAsStringAsync();
+            if (!resp.IsSuccessStatusCode)
+                throw new Exception($"{(isVideo ? "视频" : "图片")}生成提交失败({(int)resp.StatusCode}): {Truncate(respBody, 200)}");
+            using var doc = JsonDocument.Parse(respBody);
+            var taskId = doc.RootElement.GetProperty("output").GetProperty("task_id").GetString()
+                ?? throw new Exception("未获取到生成任务 ID");
+
+            // 轮询任务结果（最多约 3 分钟，视频生成较慢）
+            for (var i = 0; i < 90; i++)
+            {
+                await Task.Delay(2000);
+                var taskResp = await client.GetAsync($"https://dashscope.aliyuncs.com/api/v1/tasks/{taskId}");
+                var taskBody = await taskResp.Content.ReadAsStringAsync();
+                using var tdoc = JsonDocument.Parse(taskBody);
+                var root = tdoc.RootElement;
+                var output = root.TryGetProperty("output", out var outEl) ? outEl : default;
+                var status = output.ValueKind == JsonValueKind.Object && output.TryGetProperty("task_status", out var st)
+                    ? st.GetString() : "";
+                if (status == "SUCCEEDED")
+                {
+                    var results = output.GetProperty("results");
+                    var url = results[0].GetProperty("url").GetString();
+                    return new { type = kind, url };
+                }
+                if (status == "FAILED")
+                {
+                    var msg = output.TryGetProperty("message", out var me) ? me.GetString() : "未知错误";
+                    throw new Exception($"生成任务失败: {msg}");
+                }
+            }
+            throw new Exception("生成超时（约 3 分钟），请稍后重试");
+        }
+
+        // OpenAI 兼容 images/generations（仅生图）
+        if (kind == "image")
+        {
+            var baseUrl = provider.BaseUrl!.TrimEnd('/');
+            var url = baseUrl.EndsWith("/images/generations", StringComparison.OrdinalIgnoreCase)
+                ? baseUrl : baseUrl + "/images/generations";
+            var body = JsonSerializer.Serialize(new { model = modelName, prompt, n = 1, size = "1024x1024" });
+            using var reqMsg = new HttpRequestMessage(HttpMethod.Post, url);
+            reqMsg.Headers.TryAddWithoutValidation("Authorization", $"Bearer {apiKey}");
+            reqMsg.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            using var resp = await client.SendAsync(reqMsg);
+            var respBody = await resp.Content.ReadAsStringAsync();
+            if (!resp.IsSuccessStatusCode)
+                throw new Exception($"图片生成失败({(int)resp.StatusCode}): {Truncate(respBody, 200)}");
+            using var doc = JsonDocument.Parse(respBody);
+            var data = doc.RootElement.GetProperty("data")[0];
+            if (data.TryGetProperty("url", out var u) && u.ValueKind == JsonValueKind.String)
+                return new { type = "image", url = u.GetString() };
+            if (data.TryGetProperty("b64_json", out var b64) && b64.ValueKind == JsonValueKind.String)
+                return new { type = "image", url = "data:image/png;base64," + b64.GetString() };
+            throw new Exception("图片生成响应缺少 url/b64_json");
+        }
+
+        throw new Exception("视频生成仅支持通义万相（DashScope）供应商，请添加 dashscope 供应商或将模型切换为通义视频模型");
+    }
+
+    /// <summary>追加媒体消息（生图/生视频的提问与结果）到会话历史。</summary>
+    public async Task AppendMediaMessageAsync(AiConversationEntity conv, string userContent, string assistantContent)
+    {
+        var history = ParseMessages(conv.Messages);
+        history.Add(("user", userContent));
+        history.Add(("assistant", assistantContent));
+        conv.Messages = JsonSerializer.Serialize(history.Select(m => new { role = m.Role, content = m.Content }));
+        if (string.IsNullOrEmpty(conv.Title))
+            conv.Title = userContent.Length > 30 ? userContent[..30] : userContent;
+        conv.UpdatedAt = DateTime.Now.ToString("o");
+        await _db.SaveChangesAsync();
     }
 
     private static string Truncate(string s, int len) => s.Length <= len ? s : s[..len] + "...";

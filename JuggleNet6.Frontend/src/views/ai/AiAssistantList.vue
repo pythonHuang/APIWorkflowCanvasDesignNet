@@ -111,7 +111,9 @@
                 <el-option v-for="p in aiProviders" :key="p.id" :label="p.providerName" :value="p.id" />
               </el-select>
               <el-select v-model="form.model" size="small" style="flex:1" clearable filterable allow-create default-first-option placeholder="模型(空=供应商默认)">
-                <el-option v-for="m in assistantModelOptions" :key="m" :label="m" :value="m" />
+                <el-option v-for="m in assistantModelOptions" :key="m" :value="m">
+                  <span v-if="modelKindEmoji(m)" style="margin-right:4px">{{ modelKindEmoji(m) }}</span>{{ m }}
+                </el-option>
               </el-select>
             </div>
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -189,6 +191,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../../utils/request'
 import MarketPublishDialog from '../../components/MarketPublishDialog.vue'
 import MarketShareDialog from '../../components/MarketShareDialog.vue'
+import { modelKindEmoji } from '../../utils/aiModel'
 
 // 发布到市场
 const publishVisible = ref(false)

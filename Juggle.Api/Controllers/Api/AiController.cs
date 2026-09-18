@@ -362,6 +362,33 @@ public class AiController : ControllerBase
         catch (Exception ex) { return ApiResult.Fail(ex.Message); }
     }
 
+    /// <summary>生成图片/视频（生图/生视频模型）。</summary>
+    [HttpPost("generate-media")]
+    public async Task<ApiResult> GenerateMedia([FromBody] AiGenerateMediaRequest req)
+    {
+        try
+        {
+            var result = await _aiService.GenerateMediaAsync(req.ProviderId, req.Model, req.Prompt ?? "");
+            return ApiResult.Success(result);
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
+    }
+
+    /// <summary>追加媒体消息（生图/生视频提问与结果）到会话历史。</summary>
+    [HttpPost("conversation/media")]
+    public async Task<ApiResult> ConversationMedia([FromBody] AiConversationMediaRequest req)
+    {
+        try
+        {
+            var conv = await _db.AiConversations.FirstOrDefaultAsync(c => c.Id == req.ConversationId && c.Deleted == 0)
+                ?? throw new Exception("会话不存在");
+            if (conv.Status == 1) throw new Exception("会话已结束，请开启新对话");
+            await _aiService.AppendMediaMessageAsync(conv, req.UserContent ?? "", req.AssistantContent ?? "");
+            return ApiResult.Success();
+        }
+        catch (Exception ex) { return ApiResult.Fail(ex.Message); }
+    }
+
     /// <summary>结束对话：有输出参数时生成最终结果，会话标记已结束</summary>
     [HttpPost("conversation/end")]
     public async Task<ApiResult> EndConversation([FromBody] AiConversationEndRequest req)
@@ -507,6 +534,20 @@ public class AiOptimizePromptRequest
     public string? Model { get; set; }
     /// <summary>优化目标：空=系统提示词优化；description=一句话描述优化</summary>
     public string? Purpose { get; set; }
+}
+
+public class AiGenerateMediaRequest
+{
+    public long ProviderId { get; set; }
+    public string? Model { get; set; }
+    public string? Prompt { get; set; }
+}
+
+public class AiConversationMediaRequest
+{
+    public long ConversationId { get; set; }
+    public string? UserContent { get; set; }
+    public string? AssistantContent { get; set; }
 }
 
 public class AiGenerateIconRequest
