@@ -31,7 +31,6 @@ APIWorkflowCanvasDesignNetJuggle 原名 Juggle（积木 + 魔法）是一个**�
 
 ## ✨ 功能特性
 
-
 | 能力                    | 说明                                                                                                                           |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | 🎨**图形化流程编排**    | 14 种节点：START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / MYSQL / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY / AI |
@@ -144,11 +143,12 @@ cd JuggleNet6.Frontend && npm run build  # → Juggle.Api/wwwroot/
 
 ## 📸 界面预览
 
+| 流程编排                             | AI 智能编排                               |
+| ------------------------------------ | ----------------------------------------- |
+| ![流程编排](./images/flowdesign.png) | [多条件分支，中午、并行流程|
+| ![流程编排](./images/flowdesign01.png) | [对话描述需求，AI 自动生成流程节点与连线] |
 
-| 流程编排                             | AI 智能编排                             |
-| ------------------------------------ | --------------------------------------- |
-| ![流程编排](./images/flowdesign.png) | 对话描述需求，AI 自动生成流程节点与连线 |
-
+ 
 
 | 监控仪表盘            | 报表设计器          |
 | --------------------- | ------------------- |
@@ -159,7 +159,6 @@ cd JuggleNet6.Frontend && npm run build  # → Juggle.Api/wwwroot/
 ---
 
 ## 🛠️ 技术栈
-
 
 | 层级   | 技术                                                                                   |
 | ------ | -------------------------------------------------------------------------------------- |
@@ -172,7 +171,6 @@ cd JuggleNet6.Frontend && npm run build  # → Juggle.Api/wwwroot/
 ---
 
 ## 🔍 竞品对比
-
 
 | 项目            | Juggle（本项目）                     | n8n           | Dify          | FastGPT / Coze |
 | --------------- | ------------------------------------ | ------------- | ------------- | -------------- |
@@ -255,7 +253,6 @@ Built with **.NET 8** + **Vue 3** + **Element Plus**, ships with SQLite out of t
 
 ## ✨ Features
 
-
 | Feature                         | Description                                                                                                                                          |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 🎨**Visual Flow Orchestration** | 14 node types: START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / MYSQL / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY / AI                   |
@@ -301,7 +298,6 @@ cd JuggleNet6.Frontend && npm install && npm run dev
 
 ## 🛠️ Tech Stack
 
-
 | Layer     | Tech                                                                              |
 | --------- | --------------------------------------------------------------------------------- |
 | Backend   | ASP.NET Core 8 · EF Core 8 · 4-layer DDD                                        |
@@ -313,7 +309,6 @@ cd JuggleNet6.Frontend && npm install && npm run dev
 ---
 
 ## 🔍 vs Competitors
-
 
 |                       | Juggle                            | n8n                 | Dify             | FastGPT / Coze   |
 | --------------------- | --------------------------------- | ------------------- | ---------------- | ---------------- |
@@ -372,3 +367,4 @@ Thanks to [@somta](https://github.com/somta) and the original team!
 If you find this project helpful, please give it a ⭐ **Star**! Your support keeps this project going 💪
 
 </div>
+
