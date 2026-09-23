@@ -1,4 +1,4 @@
-# Juggle — 图形化 API 流程编排平台（AI 驱动）
+# APIWorkflowCanvasDesignNet — 图形化 API 流程编排平台（AI 驱动）
 
 <div align="center">
 
@@ -23,7 +23,7 @@
 
 ## 📖 简介
 
-Juggle（积木 + 魔法）是一个**可视化 API 流程编排平台**，通过拖拽式画布将多个接口串联成完整业务流程，支持 AI 对话自动生成流程、智能体多轮对话与工具调用、生图/生视频、报表设计等。
+APIWorkflowCanvasDesignNetJuggle 原名 Juggle（积木 + 魔法）是一个**可视化 API 流程编排平台**，通过拖拽式画布将多个接口串联成完整业务流程，支持 AI 对话自动生成流程、智能体多轮对话与工具调用、生图/生视频、报表设计等。
 
 后端基于 **.NET 8** + **EF Core 8**，前端 **Vue 3** + **Element Plus** + **@vue-flow/core**，内置 SQLite（可切换 MySQL / PostgreSQL / SQLServer）。系统已稳定运行，提供 Docker 一键部署方案，默认账号 `juggle / juggle`，监听 `9127` 端口。
 
@@ -31,17 +31,18 @@ Juggle（积木 + 魔法）是一个**可视化 API 流程编排平台**，通�
 
 ## ✨ 功能特性
 
-| 能力 | 说明 |
-|---|---|
-| 🎨 **图形化流程编排** | 14 种节点：START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / MYSQL / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY / AI |
-| 🤖 **AI 智能编排** | 对话描述需求 → 大模型自动生成完整流程（含入参/出参定义 + 节点连线 + 条件分支），预览确认后入库 |
-| 🧠 **AI 智能体对话** | 多轮对话、工具调用（接口直调/流程递归），最多 4 轮；支持生图/生视频模型（通义万相 / OpenAI） |
-| 🎛️ **模型助手** | 自定义助手（名称/提示词/输入输出参数），绑定技能/接口/流程/工具能力；支持温度/最大输出/随机种子/深度思考 |
-| 🏪 **内置应用市场** | 发现 / 导入 / 收藏 / 下载 / 发布，支持 GitHub PR 分享条目 |
-| 📊 **报表设计器** | 数据视图 + 报表设计（行列编辑 / 公式引擎 SUM / IF / 分页预览） |
-| 📈 **监控模块** | API 拓扑图（健康检查 / 访问统计 / DB 调用连线）+ 告警规则 + 告警记录 |
-| 🔐 **多租户 + JWT 认证** | 严格/宽松双隔离策略，RBAC 角色权限 |
-| 🗄️ **多数据库** | 系统库：SQLite / MySQL / PostgreSQL / SQLServer；业务数据源再加 Oracle / 达梦 |
+
+| 能力                    | 说明                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 🎨**图形化流程编排**    | 14 种节点：START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / MYSQL / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY / AI |
+| 🤖**AI 智能编排**       | 对话描述需求 → 大模型自动生成完整流程（含入参/出参定义 + 节点连线 + 条件分支），预览确认后入库                                |
+| 🧠**AI 智能体对话**     | 多轮对话、工具调用（接口直调/流程递归），最多 4 轮；支持生图/生视频模型（通义万相 / OpenAI）                                   |
+| 🎛️**模型助手**        | 自定义助手（名称/提示词/输入输出参数），绑定技能/接口/流程/工具能力；支持温度/最大输出/随机种子/深度思考                       |
+| 🏪**内置应用市场**      | 发现 / 导入 / 收藏 / 下载 / 发布，支持 GitHub PR 分享条目                                                                      |
+| 📊**报表设计器**        | 数据视图 + 报表设计（行列编辑 / 公式引擎 SUM / IF / 分页预览）                                                                 |
+| 📈**监控模块**          | API 拓扑图（健康检查 / 访问统计 / DB 调用连线）+ 告警规则 + 告警记录                                                           |
+| 🔐**多租户 + JWT 认证** | 严格/宽松双隔离策略，RBAC 角色权限                                                                                             |
+| 🗄️**多数据库**        | 系统库：SQLite / MySQL / PostgreSQL / SQLServer；业务数据源再加 Oracle / 达梦                                                  |
 
 ---
 
@@ -143,12 +144,14 @@ cd JuggleNet6.Frontend && npm run build  # → Juggle.Api/wwwroot/
 
 ## 📸 界面预览
 
-| 流程编排 | AI 智能编排 |
-|---|---|
+
+| 流程编排                             | AI 智能编排                             |
+| ------------------------------------ | --------------------------------------- |
 | ![流程编排](./images/flowdesign.png) | 对话描述需求，AI 自动生成流程节点与连线 |
 
-| 监控仪表盘 | 报表设计器 |
-|---|---|
+
+| 监控仪表盘            | 报表设计器          |
+| --------------------- | ------------------- |
 | API 拓扑图 + 告警规则 | 数据视图 + 公式引擎 |
 
 > 📌 更多截图见仓库 [images/](./images/) 目录。
@@ -157,29 +160,31 @@ cd JuggleNet6.Frontend && npm run build  # → Juggle.Api/wwwroot/
 
 ## 🛠️ 技术栈
 
-| 层级 | 技术 |
-|---|---|
-| 后端 | ASP.NET Core 8 · EF Core 8 · Juggle.Api / Application / Domain / Infrastructure 四层 |
-| 前端 | Vue 3 · Vite · Element Plus · Pinia · @vue-flow/core · Monaco Editor |
-| 数据库 | SQLite（默认）/ MySQL / PostgreSQL / SQLServer · 业务源支持 Oracle / 达梦 |
-| 容器 | Docker multi-stage build · GitHub Actions CI/CD |
-| 认证 | JWT Bearer · RBAC 角色权限 · 多租户 `HasQueryFilter` |
+
+| 层级   | 技术                                                                                   |
+| ------ | -------------------------------------------------------------------------------------- |
+| 后端   | ASP.NET Core 8 · EF Core 8 · Juggle.Api / Application / Domain / Infrastructure 四层 |
+| 前端   | Vue 3 · Vite · Element Plus · Pinia · @vue-flow/core · Monaco Editor              |
+| 数据库 | SQLite（默认）/ MySQL / PostgreSQL / SQLServer · 业务源支持 Oracle / 达梦             |
+| 容器   | Docker multi-stage build · GitHub Actions CI/CD                                       |
+| 认证   | JWT Bearer · RBAC 角色权限 · 多租户`HasQueryFilter`                                  |
 
 ---
 
 ## 🔍 竞品对比
 
-| 项目 | Juggle（本项目） | n8n | Dify | FastGPT / Coze |
-|---|---|---|---|---|
-| **核心定位** | API 流程编排 + AI 辅助生成 | 工作流自动化 | LLM 应用开发 | RAG / Bot |
-| **自研接口** | 套件/接口管理 + 批量导入 + cURL 复制 | 无 | 无 | 无 |
-| **SQL/DB节点** | ✅ 内置 MySQL/SQLite/PG/SS | ⚠️ 需要节点 | ❌ | ❌ |
-| **SOAP/WSDL** | ✅ 自动生成 + 调用 | ❌ | ❌ | ❌ |
-| **多租户** | ✅ JWT Claims 驱动 | ❌ | ❌ | ❌ |
-| **私有化部署** | ✅ Docker 一键 | ✅ | ✅ | ❌ |
-| **AI 生成流程** | ✅ 对话→完整编排+预览 | ⚠️ 仅部分 | ⚠️ 仅提示词 | ⚠️ 仅提示词 |
-| **生图/生视频** | ✅ 对话模型自动切换 | ❌ | ❌ | ✅（平台内）|
-| **应用市场** | ✅ 内置 + GitHub PR 分享 | ❌ | ❌ | ❌ |
+
+| 项目            | Juggle（本项目）                     | n8n           | Dify          | FastGPT / Coze |
+| --------------- | ------------------------------------ | ------------- | ------------- | -------------- |
+| **核心定位**    | API 流程编排 + AI 辅助生成           | 工作流自动化  | LLM 应用开发  | RAG / Bot      |
+| **自研接口**    | 套件/接口管理 + 批量导入 + cURL 复制 | 无            | 无            | 无             |
+| **SQL/DB节点**  | ✅ 内置 MySQL/SQLite/PG/SS           | ⚠️ 需要节点 | ❌            | ❌             |
+| **SOAP/WSDL**   | ✅ 自动生成 + 调用                   | ❌            | ❌            | ❌             |
+| **多租户**      | ✅ JWT Claims 驱动                   | ❌            | ❌            | ❌             |
+| **私有化部署**  | ✅ Docker 一键                       | ✅            | ✅            | ❌             |
+| **AI 生成流程** | ✅ 对话→完整编排+预览               | ⚠️ 仅部分   | ⚠️ 仅提示词 | ⚠️ 仅提示词  |
+| **生图/生视频** | ✅ 对话模型自动切换                  | ❌            | ❌            | ✅（平台内）   |
+| **应用市场**    | ✅ 内置 + GitHub PR 分享             | ❌            | ❌            | ❌             |
 
 > **一句话差异**：Juggle 是**面向后端开发者的 API 编排 + AI 自动生成**工具，补齐了 n8n/Dify 在接口管理、SOAP、SQL、多租户、私有化部署方面的空白。
 
@@ -250,17 +255,18 @@ Built with **.NET 8** + **Vue 3** + **Element Plus**, ships with SQLite out of t
 
 ## ✨ Features
 
-| Feature | Description |
-|---|---|
-| 🎨 **Visual Flow Orchestration** | 14 node types: START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / MYSQL / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY / AI |
-| 🤖 **AI Flow Generation** | Describe requirements in chat → LLM auto-generates complete flow (inputs/outputs + node wiring + conditionals), preview and confirm to save |
-| 🧠 **AI Agent Chat** | Multi-turn dialogue with tool calling (direct API / recursive flow), up to 4 rounds; image/video generation model support (Tongyi Wanxiang / OpenAI) |
-| 🎛️ **Model Assistants** | Custom assistants with system prompt / I/O params; bind skills/APIs/flows/tools; model params: temperature, max tokens, seed, thinking mode |
-| 🏪 **Built-in Marketplace** | Discover / import / favorite / download / publish; share to official GitHub via PR |
-| 📊 **Report Designer** | Data views + report builder (row/col editing / formula engine SUM & IF / paginated preview) |
-| 📈 **Monitoring** | API topology map (health check / visit stats / DB call edges) + alert rules + alert records |
-| 🔐 **Multi-tenant + JWT** | Strict/loose isolation via `HasQueryFilter`, RBAC role permissions |
-| 🗄️ **Multi-DB** | System: SQLite / MySQL / PostgreSQL / SQLServer; business sources also support Oracle / Dameng |
+
+| Feature                         | Description                                                                                                                                          |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🎨**Visual Flow Orchestration** | 14 node types: START / END / METHOD / CONDITION / MERGE / ASSIGN / CODE / MYSQL / SUB_FLOW / LOOP / DELAY / PARALLEL / NOTIFY / AI                   |
+| 🤖**AI Flow Generation**        | Describe requirements in chat → LLM auto-generates complete flow (inputs/outputs + node wiring + conditionals), preview and confirm to save         |
+| 🧠**AI Agent Chat**             | Multi-turn dialogue with tool calling (direct API / recursive flow), up to 4 rounds; image/video generation model support (Tongyi Wanxiang / OpenAI) |
+| 🎛️**Model Assistants**        | Custom assistants with system prompt / I/O params; bind skills/APIs/flows/tools; model params: temperature, max tokens, seed, thinking mode          |
+| 🏪**Built-in Marketplace**      | Discover / import / favorite / download / publish; share to official GitHub via PR                                                                   |
+| 📊**Report Designer**           | Data views + report builder (row/col editing / formula engine SUM & IF / paginated preview)                                                          |
+| 📈**Monitoring**                | API topology map (health check / visit stats / DB call edges) + alert rules + alert records                                                          |
+| 🔐**Multi-tenant + JWT**        | Strict/loose isolation via`HasQueryFilter`, RBAC role permissions                                                                                    |
+| 🗄️**Multi-DB**                | System: SQLite / MySQL / PostgreSQL / SQLServer; business sources also support Oracle / Dameng                                                       |
 
 ---
 
@@ -295,28 +301,30 @@ cd JuggleNet6.Frontend && npm install && npm run dev
 
 ## 🛠️ Tech Stack
 
-| Layer | Tech |
-|---|---|
-| Backend | ASP.NET Core 8 · EF Core 8 · 4-layer DDD |
-| Frontend | Vue 3 · Vite · Element Plus · Pinia · @vue-flow/core · Monaco Editor |
-| Database | SQLite (default) / MySQL / PostgreSQL / SQLServer · Oracle / Dameng for business |
-| Container | Docker multi-stage · GitHub Actions CI/CD |
-| Auth | JWT Bearer · RBAC · Multi-tenant `HasQueryFilter` |
+
+| Layer     | Tech                                                                              |
+| --------- | --------------------------------------------------------------------------------- |
+| Backend   | ASP.NET Core 8 · EF Core 8 · 4-layer DDD                                        |
+| Frontend  | Vue 3 · Vite · Element Plus · Pinia · @vue-flow/core · Monaco Editor         |
+| Database  | SQLite (default) / MySQL / PostgreSQL / SQLServer · Oracle / Dameng for business |
+| Container | Docker multi-stage · GitHub Actions CI/CD                                        |
+| Auth      | JWT Bearer · RBAC · Multi-tenant`HasQueryFilter`                                |
 
 ---
 
 ## 🔍 vs Competitors
 
-| | Juggle | n8n | Dify | FastGPT / Coze |
-|---|---|---|---|---|
-| **Focus** | API orchestration + AI generation | Workflow automation | LLM app dev | RAG / Bot |
-| **Self-hosted APIs** | ✅ Suite/API mgmt + bulk import | ❌ | ❌ | ❌ |
-| **SQL/DB nodes** | ✅ | ⚠️ | ❌ | ❌ |
-| **SOAP/WSDL** | ✅ Auto-gen | ❌ | ❌ | ❌ |
-| **Multi-tenant** | ✅ JWT Claims | ❌ | ❌ | ❌ |
-| **AI generate flows** | ✅ Full flow + preview | ⚠️ Partial | ⚠️ Prompt only | ⚠️ Prompt only |
-| **Image/Video gen** | ✅ Auto-switch by model | ❌ | ❌ | ✅ In-platform |
-| **Marketplace** | ✅ + GitHub PR sharing | ❌ | ❌ | ❌ |
+
+|                       | Juggle                            | n8n                 | Dify             | FastGPT / Coze   |
+| --------------------- | --------------------------------- | ------------------- | ---------------- | ---------------- |
+| **Focus**             | API orchestration + AI generation | Workflow automation | LLM app dev      | RAG / Bot        |
+| **Self-hosted APIs**  | ✅ Suite/API mgmt + bulk import   | ❌                  | ❌               | ❌               |
+| **SQL/DB nodes**      | ✅                                | ⚠️                | ❌               | ❌               |
+| **SOAP/WSDL**         | ✅ Auto-gen                       | ❌                  | ❌               | ❌               |
+| **Multi-tenant**      | ✅ JWT Claims                     | ❌                  | ❌               | ❌               |
+| **AI generate flows** | ✅ Full flow + preview            | ⚠️ Partial        | ⚠️ Prompt only | ⚠️ Prompt only |
+| **Image/Video gen**   | ✅ Auto-switch by model           | ❌                  | ❌               | ✅ In-platform   |
+| **Marketplace**       | ✅ + GitHub PR sharing            | ❌                  | ❌               | ❌               |
 
 > **One-liner**: Juggle fills the gap for **backend devs** who need API management, SOAP, SQL, multi-tenancy, and private deployment — things n8n/Dify don't cover.
 
